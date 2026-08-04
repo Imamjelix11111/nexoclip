@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+
+<html lang="id"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>NexoClip Studio Settings</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-surface": "#1a1c19",
+                        "on-secondary-container": "#61615c",
+                        "on-error": "#ffffff",
+                        "secondary-fixed": "#e4e2dc",
+                        "primary-fixed-dim": "#ffb59e",
+                        "inverse-on-surface": "#f1f1ec",
+                        "background": "#fafaf5",
+                        "secondary-container": "#deddd7",
+                        "surface-container": "#eeeee9",
+                        "on-error-container": "#93000a",
+                        "tertiary": "#5f5e5c",
+                        "on-tertiary-fixed": "#1c1c1a",
+                        "on-tertiary": "#ffffff",
+                        "surface-container-highest": "#e2e3de",
+                        "surface-container-high": "#e8e8e4",
+                        "error": "#ba1a1a",
+                        "tertiary-fixed": "#e5e2de",
+                        "surface-bright": "#fafaf5",
+                        "inverse-primary": "#ffb59e",
+                        "surface": "#fafaf5",
+                        "on-secondary-fixed-variant": "#474743",
+                        "outline": "#88726c",
+                        "surface-tint": "#99462a",
+                        "primary-container": "#d97757",
+                        "secondary-fixed-dim": "#c8c7c0",
+                        "outline-variant": "#dbc1b9",
+                        "on-background": "#1a1c19",
+                        "inverse-surface": "#2f312e",
+                        "on-primary-fixed": "#390b00",
+                        "surface-dim": "#dadad5",
+                        "on-secondary-fixed": "#1b1c18",
+                        "primary-fixed": "#ffdbd0",
+                        "surface-container-lowest": "#ffffff",
+                        "on-primary-container": "#541400",
+                        "primary": "#99462a",
+                        "tertiary-container": "#94928f",
+                        "on-tertiary-container": "#2b2b29",
+                        "on-primary-fixed-variant": "#7a2f15",
+                        "tertiary-fixed-dim": "#c8c6c3",
+                        "on-surface-variant": "#55433d",
+                        "on-primary": "#ffffff",
+                        "on-tertiary-fixed-variant": "#474744",
+                        "error-container": "#ffdad6",
+                        "surface-variant": "#e2e3de",
+                        "on-secondary": "#ffffff",
+                        "surface-container-low": "#f4f4ef",
+                        "secondary": "#5e5f5a"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Inter"],
+                        "display": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .active-pill { font-variation-settings: 'FILL' 1; }
+    </style>
+</head>
+<body class="bg-[#F7F7F2] text-[#1D1D1B] min-h-screen">
+<!-- TopNavBar -->
+<header class="bg-[#F7F7F2] dark:bg-stone-950 border-b border-[#E5E5E0] dark:border-stone-800 docked full-width top-0 z-40 fixed w-full h-16 flex justify-between items-center px-6">
+<div class="flex items-center gap-4">
+<span class="text-2xl font-black tracking-tighter text-[#1D1D1B] dark:text-stone-100">NexoClip</span>
+<nav class="hidden md:flex ml-8 space-x-6 h-full items-center">
+<a class="text-[#6B6B66] dark:text-stone-400 font-medium hover:text-[#D97757] transition-colors duration-200" href="#">Editor</a>
+<a class="text-[#6B6B66] dark:text-stone-400 font-medium hover:text-[#D97757] transition-colors duration-200" href="#">Assets</a>
+<a class="text-[#D97757] font-bold border-b-2 border-[#D97757] h-16 flex items-center" href="#">Settings</a>
+</nav>
+</div>
+<div class="flex items-center space-x-4">
+<button class="material-symbols-outlined text-secondary hover:text-primary transition-colors">history</button>
+<button class="material-symbols-outlined text-secondary hover:text-primary transition-colors">notifications</button>
+<img alt="Editor Profile" class="w-8 h-8 rounded-full object-cover border border-outline-variant" data-alt="A high-quality professional portrait of a creative media producer in a bright, modern studio. The lighting is soft and editorial, following a warm minimalist aesthetic with a clean white and off-white color palette. The subject is looking directly at the camera with a confident, approachable expression, representing the user profile of a premium video production platform." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAJvPyfWb4jQqVfQJHl1d1gY7MpAZNbJmdJnmliLkfTrYSQpKHhiZtbOdS4uaLNG5A6c6fmRJm0ERfATxGdHy5M46vSRuYnbAdPRiI0LGRrSglpARnB4_bMs_kIPrET7UEmD4O36WX58qLT6oM03wMPrmIFKKqfjVTxRp04NSGAcv8s6atFKsIazK_lMj9EaXq-9ShNINKgsXRx3uuiR4nR5_Rg7ubkxcNFI0UfVGTArjwuk1b63uWwDRnbpWPeYTHEexabqJ9xT6Ja"/>
+</div>
+</header>
+<main class="max-w-[1000px] mx-auto pt-24 pb-32 px-6 flex gap-8">
+<!-- SideNavBar -->
+<aside class="w-[260px] flex-shrink-0">
+<div class="sticky top-24 space-y-2">
+<div class="mb-8 px-4">
+<h2 class="text-xl font-bold text-[#1D1D1B] dark:text-stone-100">Studio Settings</h2>
+<p class="text-xs tracking-wide uppercase font-semibold text-[#6B6B66] dark:text-stone-400 mt-1">Production Workspace</p>
+</div>
+<nav class="flex flex-col space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 text-[#1D1D1B] dark:text-stone-50 bg-[#FFFFFF] dark:bg-stone-900 rounded-full font-bold shadow-sm transition-all scale-98" href="#koneksi">
+<span class="material-symbols-outlined text-[#D97757]">link</span>
+<span class="font-inter text-sm tracking-wide uppercase font-semibold">Koneksi</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-[#6B6B66] dark:text-stone-400 hover:bg-[#E5E5E0] dark:hover:bg-stone-800 rounded-full transition-all" href="#tampilan">
+<span class="material-symbols-outlined">palette</span>
+<span class="font-inter text-sm tracking-wide uppercase font-semibold">Tampilan</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-[#6B6B66] dark:text-stone-400 hover:bg-[#E5E5E0] dark:hover:bg-stone-800 rounded-full transition-all" href="#bahasa">
+<span class="material-symbols-outlined">language</span>
+<span class="font-inter text-sm tracking-wide uppercase font-semibold">Bahasa</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-[#6B6B66] dark:text-stone-400 hover:bg-[#E5E5E0] dark:hover:bg-stone-800 rounded-full transition-all" href="#integrasi">
+<span class="material-symbols-outlined">extension</span>
+<span class="font-inter text-sm tracking-wide uppercase font-semibold">Integrasi</span>
+</a>
+</nav>
+<div class="pt-8 mt-8 border-t border-[#E5E5E0] space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 text-[#6B6B66] hover:bg-[#E5E5E0] rounded-full transition-all" href="#">
+<span class="material-symbols-outlined">help</span>
+<span class="font-inter text-sm tracking-wide uppercase font-semibold">Bantuan</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-[#6B6B66] hover:bg-[#E5E5E0] rounded-full transition-all" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="font-inter text-sm tracking-wide uppercase font-semibold">Keluar</span>
+</a>
+</div>
+</div>
+</aside>
+<!-- Right Content -->
+<div class="flex-grow space-y-12">
+<!-- Section 1: Koneksi -->
+<section class="bg-white p-8 rounded-lg border border-[#E5E5E0] shadow-sm" id="koneksi">
+<div class="flex items-center gap-3 mb-6">
+<div class="p-2 bg-primary-container/10 rounded-lg">
+<span class="material-symbols-outlined text-[#D97757]">link</span>
+</div>
+<h3 class="text-xl font-bold tracking-tight">Koneksi</h3>
+</div>
+<div class="space-y-6">
+<div class="group">
+<label class="block text-[10px] font-bold uppercase tracking-widest text-text-muted mb-2">Backend URL</label>
+<input class="w-full bg-[#F7F7F2] border-[#E5E5E0] rounded-lg px-4 py-3 text-sm focus:ring-[#D97757] focus:border-[#D97757] transition-all" type="text" value="https://api.nexoclip.studio"/>
+</div>
+<div class="group">
+<label class="block text-[10px] font-bold uppercase tracking-widest text-text-muted mb-2">Auth Token</label>
+<input class="w-full bg-[#F7F7F2] border-[#E5E5E0] rounded-lg px-4 py-3 text-sm focus:ring-[#D97757] focus:border-[#D97757] transition-all" type="password" value="••••••••••••••••"/>
+</div>
+<div class="flex justify-start">
+<button class="flex items-center gap-2 px-5 py-2.5 bg-white border border-[#E5E5E0] rounded-full text-sm font-semibold hover:bg-surface-container-low transition-all">
+<span class="material-symbols-outlined text-green-600 text-lg" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                            Test Connection
+                        </button>
+</div>
+</div>
+</section>
+<!-- Section 2: Tampilan -->
+<section class="bg-white p-8 rounded-lg border border-[#E5E5E0] shadow-sm" id="tampilan">
+<div class="flex items-center gap-3 mb-6">
+<div class="p-2 bg-primary-container/10 rounded-lg">
+<span class="material-symbols-outlined text-[#D97757]">palette</span>
+</div>
+<h3 class="text-xl font-bold tracking-tight">Tampilan</h3>
+</div>
+<div class="space-y-8">
+<div>
+<label class="block text-[10px] font-bold uppercase tracking-widest text-text-muted mb-4">Tema</label>
+<div class="grid grid-cols-3 gap-4">
+<button class="flex flex-col items-center gap-3 p-4 rounded-xl border border-[#E5E5E0] hover:bg-surface-container-low transition-all">
+<span class="material-symbols-outlined text-3xl">settings_brightness</span>
+<span class="text-xs font-bold uppercase tracking-wider">System</span>
+</button>
+<button class="flex flex-col items-center gap-3 p-4 rounded-xl border-2 border-[#D97757] bg-primary-container/5 transition-all">
+<span class="material-symbols-outlined text-3xl text-[#D97757]" style="font-variation-settings: 'FILL' 1;">light_mode</span>
+<span class="text-xs font-bold uppercase tracking-wider text-[#D97757]">Light</span>
+</button>
+<button class="flex flex-col items-center gap-3 p-4 rounded-xl border border-[#E5E5E0] hover:bg-surface-container-low transition-all">
+<span class="material-symbols-outlined text-3xl">dark_mode</span>
+<span class="text-xs font-bold uppercase tracking-wider">Dark</span>
+</button>
+</div>
+</div>
+<div class="flex items-center justify-between py-4 border-t border-dashed border-[#E5E5E0]">
+<div>
+<span class="block text-sm font-bold tracking-tight">Sidebar Labels</span>
+<span class="text-xs text-[#6B6B66]">Tampilkan teks label pada navigasi samping</span>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-secondary-container rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#D97757]"></div>
+</label>
+</div>
+</div>
+</section>
+<!-- Section 3: Bahasa -->
+<section class="bg-white p-8 rounded-lg border border-[#E5E5E0] shadow-sm" id="bahasa">
+<div class="flex items-center gap-3 mb-6">
+<div class="p-2 bg-primary-container/10 rounded-lg">
+<span class="material-symbols-outlined text-[#D97757]">language</span>
+</div>
+<h3 class="text-xl font-bold tracking-tight">Bahasa</h3>
+</div>
+<div>
+<label class="block text-[10px] font-bold uppercase tracking-widest text-text-muted mb-4">Bahasa Antarmuka</label>
+<div class="inline-flex p-1 bg-[#F7F7F2] rounded-full border border-[#E5E5E0]">
+<button class="px-6 py-2 rounded-full bg-[#D97757] text-white text-xs font-bold uppercase tracking-widest shadow-md">Indonesia</button>
+<button class="px-6 py-2 rounded-full text-[#6B6B66] text-xs font-bold uppercase tracking-widest hover:bg-surface-container transition-all">English</button>
+</div>
+</div>
+</section>
+<!-- Section 4: Integrasi -->
+<section class="bg-white p-8 rounded-lg border border-[#E5E5E0] shadow-sm" id="integrasi">
+<div class="flex items-center gap-3 mb-6">
+<div class="p-2 bg-primary-container/10 rounded-lg">
+<span class="material-symbols-outlined text-[#D97757]">extension</span>
+</div>
+<h3 class="text-xl font-bold tracking-tight">Integrasi</h3>
+</div>
+<div class="space-y-4">
+<!-- TikTok -->
+<div class="flex items-center justify-between p-4 bg-[#F7F7F2] rounded-xl border border-[#E5E5E0]">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 bg-black rounded-lg flex items-center justify-center">
+<img alt="TikTok" class="w-6 h-6 object-contain" data-alt="The official TikTok logo rendered as a sharp, minimalist vector icon on a dark, professional background. The aesthetic is clean and modern, suitable for a high-end tech integration dashboard with a sleek monochromatic feel." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB68x1z7k8LFjEu186sW_U7igMgYYPeVNC3l5jdP9WGTrcmBL3OREBDtggdcux503tGtZFgbJSmrdoArKaN-P11Fs2STpqltzOId8P_71uVvLsuZSunroYUn0d027SPbiqQyCGbwQtgnQiMSKUqNt5kcp8SMut-xHn4kEOjbneFmq5wyrMpHySvkJZYgiD8lsqn-igTBddzKn3TuaDEnv2wlVqe6AsXqmQuDh3Ne7KAW2eAR6i_U6qyhbTmuP8MaPShRXxTD6QmHz68"/>
+</div>
+<div>
+<span class="block text-sm font-bold">TikTok Business</span>
+<span class="text-[10px] uppercase tracking-tighter text-green-600 font-bold">Terhubung</span>
+</div>
+</div>
+<button class="text-xs font-bold text-[#6B6B66] hover:text-[#D97757]">Kelola</button>
+</div>
+<!-- YouTube -->
+<div class="flex items-center justify-between p-4 bg-[#F7F7F2] rounded-xl border border-[#E5E5E0]">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center border border-[#E5E5E0]">
+<img alt="YouTube" class="w-6 h-6 object-contain" data-alt="The official YouTube logo displayed as a high-resolution, professional branding element in a soft-lit digital workspace. The scene emphasizes seamless integration and modern digital connectivity within a sophisticated editorial design system." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCCgRAa6RkJaBQiF-wlAlTWr4FUU5_bjMOKra9KP_IaCgrxeKjogc9NqIHvvkzEio0EvqhH2DsTRVOkwlmb8uvGuBAuVKVFz81e3QbId4RNFcf5I1xPk_Y4ioyod418qBetp933ZdQOKnfph3yE8G3duaIqDRwLrkFvHJbhjM5ha1z2VRufkjSiGc_SXt7Y2E4VkOoSTgHGvun9qP_YizsTGkO2ktK94ACfddRuUXGZFfcWitXDot-CVTQ4dLeHLoUapYzJSSluc138"/>
+</div>
+<div>
+<span class="block text-sm font-bold">YouTube Content ID</span>
+<span class="text-[10px] uppercase tracking-tighter text-[#6B6B66]">Belum Terhubung</span>
+</div>
+</div>
+<button class="px-4 py-2 bg-white border border-[#E5E5E0] rounded-full text-xs font-bold uppercase tracking-widest hover:bg-primary-container hover:text-white transition-all">Hubungkan</button>
+</div>
+<!-- Meta -->
+<div class="flex items-center justify-between p-4 bg-[#F7F7F2] rounded-xl border border-[#E5E5E0]">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center border border-[#E5E5E0]">
+<img alt="Meta Ads" class="w-6 h-6 object-contain" data-alt="The Meta company logo presented as a crisp, professional graphic on a clean white background. The visual style is minimal and corporate, reflecting a high-quality advertising integration interface in a warm, light-mode design environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA8V25rTZaUx2E00cEIGozTPHur8OGQmuUglsiZWu1uKgqTy_6Xc6JRes_tVNYKUpk_3D-eregR2ZnRM6sJ8Cfb-c4OlFWv586ZCwg5Jjw2rzU1aEYciugE-zKbhgDdKg8w6wB4LdYce4f2407EM2jUXUclMM8PE1K54jGc8oWv6ETszjmbBuDx9wR7S6-ueDx9rwWAkTBrwjw8Xd13qkcHbhTDpFBj4sFN7BD4-1DftsFs_pkWQ5KvlVSsgzjS4BIfiNghxyC5y3NJ"/>
+</div>
+<div>
+<span class="block text-sm font-bold">Meta Ads Manager</span>
+<span class="text-[10px] uppercase tracking-tighter text-[#6B6B66]">Belum Terhubung</span>
+</div>
+</div>
+<button class="px-4 py-2 bg-white border border-[#E5E5E0] rounded-full text-xs font-bold uppercase tracking-widest hover:bg-primary-container hover:text-white transition-all">Hubungkan</button>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- Sticky Bottom Bar -->
+<footer class="fixed bottom-0 left-0 right-0 h-20 bg-[#F7F7F2] border-t border-[#E5E5E0] z-50 flex items-center justify-center px-6">
+<div class="max-w-[1000px] w-full flex items-center justify-between">
+<div class="flex items-center gap-2 text-amber-600">
+<span class="material-symbols-outlined text-xl">warning</span>
+<span class="text-sm font-medium">Perubahan belum disimpan</span>
+</div>
+<button class="px-8 py-3 bg-[#D97757] text-white rounded-full font-bold shadow-lg hover:scale-105 active:opacity-80 transition-all">
+                Simpan Perubahan
+            </button>
+</div>
+</footer>
+</body></html>

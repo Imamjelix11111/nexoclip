@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>NexoClip Workshop Studio</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&amp;family=Playfair+Display:ital@1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-tertiary-fixed-variant": "#474744",
+                    "surface-tint": "#99462a",
+                    "on-primary": "#ffffff",
+                    "on-secondary": "#ffffff",
+                    "tertiary-fixed-dim": "#c8c6c3",
+                    "on-surface-variant": "#55433d",
+                    "on-primary-fixed": "#390b00",
+                    "tertiary-fixed": "#e5e2de",
+                    "on-secondary-container": "#61615c",
+                    "surface-container-highest": "#e2e3de",
+                    "surface-container-low": "#f4f4ef",
+                    "surface-container-high": "#e8e8e4",
+                    "inverse-surface": "#2f312e",
+                    "background": "#fafaf5",
+                    "on-tertiary-fixed": "#1c1c1a",
+                    "primary": "#99462a",
+                    "primary-fixed-dim": "#ffb59e",
+                    "on-primary-container": "#541400",
+                    "secondary-container": "#deddd7",
+                    "on-error": "#ffffff",
+                    "surface-dim": "#dadad5",
+                    "on-tertiary-container": "#2b2b29",
+                    "surface-variant": "#e2e3de",
+                    "secondary-fixed-dim": "#c8c7c0",
+                    "on-tertiary": "#ffffff",
+                    "error-container": "#ffdad6",
+                    "outline-variant": "#dbc1b9",
+                    "on-secondary-fixed": "#1b1c18",
+                    "tertiary": "#5f5e5c",
+                    "inverse-primary": "#ffb59e",
+                    "on-secondary-fixed-variant": "#474743",
+                    "outline": "#88726c",
+                    "on-background": "#1a1c19",
+                    "on-surface": "#1a1c19",
+                    "tertiary-container": "#94928f",
+                    "secondary": "#5e5f5a",
+                    "on-error-container": "#93000a",
+                    "on-primary-fixed-variant": "#7a2f15",
+                    "surface-bright": "#fafaf5",
+                    "surface-container": "#eeeee9",
+                    "primary-fixed": "#ffdbd0",
+                    "secondary-fixed": "#e4e2dc",
+                    "inverse-on-surface": "#f1f1ec",
+                    "surface-container-lowest": "#ffffff",
+                    "primary-container": "#d97757",
+                    "error": "#ba1a1a",
+                    "surface": "#fafaf5"
+            },
+            "borderRadius": {
+                    "DEFAULT": "1rem",
+                    "lg": "2rem",
+                    "xl": "3rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Inter"],
+                    "body": ["Inter"],
+                    "label": ["Inter"],
+                    "editorial": ["Playfair Display", "serif"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { background-color: #F7F7F2; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #E5E5E0; border-radius: 10px; }
+    </style>
+</head>
+<body class="font-body text-on-surface overflow-x-hidden">
+<!-- TopNavBar -->
+<nav class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-8 h-16 bg-[#F7F7F2]/80 backdrop-blur-md border-b border-[#E5E5E0]">
+<div class="flex items-center gap-8">
+<span class="text-2xl font-black text-[#1D1D1B] font-headline tracking-tight">NexoClip</span>
+<div class="hidden md:flex gap-6">
+<a class="text-[#D97757] font-bold border-b-2 border-[#D97757] pb-1 font-['Inter'] tracking-tight" href="#">Workshop</a>
+<a class="text-[#6B6B66] hover:text-[#1D1D1B] transition-colors font-['Inter'] tracking-tight" href="#">Library</a>
+<a class="text-[#6B6B66] hover:text-[#1D1D1B] transition-colors font-['Inter'] tracking-tight" href="#">Analytics</a>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex gap-2">
+<button class="p-2 text-[#6B6B66] hover:bg-[#E5E5E0]/50 rounded-full transition-all active:scale-90">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 text-[#6B6B66] hover:bg-[#E5E5E0]/50 rounded-full transition-all active:scale-90">
+<span class="material-symbols-outlined">history</span>
+</button>
+</div>
+<button class="px-6 py-2 bg-[#D97757] text-white font-bold rounded-full hover:opacity-90 active:scale-95 transition-all">
+                Render
+            </button>
+<div class="w-10 h-10 rounded-full overflow-hidden border border-[#E5E5E0]">
+<img class="w-full h-full object-cover" data-alt="close-up portrait of a professional male editor in a bright creative studio with soft lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBPStdWis2jC1_4U1YiquHANJqpf_W0lVRcup9d8rIMRxMID8eoKIehld6weMLsF3vwdKoTMfzM649QgfxeVdKn23LO_Vg89_gPQ7-aZBNRUgFCGmBtYKZGtNPnn9y2TEb5G6j7krMIhY1gPBm9Q5uMAkyERW4UjwdNDovVHlrRv4mrx0fTWnndEILenIRk_Tc-WaiJ60JTEgpDHdu6VImVims123L0lXa_2VnS4RDvPgRrkgUZXSTz1MegQt85RYFwSUJw281WJTwh"/>
+</div>
+</div>
+</nav>
+<!-- SideNavBar (Producer Controls) - Updated to Floating Card -->
+<aside class="fixed right-6 top-24 w-80 z-40 flex flex-col bg-white rounded-[32px] border border-[#E5E5E0] shadow-xl max-h-[768px] overflow-hidden">
+<div class="p-6 border-b border-[#E5E5E0]/50 shrink-0">
+<h2 class="text-lg font-black text-[#1D1D1B] uppercase tracking-widest">Producer</h2>
+<p class="text-[10px] text-[#6B6B66] uppercase tracking-[0.2em] mt-1">Status: System Online</p>
+<!-- Progress Indicator -->
+<div class="mt-4 space-y-2">
+<div class="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
+<span class="text-[#D97757] flex items-center gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-[#D97757] animate-pulse"></span>
+                        Analyzing Assets...
+                    </span>
+<span class="text-[#1D1D1B]">65%</span>
+</div>
+<div class="h-1.5 w-full bg-[#F7F7F2] rounded-full overflow-hidden">
+<div class="h-full bg-[#D97757] rounded-full w-[65%] transition-all duration-700 ease-out"></div>
+</div>
+</div>
+</div>
+<!-- Scrollable Content -->
+<div class="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+<!-- Navigation -->
+<nav class="flex flex-col gap-1">
+<a class="bg-[#F7F7F2] text-[#D97757] rounded-full py-2.5 px-4 flex items-center gap-3 font-['Inter'] text-[11px] uppercase tracking-widest font-bold" href="#">
+<span class="material-symbols-outlined text-lg">palette</span> Visuals
+                </a>
+<a class="text-[#6B6B66] hover:bg-[#F7F7F2] rounded-full py-2.5 px-4 flex items-center gap-3 font-['Inter'] text-[11px] uppercase tracking-widest font-bold transition-all" href="#">
+<span class="material-symbols-outlined text-lg">mic</span> Audio
+                </a>
+<a class="text-[#6B6B66] hover:bg-[#F7F7F2] rounded-full py-2.5 px-4 flex items-center gap-3 font-['Inter'] text-[11px] uppercase tracking-widest font-bold transition-all" href="#">
+<span class="material-symbols-outlined text-lg">description</span> Script
+                </a>
+</nav>
+<!-- Global Settings Toggles -->
+<div class="space-y-4">
+<p class="text-[10px] uppercase tracking-widest text-[#6B6B66] font-bold">Global Settings</p>
+<div class="space-y-3">
+<div class="flex items-center justify-between">
+<span class="text-xs font-medium text-[#1D1D1B]">Auto-Sync Audio</span>
+<button class="w-10 h-5 bg-[#D97757] rounded-full relative transition-colors">
+<span class="absolute right-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow-sm"></span>
+</button>
+</div>
+<div class="flex items-center justify-between">
+<span class="text-xs font-medium text-[#1D1D1B]">High-Fidelity Render</span>
+<button class="w-10 h-5 bg-[#E5E5E0] rounded-full relative transition-colors">
+<span class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow-sm"></span>
+</button>
+</div>
+</div>
+</div>
+<!-- Stats Breakdown -->
+<div class="p-5 bg-[#F7F7F2] rounded-[24px] space-y-4">
+<div class="space-y-1">
+<p class="text-[10px] uppercase tracking-tighter text-[#6B6B66]">Total Video Duration</p>
+<p class="text-3xl font-black text-[#1D1D1B] tabular-nums tracking-tighter">03:42</p>
+</div>
+<div class="grid grid-cols-3 gap-2 pt-4 border-t border-[#E5E5E0]">
+<div>
+<p class="text-[8px] uppercase font-bold text-[#6B6B66] mb-0.5">Visuals</p>
+<p class="text-xs font-bold text-[#1D1D1B]">02:15</p>
+</div>
+<div>
+<p class="text-[8px] uppercase font-bold text-[#6B6B66] mb-0.5">Audio</p>
+<p class="text-xs font-bold text-[#1D1D1B]">01:20</p>
+</div>
+<div>
+<p class="text-[8px] uppercase font-bold text-[#6B6B66] mb-0.5">Script</p>
+<p class="text-xs font-bold text-[#1D1D1B]">420w</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Sticky Footer Buttons -->
+<div class="p-6 pt-2 bg-white border-t border-[#E5E5E0]/50 space-y-3 shrink-0">
+<button class="w-full py-4 bg-[#1D1D1B] text-white rounded-full font-bold uppercase tracking-[0.15em] text-[10px] hover:bg-[#D97757] active:scale-[0.98] transition-all shadow-lg shadow-black/5">
+                Produce Full Video
+            </button>
+<button class="w-full py-3 border border-[#E5E5E0] text-[#1D1D1B] rounded-full font-bold text-[10px] uppercase tracking-[0.15em] hover:bg-[#F7F7F2] transition-all">
+                Export Draft
+            </button>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="mt-16 mr-[24rem] ml-8 p-8 max-w-4xl mx-auto">
+<header class="mb-12">
+<h1 class="text-5xl font-black tracking-tighter text-[#1D1D1B] mb-2">Workshop Studio</h1>
+<p class="text-[#6B6B66] text-lg max-w-xl">Refine your scenes, adjust voiceovers, and orchestrate the visual flow of your campaign.</p>
+</header>
+<!-- Scene List -->
+<section class="flex flex-col gap-12 pb-24">
+<!-- Scene Card 1 -->
+<article class="bg-white rounded-[32px] border border-[#E5E5E0] overflow-hidden flex flex-col md:flex-row transition-shadow hover:shadow-xl">
+<!-- 9:16 Visual Preview -->
+<div class="w-full md:w-[320px] aspect-[9/16] bg-stone-200 relative group overflow-hidden shrink-0">
+<img class="w-full h-full object-cover" data-alt="vibrant lifestyle shot of a premium electric scooter leaning against a terracotta wall in warm afternoon sunlight" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBNCuiFWskkPgHPwAjVT28NenB-fO1z73mjJ0pfyrSXR2rgXtANmLK4h8PPjZPc8W99vDPXWv8ZQhkoNRl83uk1fqC0nK8OaVxseis_Hx3S0LNI11AVGmODdLHyjVVS2agYmyDV_pqJbobybniHUgyw6m0Ly8JmdZFwD8qmlR-WoTcDSJYHL2v3PvTkvaHq-0ksXIi8o_VXw7RnCSu_C7FLex-nIYWlT8cCU2aPUD62zRkQCIJxGD0L0Ubids5NJNqoubwRx7nrejVS"/>
+<div class="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors"></div>
+<div class="absolute top-6 left-6 px-4 py-1 bg-white/90 backdrop-blur rounded-full text-[10px] font-bold uppercase tracking-widest italic">Scene 01</div>
+<button class="absolute bottom-6 left-1/2 -translate-x-1/2 p-4 bg-white/20 backdrop-blur-md rounded-full text-white border border-white/40 hover:bg-white/40 transition-all">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</button>
+</div>
+<!-- Scene Content -->
+<div class="flex-1 p-8 flex flex-col gap-6">
+<!-- Template & Language Row -->
+<div class="flex flex-wrap items-center gap-6 border-b border-[#E5E5E0] pb-6">
+<div class="space-y-2">
+<span class="block text-[10px] font-bold uppercase tracking-widest text-[#6B6B66]">Template</span>
+<div class="flex gap-1 p-1 bg-[#F7F7F2] rounded-full">
+<button class="px-4 py-1.5 rounded-full text-xs font-bold bg-white shadow-sm text-[#D97757] transition-all">UGC</button>
+<button class="px-4 py-1.5 rounded-full text-xs font-bold text-[#6B6B66] hover:text-[#1D1D1B] transition-all">Commercial</button>
+<button class="px-4 py-1.5 rounded-full text-xs font-bold text-[#6B6B66] hover:text-[#1D1D1B] transition-all">Cinematic</button>
+</div>
+</div>
+<div class="space-y-2">
+<span class="block text-[10px] font-bold uppercase tracking-widest text-[#6B6B66]">Lipsync Language</span>
+<select class="bg-[#F7F7F2] border-none text-xs font-bold rounded-full px-6 py-2 pr-10 focus:ring-2 ring-[#D97757]/20 appearance-none bg-no-repeat bg-[right_1rem_center]">
+<option>English (US)</option>
+<option>Indonesia</option>
+<option>Malaysia</option>
+<option>Japanese</option>
+</select>
+</div>
+</div>
+<!-- Voiceover Field -->
+<div class="space-y-4">
+<div class="flex justify-between items-center">
+<label class="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[#6B6B66]">
+<span class="material-symbols-outlined text-sm">record_voice_over</span> Voiceover Script
+                            </label>
+<button class="flex items-center gap-1.5 px-3 py-1 border border-[#88726c]/30 rounded-full text-[10px] font-bold uppercase tracking-widest text-[#6B6B66] hover:bg-[#F7F7F2] hover:text-[#D97757] transition-all active:scale-95">
+<span class="material-symbols-outlined text-sm">mic</span> Add Voiceover
+                            </button>
+</div>
+<textarea class="w-full bg-transparent border-none focus:ring-0 text-2xl text-[#1D1D1B] resize-none min-h-[80px] p-0 font-headline font-light tracking-tight" placeholder="Enter the voiceover text here...">The morning light hits the pavement just right. Ready for the urban commute of the future?</textarea>
+</div>
+<!-- Visual Direction -->
+<div class="space-y-2">
+<label class="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[#6B6B66]">
+<span class="material-symbols-outlined text-sm">visibility</span> Visual Direction
+                        </label>
+<input class="w-full bg-[#F7F7F2] border-none rounded-xl text-sm px-4 py-3 text-[#1D1D1B] focus:ring-2 ring-[#D97757]/20" type="text" value="Golden hour lighting, tracking shot from low angle, cinematic bokeh background."/>
+</div>
+<!-- Video Prompt -->
+<div class="space-y-2">
+<div class="flex justify-between items-center">
+<label class="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[#6B6B66]">
+<span class="material-symbols-outlined text-sm">smart_toy</span> AI Video Prompt
+                            </label>
+<button class="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#D97757] hover:opacity-80 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-sm">content_copy</span> Copy Prompt
+                            </button>
+</div>
+<div class="p-4 bg-[#1D1D1B] rounded-2xl">
+<code class="text-xs text-stone-400 font-mono block leading-relaxed">
+                                cinematic close-up of premium electric scooter, high detail metal textures, urban environment background, warm morning sunlight, 4k, hyper-realistic, depth of field
+                            </code>
+</div>
+</div>
+</div>
+</article>
+<!-- Scene Card 2 -->
+<article class="bg-white rounded-[32px] border border-[#E5E5E0] overflow-hidden flex flex-col md:flex-row transition-shadow hover:shadow-xl">
+<!-- 9:16 Visual Preview -->
+<div class="w-full md:w-[320px] aspect-[9/16] bg-stone-200 relative group overflow-hidden shrink-0">
+<img class="w-full h-full object-cover" data-alt="close up shot of hands interacting with a sleek digital dashboard on a modern vehicle interior with ambient neon lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCA5vWylnGDS1v7B1NVhbr8N_8lWQVo5p1kw_B2wMWOxdBAZ6lZwAVETU1uepnXKZkkPl4J4Rx3gmIUo4CfMnl4rAaE5j7vqN9hmzFusp_X4K2zCgltb1PhgTR0f_EBuWm0Da6SV1O-FxfzjvQY9w1eJaILggIxK7kreoYvPwrLLTG5zYA9y2VrdgYk9GmmGS0Yl51Qhn-UkF3hHeTnr4vJp2XIAUKTg7cwH9WSfKQqnZ4rwmoYjjZA5mE0a4k71_2YjNeIvNTA_H-Q"/>
+<div class="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors"></div>
+<div class="absolute top-6 left-6 px-4 py-1 bg-white/90 backdrop-blur rounded-full text-[10px] font-bold uppercase tracking-widest italic">Scene 02</div>
+<button class="absolute bottom-6 left-1/2 -translate-x-1/2 p-4 bg-white/20 backdrop-blur-md rounded-full text-white border border-white/40 hover:bg-white/40 transition-all">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</button>
+</div>
+<!-- Scene Content -->
+<div class="flex-1 p-8 flex flex-col gap-6">
+<!-- Template & Language Row -->
+<div class="flex flex-wrap items-center gap-6 border-b border-[#E5E5E0] pb-6">
+<div class="space-y-2">
+<span class="block text-[10px] font-bold uppercase tracking-widest text-[#6B6B66]">Template</span>
+<div class="flex gap-1 p-1 bg-[#F7F7F2] rounded-full">
+<button class="px-4 py-1.5 rounded-full text-xs font-bold text-[#6B6B66] hover:text-[#1D1D1B] transition-all">UGC</button>
+<button class="px-4 py-1.5 rounded-full text-xs font-bold bg-white shadow-sm text-[#D97757] transition-all">Commercial</button>
+<button class="px-4 py-1.5 rounded-full text-xs font-bold text-[#6B6B66] hover:text-[#1D1D1B] transition-all">Cinematic</button>
+</div>
+</div>
+<div class="space-y-2">
+<span class="block text-[10px] font-bold uppercase tracking-widest text-[#6B6B66]">Lipsync Language</span>
+<select class="bg-[#F7F7F2] border-none text-xs font-bold rounded-full px-6 py-2 pr-10 focus:ring-2 ring-[#D97757]/20 appearance-none bg-no-repeat bg-[right_1rem_center]">
+<option>English (US)</option>
+<option selected="">Indonesia</option>
+<option>Malaysia</option>
+<option>Japanese</option>
+</select>
+</div>
+</div>
+<!-- Voiceover Field -->
+<div class="space-y-4">
+<div class="flex justify-between items-center">
+<label class="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[#6B6B66]">
+<span class="material-symbols-outlined text-sm">record_voice_over</span> Voiceover Script
+                            </label>
+<button class="flex items-center gap-1.5 px-3 py-1 border border-[#88726c]/30 rounded-full text-[10px] font-bold uppercase tracking-widest text-[#6B6B66] hover:bg-[#F7F7F2] hover:text-[#D97757] transition-all active:scale-95">
+<span class="material-symbols-outlined text-sm">mic</span> Add Voiceover
+                            </button>
+</div>
+<textarea class="w-full bg-transparent border-none focus:ring-0 text-2xl text-[#1D1D1B] resize-none min-h-[80px] p-0 font-headline font-light tracking-tight" placeholder="Enter the voiceover text here...">Nikmati kemudahan berkendara dengan interface pintar kami. Masa depan ada di genggaman Anda.</textarea>
+</div>
+<!-- Visual Direction -->
+<div class="space-y-2">
+<label class="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[#6B6B66]">
+<span class="material-symbols-outlined text-sm">visibility</span> Visual Direction
+                        </label>
+<input class="w-full bg-[#F7F7F2] border-none rounded-xl text-sm px-4 py-3 text-[#1D1D1B] focus:ring-2 ring-[#D97757]/20" type="text" value="Extreme close-up of digital screen, neon blue glow reflecting on skin, smooth hand gestures."/>
+</div>
+<!-- Video Prompt -->
+<div class="space-y-2">
+<div class="flex justify-between items-center">
+<label class="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[#6B6B66]">
+<span class="material-symbols-outlined text-sm">smart_toy</span> AI Video Prompt
+                            </label>
+<button class="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#D97757] hover:opacity-80 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-sm">content_copy</span> Copy Prompt
+                            </button>
+</div>
+<div class="p-4 bg-[#1D1D1B] rounded-2xl">
+<code class="text-xs text-stone-400 font-mono block leading-relaxed">
+                                macro shot of futuristic dashboard interface, interactive touch controls glowing neon cyan, minimalist automotive interior, shallow depth of field, high-tech aesthetic
+                            </code>
+</div>
+</div>
+</div>
+</article>
+<!-- Add Scene Button -->
+<button class="group py-12 border-2 border-dashed border-[#E5E5E0] rounded-[32px] hover:bg-white hover:border-[#D97757]/40 transition-all flex flex-col items-center gap-4">
+<div class="w-12 h-12 bg-[#F7F7F2] group-hover:bg-[#D97757]/10 rounded-full flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-[#6B6B66] group-hover:text-[#D97757]">add</span>
+</div>
+<span class="text-xs font-bold uppercase tracking-widest text-[#6B6B66] group-hover:text-[#D97757]">Add New Scene</span>
+</button>
+</section>
+</main>
+</body></html>

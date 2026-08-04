@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>NexoClip | Discovery Studio</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&amp;family=Playfair+Display:italic&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-lowest": "#ffffff",
+                        "on-surface-variant": "#55433d",
+                        "on-secondary-container": "#5c647a",
+                        "on-primary-fixed": "#390b00",
+                        "surface-container-highest": "#f0dfda",
+                        "on-primary-fixed-variant": "#7a2f15",
+                        "on-tertiary-fixed": "#00201c",
+                        "text-muted": "#94A3B8",
+                        "surface-dim": "#e8d6d2",
+                        "secondary": "#565e74",
+                        "surface-container-low": "#fff1ed",
+                        "error-container": "#ffdad6",
+                        "secondary-fixed": "#dae2fd",
+                        "secondary-container": "#dae2fd",
+                        "on-error-container": "#93000a",
+                        "outline-variant": "#dbc1b9",
+                        "primary": "#99462a",
+                        "primary-fixed-dim": "#ffb59e",
+                        "inverse-surface": "#382e2b",
+                        "text-secondary": "#475569",
+                        "warning": "#F59E0B",
+                        "on-secondary": "#ffffff",
+                        "primary-fixed": "#ffdbd0",
+                        "on-tertiary-container": "#00312b",
+                        "text-primary": "#0F172A",
+                        "border": "#E2E8F0",
+                        "surface": "#FFFFFF",
+                        "background": "#F8FAFC",
+                        "tertiary": "#006b5f",
+                        "surface-container-high": "#f6e4e0",
+                        "tertiary-container": "#09a493",
+                        "tertiary-fixed-dim": "#5edac7",
+                        "on-primary-container": "#541400",
+                        "primary-container": "#d97757",
+                        "on-surface": "#221a17",
+                        "accent-light": "rgba(217, 119, 87, 0.1)",
+                        "secondary-fixed-dim": "#bec6e0",
+                        "surface-container": "#fceae5",
+                        "success": "#10B981",
+                        "surface-tint": "#99462a",
+                        "on-primary": "#ffffff",
+                        "tertiary-fixed": "#7df7e3",
+                        "on-error": "#ffffff",
+                        "error": "#EF4444",
+                        "inverse-primary": "#ffb59e",
+                        "on-secondary-fixed": "#131b2e",
+                        "surface-variant": "#f0dfda",
+                        "inverse-on-surface": "#ffede8",
+                        "on-secondary-fixed-variant": "#3f465c",
+                        "on-background": "#221a17",
+                        "on-tertiary-fixed-variant": "#005047",
+                        "surface-bright": "#fff8f6",
+                        "outline": "#88726c",
+                        "on-tertiary": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "content-max": "1400px",
+                        "section-gap": "32px",
+                        "card-padding": "24px",
+                        "base": "8px",
+                        "page-px": "32px",
+                        "metric-gap": "16px"
+                    },
+                    "fontFamily": {
+                        "body-default": ["Manrope"],
+                        "body-compact": ["Manrope"],
+                        "section-heading": ["Manrope"],
+                        "page-title": ["Manrope"],
+                        "stats-display": ["Manrope"],
+                        "small-label": ["Manrope"],
+                        "serif": ["Playfair Display", "serif"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .placeholder-italic::placeholder {
+            font-family: 'Playfair Display', serif;
+            font-style: italic;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body class="bg-background font-body-default text-text-primary min-h-screen">
+<!-- TopAppBar -->
+<header class="fixed top-0 left-0 right-0 z-50 bg-slate-50/80 backdrop-blur-md border-b border-slate-200">
+<div class="flex justify-between items-center px-8 h-16 w-full max-w-[1400px] mx-auto">
+<div class="flex items-center gap-8">
+<span class="text-xl font-extrabold text-slate-900 tracking-tighter">NexoClip</span>
+<nav class="hidden md:flex items-center gap-6 font-manrope font-medium tracking-tight">
+<a class="text-[#D97757] font-bold border-b-2 border-[#D97757] pb-1" href="#">Studio</a>
+<a class="text-slate-500 hover:text-slate-900 transition-all duration-150" href="#">Assets</a>
+<a class="text-slate-500 hover:text-slate-900 transition-all duration-150" href="#">Archive</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 text-slate-500 hover:bg-slate-100 rounded-md transition-all duration-150 active:scale-95">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-2 text-slate-500 hover:bg-slate-100 rounded-md transition-all duration-150 active:scale-95">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-slate-200">
+<img alt="Producer Avatar" data-alt="A professional close-up portrait of a digital content producer with a focused expression. The lighting is soft and cinematic, with a warm minimalist office background. The overall aesthetic is clean, professional, and corporate modern, consistent with high-end creative agency branding." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDSfsERuAXBk6dYn-MDrjgWozZp5oTy23FPBSQBdxYtZro7wWMv5tiva31YeKTtrUgG8SPjHOznOTxOoqNpXqhPzS07d0NqaO0tmifptavq-yYtGHeKgtLIiA3xzOe-EoXG3wKsBhSPckr7KnJO9ROVt8SbhMokZYhmEHGsrthhEEA0W-h_cfFME-V8Lv-JbrkVBtuRKXYHEY6_ulh0gXgG-xAstW-0vSGBmrB5hMII8_roIgtL8W9X2MWGEc1Xi53BrJ_SCOwVcG0t"/>
+</div>
+</div>
+</div>
+</header>
+<main class="pt-32 pb-24 px-page-px max-w-[800px] mx-auto">
+<!-- Hero Area: Chat-style Input -->
+<section class="text-center mb-section-gap">
+<h1 class="font-page-title text-page-title mb-8 text-on-surface">Discovery Studio</h1>
+<div class="relative group">
+<textarea class="w-full bg-transparent border-none focus:ring-0 text-2xl md:text-3xl text-center placeholder-italic p-4 resize-none h-32 text-on-surface" placeholder="Describe your vision... e.g., A cinematic TikTok reveal for a premium coffee brand."></textarea>
+<div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-24 h-0.5 bg-primary-container/20 group-focus-within:w-48 group-focus-within:bg-primary-container transition-all duration-500"></div>
+</div>
+</section>
+<!-- Asset Hub -->
+<section class="grid md:grid-cols-2 gap-metric-gap mb-section-gap">
+<!-- Product Library Upload -->
+<div class="group cursor-pointer bg-white border border-border rounded-[16px] p-card-padding hover:border-primary-container transition-all duration-150 shadow-sm">
+<div class="flex items-center justify-between mb-4">
+<span class="font-section-heading text-section-heading uppercase tracking-widest text-text-muted">Product Library</span>
+<span class="material-symbols-outlined text-text-muted" data-icon="inventory_2">inventory_2</span>
+</div>
+<div class="relative h-48 rounded-lg overflow-hidden bg-slate-50 border border-dashed border-slate-200 flex items-center justify-center">
+<img alt="Premium Coffee" class="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-500" data-alt="A high-end product photography shot of a sleek, dark glass cold brew coffee bottle on a textured stone surface. The lighting is editorial and moody, with soft shadows and warm highlights that emphasize the premium quality. The setting is clean and minimalist, maintaining a sophisticated professional aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCD80HjJi8sZ1a7dy5zgcOrrD3v6XML01qcpIygsS5Xhn_ChMx071xsiDh2EE4i4MOn8sGEM-OLU5ZL_7ia1fw9Z_3dzAbwBR-UOP2YmbTGz2hc8iuXTA_ZGdgbbw9fq1NhBjQMwcAa-lGqE6d22cLk6R6onUx958csbou6S5HnXbs1QM51xNshK-0WsWjwtjGjlt8IMZ_RtBKVl7DWjy_2Fkw73IJjfW8DpgY3PN3V9xx9m-j4sF8QvBgCqJh2v4wJSxFZU8cNwpYg"/>
+<div class="relative z-10 text-center px-4">
+<span class="material-symbols-outlined text-primary-container mb-2 text-3xl" data-icon="upload_file">upload_file</span>
+<p class="text-body-compact font-body-compact text-text-secondary">Drop high-res assets</p>
+</div>
+</div>
+</div>
+<!-- Avatar/Talent Gallery -->
+<div class="group cursor-pointer bg-white border border-border rounded-[16px] p-card-padding hover:border-primary-container transition-all duration-150 shadow-sm">
+<div class="flex items-center justify-between mb-4">
+<span class="font-section-heading text-section-heading uppercase tracking-widest text-text-muted">Talent Gallery</span>
+<span class="material-symbols-outlined text-text-muted" data-icon="face">face</span>
+</div>
+<div class="relative h-48 rounded-lg overflow-hidden bg-slate-50 border border-dashed border-slate-200 flex items-center justify-center">
+<img alt="Professional Talent" class="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-500" data-alt="A professional headshot of a female talent with a confident, welcoming smile. She is set against a clean, neutral studio background with high-key lighting that creates a bright, editorial look. The composition is centered and modern, reflecting a premium corporate creative standard." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDyU3k8ISMsfQBOz-YWl3tvaAms7DknGbDeQgl6j0uiVELlimelsww3F6uFcIM-YoF-tc0VbYDUQX3dc6T4_yxETUohOQEib-0b-043XxKo356dcjK25bIm99aVRFlcMsQg7F9vGqNExGcUc7gfCZTqZwbFY19OTpRnkCgYWhAA9zUR-Iug4Pc59U3_Lt87WHF_NQw9dENVeCGJ2wTbJYItj5BE0Zc7oUVS3PGbH7ghT_dwa7ZBeiulNSefLg7vV7LhubHimpVVsIOH"/>
+<div class="relative z-10 text-center px-4">
+<span class="material-symbols-outlined text-primary-container mb-2 text-3xl" data-icon="person_add">person_add</span>
+<p class="text-body-compact font-body-compact text-text-secondary">Assign digital persona</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Style Presets -->
+<section class="mb-section-gap overflow-x-auto">
+<h3 class="text-center font-section-heading text-section-heading text-text-muted uppercase tracking-[0.2em] mb-8">Visual Theme Presets</h3>
+<div class="flex justify-center items-center gap-8 min-w-max pb-4">
+<!-- Preset: Alexandria -->
+<button class="group flex flex-col items-center gap-3">
+<div class="w-16 h-16 rounded-full border-2 border-primary-container p-1 bg-white transition-all duration-300 group-hover:scale-110">
+<div class="w-full h-full rounded-full bg-[#f4ece1] flex items-center justify-center text-[#8d775f] font-serif italic text-lg">A</div>
+</div>
+<span class="font-small-label text-small-label text-text-secondary group-hover:text-primary transition-colors">Alexandria</span>
+</button>
+<!-- Preset: Bauhaus -->
+<button class="group flex flex-col items-center gap-3">
+<div class="w-16 h-16 rounded-full border-2 border-transparent hover:border-slate-300 p-1 bg-white transition-all duration-300 group-hover:scale-110">
+<div class="w-full h-full rounded-full bg-slate-900 flex items-center justify-center gap-0.5">
+<div class="w-2 h-2 bg-red-500"></div>
+<div class="w-2 h-2 rounded-full bg-yellow-400"></div>
+<div class="w-2 h-2 bg-blue-600"></div>
+</div>
+</div>
+<span class="font-small-label text-small-label text-text-secondary group-hover:text-primary transition-colors">Bauhaus</span>
+</button>
+<!-- Preset: Glacier -->
+<button class="group flex flex-col items-center gap-3">
+<div class="w-16 h-16 rounded-full border-2 border-transparent hover:border-slate-300 p-1 bg-white transition-all duration-300 group-hover:scale-110">
+<div class="w-full h-full rounded-full bg-sky-50 flex items-center justify-center">
+<span class="material-symbols-outlined text-sky-400 text-xl" data-icon="ac_unit">ac_unit</span>
+</div>
+</div>
+<span class="font-small-label text-small-label text-text-secondary group-hover:text-primary transition-colors">Glacier</span>
+</button>
+<!-- Preset: Neon Tokyo -->
+<button class="group flex flex-col items-center gap-3">
+<div class="w-16 h-16 rounded-full border-2 border-transparent hover:border-slate-300 p-1 bg-white transition-all duration-300 group-hover:scale-110">
+<div class="w-full h-full rounded-full bg-[#1a1a2e] flex items-center justify-center">
+<div class="w-6 h-6 rounded-full border-2 border-fuchsia-500 shadow-[0_0_8px_rgba(217,70,239,0.5)]"></div>
+</div>
+</div>
+<span class="font-small-label text-small-label text-text-secondary group-hover:text-primary transition-colors">Neon Tokyo</span>
+</button>
+</div>
+</section>
+<!-- Primary CTA -->
+<div class="flex justify-center mt-12">
+<button class="group relative flex items-center gap-4 bg-primary-container hover:bg-primary text-white font-bold py-6 px-12 rounded-xl transition-all duration-200 active:scale-95 shadow-lg shadow-primary-container/20">
+<span class="material-symbols-outlined text-2xl" data-icon="auto_awesome" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+<span class="tracking-widest font-section-heading">CRAFT STORYBOARD BLUEPRINT</span>
+<div class="absolute -top-1 -right-1 w-4 h-4 bg-warning rounded-full border-2 border-white animate-pulse"></div>
+</button>
+</div>
+<p class="text-center mt-8 text-body-compact font-body-compact text-text-muted">
+            AI will synthesize your vision into a production-ready sequence.
+        </p>
+</main>
+<!-- SideNavBar (Hidden on Mobile) -->
+<aside class="hidden lg:flex fixed left-0 top-16 bottom-0 w-64 bg-white border-r border-slate-200 flex-col p-6 font-manrope text-sm font-semibold">
+<div class="mb-8">
+<div class="flex items-center gap-3 mb-1">
+<div class="w-8 h-8 rounded-lg bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-sm" data-icon="video_settings" style="font-variation-settings: 'FILL' 1;">video_settings</span>
+</div>
+<div>
+<h2 class="text-slate-900 text-sm">Producer Panel</h2>
+<p class="text-[10px] text-slate-500 uppercase tracking-wider font-bold">AI Production Suite</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 text-slate-500 px-4 py-3 hover:bg-slate-50 rounded-lg transition-transform duration-200 hover:translate-x-1" href="#">
+<span class="material-symbols-outlined" data-icon="campaign">campaign</span>
+<span>Campaigns</span>
+</a>
+<a class="flex items-center gap-3 bg-[#D97757]/10 text-[#D97757] rounded-lg px-4 py-3 transition-transform duration-200 hover:translate-x-1" href="#">
+<span class="material-symbols-outlined" data-icon="video_settings">video_settings</span>
+<span>Workshop</span>
+</a>
+<a class="flex items-center gap-3 text-slate-500 px-4 py-3 hover:bg-slate-50 rounded-lg transition-transform duration-200 hover:translate-x-1" href="#">
+<span class="material-symbols-outlined" data-icon="auto_awesome_motion">auto_awesome_motion</span>
+<span>Library</span>
+</a>
+<a class="flex items-center gap-3 text-slate-500 px-4 py-3 hover:bg-slate-50 rounded-lg transition-transform duration-200 hover:translate-x-1" href="#">
+<span class="material-symbols-outlined" data-icon="archive">archive</span>
+<span>History</span>
+</a>
+</nav>
+<button class="mt-4 mb-8 bg-[#D97757] text-white rounded-lg py-3 px-4 flex items-center justify-center gap-2 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-sm" data-icon="add">add</span>
+<span>Create New Clip</span>
+</button>
+<div class="border-t border-slate-100 pt-6 space-y-1">
+<a class="flex items-center gap-3 text-slate-500 px-4 py-3 hover:bg-slate-50 rounded-lg transition-transform duration-200 hover:translate-x-1" href="#">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+<span>Help Center</span>
+</a>
+<a class="flex items-center gap-3 text-slate-500 px-4 py-3 hover:bg-slate-50 rounded-lg transition-transform duration-200 hover:translate-x-1" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span>Account Settings</span>
+</a>
+</div>
+</aside>
+</body></html>

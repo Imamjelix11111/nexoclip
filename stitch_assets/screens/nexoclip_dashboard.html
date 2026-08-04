@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>NexoClip Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary": "#006b5f",
+                    "surface-container-high": "#f6e4e0",
+                    "error-muted": "#fff1f2",
+                    "tertiary-fixed-dim": "#5edac7",
+                    "tertiary-container": "#09a493",
+                    "on-primary-container": "#541400",
+                    "primary-container": "#d97757",
+                    "success-muted": "#ecfdf5",
+                    "on-surface": "#221a17",
+                    "accent-light": "rgba(217, 119, 87, 0.1)",
+                    "secondary-fixed-dim": "#b9c7df",
+                    "surface-container": "#fceae5",
+                    "success": "#10b981",
+                    "surface-tint": "#99462a",
+                    "tertiary-fixed": "#7df7e3",
+                    "on-primary": "#ffffff",
+                    "on-error": "#ffffff",
+                    "error": "#ef4444",
+                    "inverse-primary": "#ffb59e",
+                    "on-secondary-fixed": "#0d1c2e",
+                    "surface-variant": "#f0dfda",
+                    "inverse-on-surface": "#ffede8",
+                    "on-secondary-fixed-variant": "#3a485b",
+                    "on-tertiary-fixed-variant": "#005047",
+                    "on-background": "#221a17",
+                    "outline": "#88726c",
+                    "surface-bright": "#fff8f6",
+                    "on-tertiary": "#ffffff",
+                    "surface-container-lowest": "#ffffff",
+                    "on-surface-variant": "#55433d",
+                    "on-secondary-container": "#57657a",
+                    "on-primary-fixed": "#390b00",
+                    "surface-container-highest": "#f0dfda",
+                    "on-primary-fixed-variant": "#7a2f15",
+                    "on-tertiary-fixed": "#00201c",
+                    "text-muted": "#94a3b8",
+                    "surface-dim": "#e8d6d2",
+                    "secondary": "#515f74",
+                    "surface-container-low": "#fff1ed",
+                    "error-container": "#ffdad6",
+                    "secondary-fixed": "#d5e3fc",
+                    "secondary-container": "#d5e3fc",
+                    "on-error-container": "#93000a",
+                    "primary": "#99462a",
+                    "outline-variant": "#dbc1b9",
+                    "primary-fixed-dim": "#ffb59e",
+                    "inverse-surface": "#382e2b",
+                    "warning": "#f59e0b",
+                    "text-secondary": "#475569",
+                    "on-secondary": "#ffffff",
+                    "primary-fixed": "#ffdbd0",
+                    "on-tertiary-container": "#00312b",
+                    "border": "#e2e8f0",
+                    "text-primary": "#0f172a",
+                    "background": "#f8fafc",
+                    "surface": "#ffffff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "gap-md": "24px",
+                    "gap-xs": "8px",
+                    "gap-lg": "32px",
+                    "base": "8px",
+                    "gap-sm": "16px",
+                    "page-padding": "32px",
+                    "max-width": "1400px",
+                    "card-padding": "24px"
+            },
+            "fontFamily": {
+                    "page-title": ["Manrope"],
+                    "section-heading": ["Manrope"],
+                    "small-label": ["Manrope"],
+                    "body-medium": ["Manrope"],
+                    "body": ["Manrope"],
+                    "stats": ["Manrope"]
+            },
+            "fontSize": {
+                    "page-title": ["20px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                    "section-heading": ["13px", {"lineHeight": "1.4", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                    "small-label": ["11px", {"lineHeight": "1", "letterSpacing": "0.1em", "fontWeight": "500"}],
+                    "body-medium": ["14px", {"lineHeight": "1.6", "letterSpacing": "normal", "fontWeight": "500"}],
+                    "body": ["13px", {"lineHeight": "1.6", "letterSpacing": "normal", "fontWeight": "400"}],
+                    "stats": ["24px", {"fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Manrope', sans-serif; background-color: #f8fafc; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    </style>
+</head>
+<body class="text-on-background">
+<!-- Top Navigation Bar -->
+<header class="bg-white dark:bg-slate-900 docked full-width top-0 z-40 border-b border-slate-200 dark:border-slate-800 shadow-sm sticky">
+<div class="flex justify-between items-center px-8 h-16 w-full max-w-[1400px] mx-auto">
+<div class="flex items-center gap-8">
+<span class="text-xl font-black text-slate-900 dark:text-white tracking-tighter">NexoClip</span>
+<nav class="hidden md:flex items-center gap-6 font-manrope text-sm font-semibold tracking-tight">
+<a class="text-orange-600 dark:text-orange-400 border-b-2 border-orange-600 pb-1" href="#">Dashboard</a>
+<a class="text-slate-500 dark:text-slate-400 font-medium hover:text-orange-600 dark:hover:text-orange-300 transition-colors duration-200" href="#">Projects</a>
+<a class="text-slate-500 dark:text-slate-400 font-medium hover:text-orange-600 dark:hover:text-orange-300 transition-colors duration-200" href="#">Assets</a>
+<a class="text-slate-500 dark:text-slate-400 font-medium hover:text-orange-600 dark:hover:text-orange-300 transition-colors duration-200" href="#">Team</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="bg-primary text-on-primary px-4 py-2 rounded-lg font-manrope text-sm font-semibold scale-95 active:scale-90 transition-transform">Create New</button>
+<div class="flex items-center gap-2 border-l border-slate-200 pl-4">
+<span class="material-symbols-outlined text-slate-500 cursor-pointer hover:text-primary transition-colors">notifications</span>
+<span class="material-symbols-outlined text-slate-500 cursor-pointer hover:text-primary transition-colors">settings</span>
+<div class="w-8 h-8 rounded-full overflow-hidden bg-slate-200">
+<img alt="User Profile Avatar" class="w-full h-full object-cover" data-alt="A professional studio portrait of a young Indonesian creative professional with a clean, modern aesthetic. The individual has a friendly expression, short styled hair, and is wearing a minimalist dark polo shirt. The background is a soft, out-of-focus high-end office environment with warm terracotta and slate blue tones consistent with a creative agency." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDOBULX6xnB97TM1fWJQU9ZAZx3zY9HPGU-WAqtw08Ss7_5_xsMxBVkQOTzTNYkCNWZ5ZOJBH0rnNYgCjbBIWXmzg85B3WYi3uKcG_C4yv5Px0rsr-QVMSigZ8SvB-gY96yWSALRnh6lwYgKoRTc_mz5bqDXmtj1uhFcrWWNqp20epeQBhHLT64pzAabgECQ8-9-MLIQGMYWt6EBiD_o0o-jY4WQnPNPTUbk-zK_SzpAYVUfWlGo-mEfarxasBxzyP5Dw6wfftJcFGI"/>
+</div>
+</div>
+</div>
+</div>
+</header>
+<main class="max-w-[1400px] mx-auto p-8 space-y-8">
+<!-- Section 1: Header -->
+<section class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+<div class="space-y-1">
+<div class="flex items-center gap-3">
+<h1 class="font-page-title text-page-title text-text-primary">Hi, Imam</h1>
+<span class="bg-primary text-on-primary text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase">PRO</span>
+</div>
+<p class="font-body text-body text-text-secondary">Diperbarui 2 menit lalu</p>
+</div>
+<button class="flex items-center gap-2 bg-surface border border-border px-4 py-2 rounded-lg font-manrope text-sm font-semibold text-text-primary hover:bg-slate-50 transition-all scale-95 active:scale-90 shadow-sm">
+<span class="material-symbols-outlined text-[18px]">refresh</span>
+                Segarkan
+            </button>
+</section>
+<!-- Section 2: Quick Actions -->
+<section class="flex flex-wrap gap-sm">
+<button class="flex items-center gap-2 bg-white border border-border px-5 py-2.5 rounded-full font-body-medium text-body-medium text-text-primary hover:border-primary hover:text-primary transition-all duration-200 shadow-sm">
+<span class="material-symbols-outlined text-primary text-[20px]" data-weight="fill">smart_toy</span>
+                UGC Agent
+            </button>
+<button class="flex items-center gap-2 bg-white border border-border px-5 py-2.5 rounded-full font-body-medium text-body-medium text-text-primary hover:border-primary hover:text-primary transition-all duration-200 shadow-sm">
+<span class="material-symbols-outlined text-primary text-[20px]" data-weight="fill">movie_edit</span>
+                Auto Clip
+            </button>
+<button class="flex items-center gap-2 bg-white border border-border px-5 py-2.5 rounded-full font-body-medium text-body-medium text-text-primary hover:border-primary hover:text-primary transition-all duration-200 shadow-sm">
+<span class="material-symbols-outlined text-primary text-[20px]" data-weight="fill">format_list_bulleted</span>
+                Listicle
+            </button>
+<button class="flex items-center gap-2 bg-white border border-border px-5 py-2.5 rounded-full font-body-medium text-body-medium text-text-primary hover:border-primary hover:text-primary transition-all duration-200 shadow-sm">
+<span class="material-symbols-outlined text-primary text-[20px]" data-weight="fill">share</span>
+                Distribusi
+            </button>
+</section>
+<!-- Section 3: Metrics -->
+<section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-sm">
+<div class="bg-surface border border-border p-card-padding rounded-xl shadow-sm hover:shadow-md transition-shadow">
+<div class="flex justify-between items-start mb-4">
+<span class="material-symbols-outlined p-2 bg-accent-light text-primary rounded-lg">video_library</span>
+<span class="text-success text-xs font-bold">+12%</span>
+</div>
+<h3 class="font-small-label text-small-label text-text-muted mb-1 uppercase tracking-widest">Total Video</h3>
+<p class="font-stats text-stats text-text-primary">48</p>
+</div>
+<div class="bg-surface border border-border p-card-padding rounded-xl shadow-sm hover:shadow-md transition-shadow">
+<div class="flex justify-between items-start mb-4">
+<span class="material-symbols-outlined p-2 bg-accent-light text-primary rounded-lg">visibility</span>
+<span class="text-success text-xs font-bold">+24%</span>
+</div>
+<h3 class="font-small-label text-small-label text-text-muted mb-1 uppercase tracking-widest">Total Views</h3>
+<p class="font-stats text-stats text-text-primary">12.4K</p>
+</div>
+<div class="bg-surface border border-border p-card-padding rounded-xl shadow-sm hover:shadow-md transition-shadow">
+<div class="flex justify-between items-start mb-4">
+<span class="material-symbols-outlined p-2 bg-accent-light text-primary rounded-lg">token</span>
+<span class="text-text-muted text-xs font-medium">Monthly</span>
+</div>
+<h3 class="font-small-label text-small-label text-text-muted mb-1 uppercase tracking-widest">Credits</h3>
+<p class="font-stats text-stats text-text-primary">1,240</p>
+</div>
+<div class="bg-surface border border-border p-card-padding rounded-xl shadow-sm hover:shadow-md transition-shadow">
+<div class="flex justify-between items-start mb-4">
+<span class="material-symbols-outlined p-2 bg-accent-light text-primary rounded-lg">monetization_on</span>
+<span class="text-error text-xs font-bold">0%</span>
+</div>
+<h3 class="font-small-label text-small-label text-text-muted mb-1 uppercase tracking-widest">Est. Revenue</h3>
+<p class="font-stats text-stats text-text-primary">$0</p>
+</div>
+</section>
+<!-- Section 4: Main Grid -->
+<section class="grid grid-cols-1 lg:grid-cols-3 gap-lg">
+<!-- Chart Area -->
+<div class="lg:col-span-2 bg-surface border border-border p-card-padding rounded-xl shadow-sm">
+<div class="flex justify-between items-center mb-8">
+<h2 class="font-section-heading text-section-heading text-text-primary uppercase tracking-wider">Tren Engagement</h2>
+<select class="bg-transparent border-none text-xs font-semibold text-text-secondary focus:ring-0 cursor-pointer">
+<option>Last 7 Days</option>
+<option>Last 30 Days</option>
+</select>
+</div>
+<div class="h-64 relative w-full bg-slate-50 rounded-lg overflow-hidden flex items-end">
+<!-- Faux Area Chart Visualization -->
+<svg class="w-full h-full preserve-aspect-ratio-none" viewbox="0 0 400 100">
+<defs>
+<lineargradient id="chartGradient" x1="0" x2="0" y1="0" y2="1">
+<stop offset="5%" stop-color="#D97757" stop-opacity="0.3"></stop>
+<stop offset="95%" stop-color="#D97757" stop-opacity="0"></stop>
+</lineargradient>
+</defs>
+<path d="M0 80 Q 50 20, 100 60 T 200 40 T 300 70 T 400 30 L 400 100 L 0 100 Z" fill="url(#chartGradient)"></path>
+<path d="M0 80 Q 50 20, 100 60 T 200 40 T 300 70 T 400 30" fill="none" stroke="#D97757" stroke-width="2"></path>
+</svg>
+<div class="absolute inset-0 flex justify-around items-end px-4 pb-2">
+<span class="text-[10px] text-text-muted">Mon</span>
+<span class="text-[10px] text-text-muted">Tue</span>
+<span class="text-[10px] text-text-muted">Wed</span>
+<span class="text-[10px] text-text-muted">Thu</span>
+<span class="text-[10px] text-text-muted">Fri</span>
+<span class="text-[10px] text-text-muted">Sat</span>
+<span class="text-[10px] text-text-muted">Sun</span>
+</div>
+</div>
+</div>
+<!-- AI Usage Progress List -->
+<div class="bg-surface border border-border p-card-padding rounded-xl shadow-sm">
+<h2 class="font-section-heading text-section-heading text-text-primary uppercase tracking-wider mb-6">AI Usage</h2>
+<div class="space-y-6">
+<div class="space-y-2">
+<div class="flex justify-between items-center text-xs font-semibold">
+<span class="text-text-primary">Script Generation</span>
+<span class="text-text-secondary">85%</span>
+</div>
+<div class="w-full bg-slate-100 h-1.5 rounded-full">
+<div class="bg-primary h-full rounded-full w-[85%]"></div>
+</div>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between items-center text-xs font-semibold">
+<span class="text-text-primary">Video Rendering</span>
+<span class="text-text-secondary">42%</span>
+</div>
+<div class="w-full bg-slate-100 h-1.5 rounded-full">
+<div class="bg-primary h-full rounded-full w-[42%]"></div>
+</div>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between items-center text-xs font-semibold">
+<span class="text-text-primary">Subtitle AI</span>
+<span class="text-text-secondary">68%</span>
+</div>
+<div class="w-full bg-slate-100 h-1.5 rounded-full">
+<div class="bg-primary h-full rounded-full w-[68%]"></div>
+</div>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between items-center text-xs font-semibold">
+<span class="text-text-primary">Image Gen</span>
+<span class="text-text-secondary">15%</span>
+</div>
+<div class="w-full bg-slate-100 h-1.5 rounded-full">
+<div class="bg-primary h-full rounded-full w-[15%]"></div>
+</div>
+</div>
+<div class="mt-8 p-4 bg-accent-light rounded-lg border border-primary/10">
+<p class="text-[12px] font-medium text-primary mb-2">You're almost out of credits!</p>
+<button class="text-[12px] font-bold text-primary underline underline-offset-4">Upgrade Now</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Section 5: Bottom Grid -->
+<section class="grid grid-cols-1 md:grid-cols-2 gap-lg">
+<!-- Video Terbaru -->
+<div class="bg-surface border border-border p-card-padding rounded-xl shadow-sm">
+<div class="flex justify-between items-center mb-6">
+<h2 class="font-section-heading text-section-heading text-text-primary uppercase tracking-wider">Video Terbaru</h2>
+<button class="text-xs font-bold text-primary">Lihat Semua</button>
+</div>
+<div class="space-y-4">
+<div class="flex items-center gap-4 group cursor-pointer">
+<div class="w-16 h-10 bg-slate-200 rounded overflow-hidden flex-shrink-0">
+<img alt="Video Thumbnail" class="w-full h-full object-cover group-hover:scale-110 transition-transform" data-alt="A cinematic low-angle shot of a lush tropical jungle in Indonesia, with soft morning sunlight filtering through the canopy. The style is professional travel cinematography, with rich green and warm golden tones. The image is framed as a 16:9 video thumbnail, suggesting high-quality editorial content." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAXc8g__vEmwm8NvuBg0Xn0a1crExRe5H72eNqRwHh1RMi32a2-ZOYxrgzZ4XSqBUxg20oJG4NuipDLrrcFXNpkVnxD2qrupIivRbthcNFroYaLbcgMUEF5J3TAttLH1ppoSpep2SPn2plHAbyIFB5kpqbJEX8gJBagnqB4Xy24qTA-MsjdYZjSYWfvVCtXRgvwLFzA9bS-vOZM-5z4B_mkN5bKAyjNlSkOYwv08S9vD1BKw_e3LLyHJa4u5sMGFygF9zZAoBPlhznK"/>
+</div>
+<div class="flex-grow min-w-0">
+<h4 class="text-body-medium font-bold text-text-primary truncate">Tips Marketing 2024</h4>
+<p class="text-[11px] text-text-muted">3 jam lalu • 1.2K Views</p>
+</div>
+<span class="bg-emerald-50 text-emerald-600 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-tighter">PUBLISHED</span>
+</div>
+<div class="flex items-center gap-4 group cursor-pointer">
+<div class="w-16 h-10 bg-slate-200 rounded overflow-hidden flex-shrink-0">
+<img alt="Video Thumbnail" class="w-full h-full object-cover group-hover:scale-110 transition-transform" data-alt="A clean, minimalist high-key photo of a sleek digital workstation with a modern camera and lighting setup. The aesthetic is professional and corporate, emphasizing content creation tools. The background consists of soft white walls and warm wood accents, mirroring a high-end creative studio environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDEKInbPHcZoy0xbdeUQwzQxv9SwmYfQ7Dmsl5ZfdbjOwMXEUlVM4T1JPSjvMN3hajY3sOYJtE9ctmA5Q8-FZ5SOD6EQEXABRY80iozY9CC1EpxTQ6eSDEHyAG8aZU9WPlRILA9-zfsypWpPCa6yuXI3Nw0gy3wIOZqypc6XGrtgl3SpIH5bk0MtlfSb8jyyMgcgOMwu0F7vtKnGgxDMN28EgM1UC_m9ksYvSGXWoesTlH6QS90tuQjstlz8sO4PSpUf-sDm7LYa_H_"/>
+</div>
+<div class="flex-grow min-w-0">
+<h4 class="text-body-medium font-bold text-text-primary truncate">Review Produk Viral</h4>
+<p class="text-[11px] text-text-muted">Kemarin • 854 Views</p>
+</div>
+<span class="bg-emerald-50 text-emerald-600 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-tighter">PUBLISHED</span>
+</div>
+<div class="flex items-center gap-4 group cursor-pointer">
+<div class="w-16 h-10 bg-slate-200 rounded overflow-hidden flex-shrink-0">
+<img alt="Video Thumbnail" class="w-full h-full object-cover group-hover:scale-110 transition-transform" data-alt="A striking interior shot of a futuristic data center with glowing blue and orange server lights. The lighting is dramatic and technical, symbolizing high-performance computing and AI processing. The composition is symmetrical and professional, suitable for a tech-focused creative agency visual." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBzLJz0yzsHkukUBgnQqVhvgSKk4DjfSDxofo70G1Jg2CosaFxNEhecj-aFPzY3PMJ09gCpSTuhx8FS9Qus5bzoZogUPTiFidDpot3VWbx0mgg6ZQ1pMI4FoLAN3qv2oc5zKdWCdjWh6x6s0zULixO7tvgwUnTZ2pSjNUyY_tiAoRqvsHGvC7gHSkji052mCEtHJ_YCqTiYJreLTbXWCd6Nro1R6CyN3MQna952KLnFcCy0chWuYFgNXqEGOM9GLtaS4I7pi0vwuS3o"/>
+</div>
+<div class="flex-grow min-w-0">
+<h4 class="text-body-medium font-bold text-text-primary truncate">AI Trends Discussion</h4>
+<p class="text-[11px] text-text-muted">2 hari lalu • 4.2K Views</p>
+</div>
+<span class="bg-emerald-50 text-emerald-600 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-tighter">PUBLISHED</span>
+</div>
+</div>
+</div>
+<!-- Antrian Publish -->
+<div class="bg-surface border border-border p-card-padding rounded-xl shadow-sm">
+<div class="flex justify-between items-center mb-6">
+<h2 class="font-section-heading text-section-heading text-text-primary uppercase tracking-wider">Antrian Publish</h2>
+<button class="text-xs font-bold text-primary">Kelola</button>
+</div>
+<div class="space-y-4">
+<div class="flex items-center gap-4 p-3 bg-slate-50 rounded-lg border border-dashed border-slate-200">
+<div class="w-10 h-10 bg-white rounded-full flex items-center justify-center border border-slate-200 shadow-sm">
+<span class="material-symbols-outlined text-primary">schedule</span>
+</div>
+<div class="flex-grow">
+<h4 class="text-body-medium font-bold text-text-primary">Eksperimen UGC #12</h4>
+<p class="text-[11px] text-text-muted">Scheduled: Besok, 10:00 AM</p>
+</div>
+<span class="material-symbols-outlined text-slate-400 cursor-pointer hover:text-error transition-colors">more_vert</span>
+</div>
+<div class="flex items-center gap-4 p-3 bg-slate-50 rounded-lg border border-dashed border-slate-200">
+<div class="w-10 h-10 bg-white rounded-full flex items-center justify-center border border-slate-200 shadow-sm">
+<span class="material-symbols-outlined text-primary">pending</span>
+</div>
+<div class="flex-grow">
+<h4 class="text-body-medium font-bold text-text-primary">Tutorial NexoClip</h4>
+<p class="text-[11px] text-text-muted">Status: Sedang Render (82%)</p>
+</div>
+<div class="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin hidden"></div>
+</div>
+<div class="flex items-center justify-center h-16 border-2 border-dashed border-slate-200 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors">
+<p class="text-[11px] font-bold text-text-muted uppercase tracking-widest">+ Tambah Antrian Baru</p>
+</div>
+</div>
+</div>
+</section>
+</main>
+<footer class="max-w-[1400px] mx-auto px-8 py-12 border-t border-slate-200 mt-12">
+<div class="flex flex-col md:flex-row justify-between items-center gap-6">
+<div class="flex items-center gap-4">
+<span class="text-lg font-black text-slate-400 tracking-tighter">NexoClip</span>
+<span class="text-[12px] text-slate-400 font-medium">© 2024 NexoClip Studio. All rights reserved.</span>
+</div>
+<div class="flex gap-6">
+<a class="text-[12px] text-slate-400 hover:text-primary transition-colors" href="#">Privacy Policy</a>
+<a class="text-[12px] text-slate-400 hover:text-primary transition-colors" href="#">Terms of Service</a>
+<a class="text-[12px] text-slate-400 hover:text-primary transition-colors" href="#">Help Center</a>
+</div>
+</div>
+</footer>
+</body></html>

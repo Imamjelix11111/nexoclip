@@ -1,0 +1,141 @@
+# NexoClip — Global Style System
+
+Design a SaaS web application called **NexoClip**, an AI-powered video content creation and distribution studio for Indonesian content creators and digital marketers.
+
+---
+
+## Identity
+
+- App name: NexoClip
+- Tagline: AI Video Production Studio
+- Tone: Professional, modern, editorial. Like a high-end creative agency tool — not a startup toy.
+- Audience: Indonesian TikTok/YouTube creators and performance marketers.
+
+---
+
+## Color Palette
+
+| Token | Hex | Usage |
+|---|---|---|
+| Background | #f8fafc | Page/app background |
+| Surface | #ffffff | Cards, panels |
+| Border | #e2e8f0 | Dividers, card borders |
+| Text Primary | #0f172a | Headings, important text |
+| Text Secondary | #475569 | Body text |
+| Text Muted | #94a3b8 | Labels, placeholders, metadata |
+| Accent | #D97757 | CTAs, active states, highlights |
+| Accent Light | #D97757/10 | Active item bg, badge bg |
+| Success | #10b981 | Completed status |
+| Error | #ef4444 | Failed status |
+| Warning | #f59e0b | Pending/warning |
+
+---
+
+## Typography
+
+- **Font family**: Inter or Manrope (sans-serif)
+- **Page title**: 20px, weight 600, tracking-tight (-0.02em)
+- **Section heading**: 13px, weight 600, tracking-tight
+- **Body**: 13–14px, weight 400–500, line-height 1.6
+- **Small label**: 11px, uppercase, letter-spacing 0.1em, weight 500 — used for metadata, card labels
+- **Numbers/stats**: Tabular nums, weight 600
+
+---
+
+## Spacing & Layout
+
+- Base grid: 8px
+- Page horizontal padding: 32px
+- Content max-width: 1400px, centered
+- Card inner padding: 20–24px
+- Section gap: 24–32px
+- Between metric cards: 16px gap
+
+---
+
+## Borders & Radius
+
+| Element | Radius |
+|---|---|
+| Cards | 16px |
+| Buttons (primary/secondary) | 12px |
+| Inputs | 10px |
+| Badges/status pills | 6px |
+| Rounded pills | 999px |
+
+---
+
+## Shadows
+
+- **Card**: `0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)`
+- **Dropdown/popover**: `0 8px 24px rgba(0,0,0,0.1)`
+- **Modal**: `0 20px 60px rgba(0,0,0,0.14)`
+- **Focused input**: `0 0 0 3px rgba(217,119,87,0.15)`
+
+---
+
+## Components
+
+### Button — Primary
+- Background: #D97757
+- Text: white, 13px, weight 600
+- Radius: 12px
+- Padding: 10px 20px
+- Hover: slightly darker (#c96845)
+- Disabled: opacity 50%
+
+### Button — Secondary
+- Background: white
+- Border: #e2e8f0
+- Text: #475569
+- Hover: #f8fafc bg
+
+### Button — Ghost
+- No border, no bg
+- Text: #475569
+- Hover: #f1f5f9 bg
+
+### Input Field
+- Background: white
+- Border: #e2e8f0
+- Border radius: 10px
+- Padding: 10px 14px
+- Font: 13px, #0f172a
+- Focus border: #D97757
+- Focus ring: 3px rgba(217,119,87,0.15)
+- Placeholder: #94a3b8
+
+### Card
+- Background: white
+- Border: 1px solid #e2e8f0
+- Border radius: 16px
+- Shadow: card shadow above
+- Padding: 20–24px
+
+### Badge / Status Pill
+- Small: 10px font, uppercase, letter-spacing 0.1em, px-2 py-0.5, radius 6px
+- Completed: emerald-50 bg + emerald-600 text
+- Failed: rose-50 bg + rose-600 text
+- Processing: accent/10 bg + accent text
+- Plan badge: accent/10 bg + accent text, border accent/20
+
+### Dividers
+- Color: #e2e8f0 (or slate-100 inside cards)
+- 1px height
+
+---
+
+## Icons
+
+- Library: Lucide Icons (16px default, 14px small)
+- Color: inherits from parent or slate-400 for decorative icons
+- Accent icons: #D97757
+
+---
+
+## States
+
+- **Loading skeleton**: slate-100 bg, animate-pulse, same shape as content
+- **Empty state**: centered icon (40px, opacity 40%) + 12px muted text
+- **Error state**: rose-50 banner, rose-600 text, AlertCircle icon
+- **Hover**: smooth 150ms transition on bg/border/color

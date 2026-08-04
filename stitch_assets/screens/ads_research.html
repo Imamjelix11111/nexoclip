@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>NexoClip - Riset Ads</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary": "#5f5e5c",
+                    "inverse-on-surface": "#f1f1ec",
+                    "secondary": "#5e5f5a",
+                    "on-surface": "#1a1c19",
+                    "surface-container-lowest": "#ffffff",
+                    "outline": "#88726c",
+                    "error": "#ba1a1a",
+                    "surface-container-low": "#f4f4ef",
+                    "on-surface-variant": "#55433d",
+                    "on-primary-fixed": "#390b00",
+                    "on-tertiary-fixed": "#1c1c1a",
+                    "on-background": "#1a1c19",
+                    "on-tertiary-fixed-variant": "#474744",
+                    "background": "#fafaf5",
+                    "surface-container-high": "#e8e8e4",
+                    "primary-fixed": "#ffdbd0",
+                    "inverse-primary": "#ffb59e",
+                    "on-secondary": "#ffffff",
+                    "secondary-fixed-dim": "#c8c7c0",
+                    "surface": "#fafaf5",
+                    "on-tertiary": "#ffffff",
+                    "surface-dim": "#dadad5",
+                    "secondary-container": "#deddd7",
+                    "on-error": "#ffffff",
+                    "on-primary": "#ffffff",
+                    "tertiary-fixed": "#e5e2de",
+                    "tertiary-container": "#94928f",
+                    "on-secondary-fixed": "#1b1c18",
+                    "surface-container": "#eeeee9",
+                    "on-primary-container": "#541400",
+                    "surface-tint": "#99462a",
+                    "surface-container-highest": "#e2e3de",
+                    "on-secondary-fixed-variant": "#474743",
+                    "on-tertiary-container": "#2b2b29",
+                    "secondary-fixed": "#e4e2dc",
+                    "primary-fixed-dim": "#ffb59e",
+                    "outline-variant": "#dbc1b9",
+                    "primary": "#99462a",
+                    "inverse-surface": "#2f312e",
+                    "surface-variant": "#e2e3de",
+                    "on-error-container": "#93000a",
+                    "primary-container": "#d97757",
+                    "error-container": "#ffdad6",
+                    "on-primary-fixed-variant": "#7a2f15",
+                    "on-secondary-container": "#61615c",
+                    "tertiary-fixed-dim": "#c8c6c3",
+                    "surface-bright": "#fafaf5"
+            },
+            "borderRadius": {
+                    "DEFAULT": "1rem",
+                    "lg": "2rem",
+                    "xl": "3rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Inter"],
+                    "display": ["Inter"],
+                    "body": ["Inter"],
+                    "label": ["Inter"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body min-h-screen">
+<!-- Sidebar Navigation (SideNavBar) -->
+<aside class="h-screen w-64 border-r fixed left-0 top-0 bg-[#F7F7F2] dark:bg-stone-900 border-stone-200 dark:border-stone-800 flex flex-col h-full py-8 z-40 hidden md:flex">
+<div class="px-6 mb-10">
+<h1 class="text-lg font-black text-stone-900 dark:text-stone-100 uppercase tracking-tighter">Studio Workspace</h1>
+<p class="text-[10px] font-medium uppercase tracking-widest text-[#D97757]">Editorial Mode</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 text-stone-500 dark:text-stone-400 pl-5 py-3 hover:bg-stone-100 dark:hover:bg-stone-800 transition-all font-inter text-sm font-medium uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+                Overview
+            </a>
+<a class="flex items-center gap-3 text-stone-900 dark:text-stone-50 font-bold border-l-4 border-[#D97757] pl-4 py-3 bg-stone-100/50 dark:bg-stone-800/50 font-inter text-sm font-medium uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined" data-icon="movie" style="font-variation-settings: 'FILL' 1;">movie</span>
+                Content
+            </a>
+<a class="flex items-center gap-3 text-stone-500 dark:text-stone-400 pl-5 py-3 hover:bg-stone-100 dark:hover:bg-stone-800 transition-all font-inter text-sm font-medium uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined" data-icon="share">share</span>
+                Distribution
+            </a>
+<a class="flex items-center gap-3 text-stone-500 dark:text-stone-400 pl-5 py-3 hover:bg-stone-100 dark:hover:bg-stone-800 transition-all font-inter text-sm font-medium uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined" data-icon="shopping_bag">shopping_bag</span>
+                Commerce
+            </a>
+<a class="flex items-center gap-3 text-stone-500 dark:text-stone-400 pl-5 py-3 hover:bg-stone-100 dark:hover:bg-stone-800 transition-all font-inter text-sm font-medium uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+                System
+            </a>
+</nav>
+<div class="px-6 mt-auto">
+<button class="w-full py-3 px-4 bg-primary-container text-on-primary-container font-bold rounded-lg text-xs uppercase tracking-widest active:opacity-80 transition-all">
+                Upgrade Plan
+            </button>
+<div class="mt-8 space-y-4">
+<a class="flex items-center gap-3 text-stone-500 text-xs font-medium uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined text-sm" data-icon="help_outline">help_outline</span>
+                    Help
+                </a>
+<a class="flex items-center gap-3 text-stone-500 text-xs font-medium uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined text-sm" data-icon="chat_bubble_outline">chat_bubble_outline</span>
+                    Feedback
+                </a>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="md:ml-64 flex flex-col min-h-screen">
+<!-- Top Navigation Bar (TopNavBar) -->
+<header class="bg-[#F7F7F2] dark:bg-stone-950 border-b border-stone-200 dark:border-stone-800 flex justify-between items-center px-6 py-3 w-full docked full-width top-0 sticky z-50">
+<div class="flex items-center gap-8">
+<span class="text-xl font-bold tracking-tighter text-stone-900 dark:text-stone-50">NexoClip</span>
+<nav class="hidden lg:flex gap-6">
+<a class="text-stone-500 dark:text-stone-400 hover:text-[#D97757] transition-colors duration-200 font-inter tracking-tight font-semibold" href="#">Projects</a>
+<a class="text-stone-900 dark:text-stone-50 border-b-2 border-[#D97757] pb-1 font-inter tracking-tight font-semibold" href="#">Library</a>
+<a class="text-stone-500 dark:text-stone-400 hover:text-[#D97757] transition-colors duration-200 font-inter tracking-tight font-semibold" href="#">Team</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-full font-semibold text-sm hover:opacity-90 transition-all">
+                    Create New
+                </button>
+<button class="text-stone-500 dark:text-stone-400 hover:text-[#D97757] transition-all">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-stone-200">
+<img alt="User profile" class="w-full h-full object-cover" data-alt="A professional headshot of a creative director with a minimalist background, soft natural lighting highlighting facial features, captured in a modern studio aesthetic. The mood is sophisticated and approachable, maintaining a high-key light mode look that aligns with editorial design principles." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCAwV1F47TOUZh_6hgTnCYy8YNZxn8VebV7X_a7vJTmSmLI3Ea8OIQO-q8WBf36sk133J3drKXKlyCDSHFElRx1SZZvogYiDVMjKQJMmlruw5TumXPaJbNPaYNF3VI4gx7KnSmP45cAteQfwM3pCSKsca9SMJg6GE6qRKUm7Xemyoplz2cGW_DBuXfSdmHcl9Gik8FfrU6CHBZZQxw8jsNao6tugK5Sp67qZCp-zeWQRGM9ayG3GF_1T4SNHzrslj5qT5-moXoNf-WD"/>
+</div>
+</div>
+</header>
+<!-- Search & Filter Section -->
+<section class="px-8 py-12 max-w-7xl mx-auto w-full">
+<div class="mb-12">
+<h2 class="text-5xl font-black tracking-tighter text-on-surface mb-6">Ads Research</h2>
+<!-- Large Search Bar -->
+<div class="relative group">
+<div class="absolute inset-y-0 left-6 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-stone-400 group-focus-within:text-primary transition-colors" data-icon="search">search</span>
+</div>
+<input class="w-full pl-16 pr-8 py-6 bg-surface-container-low border-none rounded-2xl text-xl focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-stone-400 font-medium" placeholder="Search creatives, brands, or niches..." type="text"/>
+</div>
+<!-- Filters Row -->
+<div class="flex flex-wrap items-center justify-between gap-6 mt-8">
+<div class="flex items-center gap-3 overflow-x-auto no-scrollbar pb-2">
+<button class="px-6 py-2.5 rounded-full bg-primary text-white font-semibold text-sm transition-all">All Platforms</button>
+<button class="px-6 py-2.5 rounded-full bg-surface-container text-on-surface-variant font-semibold text-sm hover:bg-surface-container-high transition-all flex items-center gap-2">
+<span class="material-symbols-outlined text-lg" data-icon="tiktok">brand_family</span> TikTok
+                        </button>
+<button class="px-6 py-2.5 rounded-full bg-surface-container text-on-surface-variant font-semibold text-sm hover:bg-surface-container-high transition-all flex items-center gap-2">
+<span class="material-symbols-outlined text-lg" data-icon="facebook">social_leaderboard</span> Meta
+                        </button>
+<button class="px-6 py-2.5 rounded-full bg-surface-container text-on-surface-variant font-semibold text-sm hover:bg-surface-container-high transition-all flex items-center gap-2">
+<span class="material-symbols-outlined text-lg" data-icon="play_circle">play_circle</span> YouTube
+                        </button>
+</div>
+<div class="flex items-center gap-4">
+<span class="text-xs font-bold uppercase tracking-widest text-text-muted">Sort By</span>
+<select class="bg-surface-container border-none rounded-xl px-4 py-2.5 text-sm font-semibold focus:ring-2 focus:ring-primary/20 cursor-pointer">
+<option>Highest Spend</option>
+<option>Most Recent</option>
+<option>Engagement Rate</option>
+<option>Viral Factor</option>
+</select>
+</div>
+</div>
+</div>
+<!-- Results Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+<!-- Ad Card 1 -->
+<div class="group bg-surface-card rounded-3xl overflow-hidden border border-border-soft hover:shadow-2xl hover:shadow-stone-200 transition-all duration-500 flex flex-col">
+<div class="aspect-[9/16] relative overflow-hidden bg-stone-100">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" data-alt="A dynamic 9:16 fashion advertisement featuring a model in vibrant streetwear walking through a sun-drenched urban setting. The lighting is crisp and editorial, highlighting textures and colors with a professional high-key aesthetic. The composition is energetic and specifically framed for mobile social media platforms like TikTok." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBs55-8Yrf8lJctDn7imuIO87OPYsvSNJnKMPVrbRM3APMpg1HCnKQkyvBWbOQ9ls7bjVXvGnLv3F8MZIbf-p8HVM1ehDaf9LK9sCfzPXErl_JKltKN2-qWKxY7Wt1jafYEW56aiSXJsLZHTqyEfImFE6XkN0oMa3BM9RphHDRZM06UtRCllktQUs0bse2uTRkOR9IeLKHNMdhxXnp0XQ1mQVbVddbiIOM1IDnCRALcVDbKMoMigfTwL_hfSFDKyseYFlKSxzluyJLf"/>
+<div class="absolute top-4 left-4 flex gap-2">
+<span class="px-3 py-1 bg-black/40 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-widest rounded-full">New Ad</span>
+<span class="px-3 py-1 bg-primary/90 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-widest rounded-full">Winning</span>
+</div>
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-6">
+<button class="w-full py-4 bg-white text-on-background rounded-xl font-bold flex items-center justify-center gap-2 shadow-xl">
+<span class="material-symbols-outlined" data-icon="play_arrow" style="font-variation-settings: 'FILL' 1;">play_arrow</span> Preview Creative
+                            </button>
+</div>
+</div>
+<div class="p-6 space-y-4">
+<div class="flex justify-between items-start">
+<div>
+<h3 class="font-bold text-lg text-on-surface">Velo Athletics</h3>
+<div class="flex items-center gap-1.5 text-text-muted">
+<span class="material-symbols-outlined text-sm" data-icon="brand_family">brand_family</span>
+<span class="text-xs font-medium">TikTok Ads</span>
+</div>
+</div>
+<div class="bg-surface-container-high px-3 py-1 rounded-lg">
+<p class="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-0.5">Est. Spend</p>
+<p class="text-primary font-black tracking-tight text-sm">$45.2k</p>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-4 py-4 border-y border-border-soft">
+<div class="text-center">
+<p class="text-[10px] font-bold text-text-muted uppercase tracking-widest">CTR</p>
+<p class="font-bold text-on-surface">3.2%</p>
+</div>
+<div class="text-center">
+<p class="text-[10px] font-bold text-text-muted uppercase tracking-widest">ROAS</p>
+<p class="font-bold text-on-surface">4.1x</p>
+</div>
+<div class="text-center">
+<p class="text-[10px] font-bold text-text-muted uppercase tracking-widest">HOOK</p>
+<p class="font-bold text-on-surface">88%</p>
+</div>
+</div>
+<button class="w-full py-3.5 border-2 border-primary text-primary font-bold rounded-xl hover:bg-primary hover:text-white transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-xl" data-icon="query_stats">query_stats</span>
+                            Analisis
+                        </button>
+</div>
+</div>
+<!-- Ad Card 2 -->
+<div class="group bg-surface-card rounded-3xl overflow-hidden border border-border-soft hover:shadow-2xl hover:shadow-stone-200 transition-all duration-500 flex flex-col">
+<div class="aspect-[9/16] relative overflow-hidden bg-stone-100">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" data-alt="A professional product showcase for a sleek sneaker brand, using clean studio lighting and a warm off-white background. The shot is high-contrast with sharp focus on the product's details and materials. The aesthetic is extremely minimalist and editorial, capturing the essence of modern digital advertising for luxury goods." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD82AzvgkqaBweZy3C1DMbDTk7gig1CAor2CX75nwj9wr1nqRvUKqbexgNLlBG0K1s5HSwj9TbabHOGxNJHFRG471j9jlf2XNmEckpv01ZbkUqHeLEuZXgZNhHb61IANMfkCUfgKmO9LHCmAYTFZNG1IL7G7ZOutMa9jpp5G6dWAhaadvNUabeKUIYtjsMhGKkDtBB9fQ5Hau4sr4KiFhMrUM1jPeauTIt486wfEt2FL9wwdn9jKiZu6HaCupGTp7nkzcCo1KQXXqdU"/>
+<div class="absolute top-4 left-4 flex gap-2">
+<span class="px-3 py-1 bg-black/40 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-widest rounded-full">Active 12d</span>
+</div>
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-6">
+<button class="w-full py-4 bg-white text-on-background rounded-xl font-bold flex items-center justify-center gap-2 shadow-xl">
+<span class="material-symbols-outlined" data-icon="play_arrow" style="font-variation-settings: 'FILL' 1;">play_arrow</span> Preview Creative
+                            </button>
+</div>
+</div>
+<div class="p-6 space-y-4">
+<div class="flex justify-between items-start">
+<div>
+<h3 class="font-bold text-lg text-on-surface">Stride Footwear</h3>
+<div class="flex items-center gap-1.5 text-text-muted">
+<span class="material-symbols-outlined text-sm" data-icon="facebook">social_leaderboard</span>
+<span class="text-xs font-medium">Meta Ads</span>
+</div>
+</div>
+<div class="bg-surface-container-high px-3 py-1 rounded-lg">
+<p class="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-0.5">Est. Spend</p>
+<p class="text-primary font-black tracking-tight text-sm">$12.8k</p>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-4 py-4 border-y border-border-soft">
+<div class="text-center">
+<p class="text-[10px] font-bold text-text-muted uppercase tracking-widest">CTR</p>
+<p class="font-bold text-on-surface">1.8%</p>
+</div>
+<div class="text-center">
+<p class="text-[10px] font-bold text-text-muted uppercase tracking-widest">ROAS</p>
+<p class="font-bold text-on-surface">2.4x</p>
+</div>
+<div class="text-center">
+<p class="text-[10px] font-bold text-text-muted uppercase tracking-widest">HOOK</p>
+<p class="font-bold text-on-surface">62%</p>
+</div>
+</div>
+<button class="w-full py-3.5 border-2 border-primary text-primary font-bold rounded-xl hover:bg-primary hover:text-white transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-xl" data-icon="query_stats">query_stats</span>
+                            Analisis
+                        </button>
+</div>
+</div>
+<!-- Ad Card 3 -->
+<div class="group bg-surface-card rounded-3xl overflow-hidden border border-border-soft hover:shadow-2xl hover:shadow-stone-200 transition-all duration-500 flex flex-col">
+<div class="aspect-[9/16] relative overflow-hidden bg-stone-100">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" data-alt="A clean, flat-lay arrangement of high-tech gadgets on a minimal workspace, illuminated by soft morning light. The color palette is composed of soft greys, whites, and warm wood tones. This image serves as a visual placeholder for a tech-focused digital advertisement that emphasizes productivity and modern design." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBJw3axhxfeWqoDlHvDMHmsIwTffgnoKRnPtK26xcA4SoSC5rAJJ7c15__QrwRHFbqbVLvlHggQvbMy-Utqv2hkEIy-upgrZekaIZtcRbifuiWcui5kXLfelHqomFHOvbTtm7mkZ4VXagMHsfdlBtUTNjjX5FXIYZZHTO6DgfjnQ2oEuMOAKYg2gmtaUNHsV7tUaYw1AJYvXJYVd74I2lr-sRh7dyCo5yrA-esk4HsziVE8bZkPURr3VyGcl1B_6q9NMfTQQ0nk5YBr"/>
+<div class="absolute top-4 left-4 flex gap-2">
+<span class="px-3 py-1 bg-black/40 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-widest rounded-full">Trending</span>
+</div>
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-6">
+<button class="w-full py-4 bg-white text-on-background rounded-xl font-bold flex items-center justify-center gap-2 shadow-xl">
+<span class="material-symbols-outlined" data-icon="play_arrow" style="font-variation-settings: 'FILL' 1;">play_arrow</span> Preview Creative
+                            </button>
+</div>
+</div>
+<div class="p-6 space-y-4">
+<div class="flex justify-between items-start">
+<div>
+<h3 class="font-bold text-lg text-on-surface">Core Tech</h3>
+<div class="flex items-center gap-1.5 text-text-muted">
+<span class="material-symbols-outlined text-sm" data-icon="play_circle">play_circle</span>
+<span class="text-xs font-medium">YouTube Shorts</span>
+</div>
+</div>
+<div class="bg-surface-container-high px-3 py-1 rounded-lg">
+<p class="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-0.5">Est. Spend</p>
+<p class="text-primary font-black tracking-tight text-sm">$89.1k</p>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-4 py-4 border-y border-border-soft">
+<div class="text-center">
+<p class="text-[10px] font-bold text-text-muted uppercase tracking-widest">CTR</p>
+<p class="font-bold text-on-surface">4.5%</p>
+</div>
+<div class="text-center">
+<p class="text-[10px] font-bold text-text-muted uppercase tracking-widest">ROAS</p>
+<p class="font-bold text-on-surface">5.8x</p>
+</div>
+<div class="text-center">
+<p class="text-[10px] font-bold text-text-muted uppercase tracking-widest">HOOK</p>
+<p class="font-bold text-on-surface">91%</p>
+</div>
+</div>
+<button class="w-full py-3.5 border-2 border-primary text-primary font-bold rounded-xl hover:bg-primary hover:text-white transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-xl" data-icon="query_stats">query_stats</span>
+                            Analisis
+                        </button>
+</div>
+</div>
+</div>
+<!-- Load More Section -->
+<div class="mt-16 flex flex-col items-center gap-4">
+<p class="text-text-muted text-sm font-medium">Showing 12 of 2,492 creatives found</p>
+<button class="px-10 py-4 bg-surface-container-high text-on-surface font-black uppercase tracking-widest rounded-2xl hover:bg-stone-200 transition-all">
+                    Load More Creatives
+                </button>
+</div>
+</section>
+<!-- Footer Information -->
+<footer class="mt-auto px-8 py-10 border-t border-border-soft flex flex-col md:flex-row justify-between items-center gap-6">
+<div class="flex items-center gap-8">
+<span class="text-lg font-bold tracking-tighter text-stone-900">NexoClip</span>
+<p class="text-xs text-text-muted font-medium">© 2024 NexoClip Production Studio. All data indexed from public ad libraries.</p>
+</div>
+<div class="flex gap-6">
+<a class="text-xs font-bold uppercase tracking-widest text-text-muted hover:text-primary transition-colors" href="#">Privacy Policy</a>
+<a class="text-xs font-bold uppercase tracking-widest text-text-muted hover:text-primary transition-colors" href="#">Terms of Service</a>
+<a class="text-xs font-bold uppercase tracking-widest text-text-muted hover:text-primary transition-colors" href="#">Data Usage</a>
+</div>
+</footer>
+</main>
+<!-- Floating Action Button (FAB) - Contextual to Home/Dashboard Search -->
+<button class="fixed bottom-8 right-8 w-16 h-16 bg-primary text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-50">
+<span class="material-symbols-outlined text-3xl" data-icon="add">add</span>
+</button>
+</body></html>

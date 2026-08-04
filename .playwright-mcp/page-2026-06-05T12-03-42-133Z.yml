@@ -1,0 +1,464 @@
+- generic [active] [ref=e1]:
+  - banner:
+    - link "Nexo Clip" [ref=e2] [cursor=pointer]:
+      - /url: /
+      - img "Nexo Clip" [ref=e4]
+    - generic [ref=e5]:
+      - button "Platform" [ref=e7] [cursor=pointer]:
+        - text: Platform
+        - img [ref=e8]
+      - button "Resources" [ref=e11] [cursor=pointer]:
+        - text: Resources
+        - img [ref=e12]
+      - button "Company" [ref=e15] [cursor=pointer]:
+        - text: Company
+        - img [ref=e16]
+      - link "Pricing" [ref=e18] [cursor=pointer]:
+        - /url: https://app.nexoclip.com
+    - button "MASUK" [ref=e20] [cursor=pointer]:
+      - img [ref=e22]
+      - generic [ref=e29]: MASUK
+  - generic [ref=e30]:
+    - generic [ref=e31]:
+      - main [ref=e33]:
+        - heading "Iklan AI yang menang." [level=1] [ref=e34]:
+          - text: Iklan AI yang
+          - text: menang.
+        - paragraph [ref=e35]: Iklan video hasil generasi AI yang benar-benar menghasilkan konversi — dalam skala yang dibutuhkan bisnis Anda.
+        - button "BUAT IKLAN PERTAMA ANDA GRATIS" [ref=e37] [cursor=pointer]:
+          - img [ref=e39]
+          - generic [ref=e46]: BUAT IKLAN PERTAMA ANDA GRATIS
+        - paragraph [ref=e47]: Dari 10 iklan per bulan menjadi 10.000.
+      - generic [ref=e49]:
+        - generic [ref=e50]:
+          - generic [ref=e51]:
+            - img "Person talking" [ref=e52]
+            - generic [ref=e53]: Dihasilkan Oleh AI
+          - generic [ref=e54]:
+            - img "Hair care product" [ref=e55]
+            - generic [ref=e56]: Dihasilkan Oleh AI
+          - generic [ref=e57]:
+            - img "Classroom scene" [ref=e58]
+            - generic [ref=e59]: Dihasilkan Oleh AI
+          - generic [ref=e60]:
+            - img "Person with glasses" [ref=e61]
+            - generic [ref=e62]: Dihasilkan Oleh AI
+          - generic [ref=e63]:
+            - img "Person in dress" [ref=e64]
+            - generic [ref=e65]: Dihasilkan Oleh AI
+          - generic [ref=e66]:
+            - img "Person in silver jacket" [ref=e67]
+            - generic [ref=e68]: Dihasilkan Oleh AI
+          - generic [ref=e69]:
+            - img "Luggage" [ref=e70]
+            - generic [ref=e71]: Dihasilkan Oleh AI
+        - button [ref=e72] [cursor=pointer]:
+          - img [ref=e73]
+    - generic [ref=e75]:
+      - generic [ref=e76]:
+        - heading "Mendukung 18.000+ Merek dan Agensi" [level=2] [ref=e77]
+        - generic [ref=e78]:
+          - generic [ref=e79]:
+            - img [ref=e80]
+            - generic [ref=e82]: zumper
+          - generic [ref=e83]: /kit·sch/
+          - generic [ref=e84]: drift
+          - generic [ref=e85]:
+            - generic [ref=e86]: SCENTBIRD
+            - generic [ref=e87]: NEW YORK
+          - generic [ref=e88]:
+            - img [ref=e89]
+            - generic [ref=e92]: BOMBAS
+          - generic [ref=e93]: Mary Ruth's®
+          - generic [ref=e94]: BIOMA®
+          - generic [ref=e95]:
+            - img [ref=e96]
+            - generic [ref=e99]: ELEVATE
+          - generic [ref=e100]:
+            - img [ref=e101]
+            - generic [ref=e103]: BINANCE
+          - generic [ref=e104]: Weee!
+          - generic [ref=e105]:
+            - img [ref=e106]
+            - generic [ref=e108]: COMCAST
+          - generic [ref=e109]:
+            - img [ref=e110]
+            - generic [ref=e113]: APPLOVIN
+          - generic [ref=e114]:
+            - generic [ref=e115]: Alibaba
+            - generic [ref=e116]: .com
+          - generic [ref=e117]:
+            - img [ref=e118]
+            - generic [ref=e122]: ByteDance
+      - generic [ref=e124]:
+        - generic [ref=e125]:
+          - 'heading "Platform Iklan AI #1 Dibangun untuk Kinerja" [level=2] [ref=e126]':
+            - text: "Platform Iklan AI #1"
+            - text: Dibangun untuk Kinerja
+          - paragraph [ref=e127]: Ubah setiap halaman produk menjadi iklan video yang sukses—dibuat, diuji, dan dioptimalkan dalam hitungan menit.
+        - generic [ref=e128]:
+          - generic [ref=e130]:
+            - generic [ref=e131]:
+              - generic [ref=e132]:
+                - generic [ref=e133]:
+                  - img "avatar" [ref=e136]
+                  - generic [ref=e142]: NEW
+                - img "content" [ref=e144]
+                - generic [ref=e148]:
+                  - generic [ref=e151]:
+                    - generic [ref=e152] [cursor=pointer]: View insights
+                    - img [ref=e154] [cursor=pointer]
+                  - generic [ref=e156] [cursor=pointer]: Clone this video ad
+              - generic [ref=e157]:
+                - generic [ref=e158]:
+                  - img "avatar" [ref=e161]
+                  - generic [ref=e167]: NEW
+                - img "content" [ref=e169]
+                - generic [ref=e173]:
+                  - generic [ref=e176]:
+                    - generic [ref=e177] [cursor=pointer]: View insights
+                    - img [ref=e179] [cursor=pointer]
+                  - generic [ref=e181] [cursor=pointer]: Clone this video ad
+              - generic [ref=e182]:
+                - generic [ref=e183]:
+                  - img "avatar" [ref=e186]
+                  - generic [ref=e192]: NEW
+                - img "content" [ref=e194]
+                - generic [ref=e198]:
+                  - generic [ref=e201]:
+                    - generic [ref=e202] [cursor=pointer]: View insights
+                    - img [ref=e204] [cursor=pointer]
+                  - generic [ref=e206] [cursor=pointer]: Clone this video ad
+            - generic [ref=e207]:
+              - generic [ref=e208]:
+                - generic [ref=e209]:
+                  - img "avatar" [ref=e212]
+                  - generic [ref=e218]: NEW
+                - img "content" [ref=e220]
+                - generic [ref=e224]:
+                  - generic [ref=e227]:
+                    - generic [ref=e228] [cursor=pointer]: View insights
+                    - img [ref=e230] [cursor=pointer]
+                  - generic [ref=e232] [cursor=pointer]: Clone this video ad
+              - generic [ref=e233]:
+                - generic [ref=e234]:
+                  - img "avatar" [ref=e237]
+                  - generic [ref=e243]: NEW
+                - img "content" [ref=e245]
+                - generic [ref=e249]:
+                  - generic [ref=e252]:
+                    - generic [ref=e253] [cursor=pointer]: View insights
+                    - img [ref=e255] [cursor=pointer]
+                  - generic [ref=e257] [cursor=pointer]: Clone this video ad
+              - generic [ref=e258]:
+                - generic [ref=e259]:
+                  - img "avatar" [ref=e262]
+                  - generic [ref=e268]: NEW
+                - img "content" [ref=e270]
+                - generic [ref=e274]:
+                  - generic [ref=e277]:
+                    - generic [ref=e278] [cursor=pointer]: View insights
+                    - img [ref=e280] [cursor=pointer]
+                  - generic [ref=e282] [cursor=pointer]: Clone this video ad
+            - generic [ref=e283]:
+              - generic [ref=e284]:
+                - generic [ref=e285]:
+                  - img "avatar" [ref=e288]
+                  - generic [ref=e294]: NEW
+                - img "content" [ref=e296]
+                - generic [ref=e300]:
+                  - generic [ref=e303]:
+                    - generic [ref=e304] [cursor=pointer]: View insights
+                    - img [ref=e306] [cursor=pointer]
+                  - generic [ref=e308] [cursor=pointer]: Clone this video ad
+              - generic [ref=e309]:
+                - generic [ref=e310]:
+                  - img "avatar" [ref=e313]
+                  - generic [ref=e319]: NEW
+                - img "content" [ref=e321]
+                - generic [ref=e325]:
+                  - generic [ref=e328]:
+                    - generic [ref=e329] [cursor=pointer]: View insights
+                    - img [ref=e331] [cursor=pointer]
+                  - generic [ref=e333] [cursor=pointer]: Clone this video ad
+              - generic [ref=e334]:
+                - generic [ref=e335]:
+                  - img "avatar" [ref=e338]
+                  - generic [ref=e344]: NEW
+                - img "content" [ref=e346]
+                - generic [ref=e350]:
+                  - generic [ref=e353]:
+                    - generic [ref=e354] [cursor=pointer]: View insights
+                    - img [ref=e356] [cursor=pointer]
+                  - generic [ref=e358] [cursor=pointer]: Clone this video ad
+          - generic [ref=e359]:
+            - generic [ref=e360]:
+              - img [ref=e362]
+              - generic [ref=e364]: Temukan
+            - heading "Lihat dengan tepat apa yang sedang mengkonversi di industri Anda saat ini" [level=3] [ref=e365]
+            - list [ref=e366]:
+              - listitem [ref=e367]: Telusuri template iklan yang menang berdasarkan industri & platform
+              - listitem [ref=e368]: Analisis strategi kreatif kompetitor yang sebenarnya
+              - listitem [ref=e369]: Kreasikan ulang konsep yang sudah terbukti dalam hitungan detik
+            - button "TELUSURI IKLAN" [ref=e370] [cursor=pointer]:
+              - img [ref=e372]
+              - generic [ref=e379]: TELUSURI IKLAN
+      - generic [ref=e381]:
+        - generic [ref=e382]:
+          - generic [ref=e383]:
+            - img [ref=e385]
+            - generic [ref=e389]: Buat
+          - heading "Semua format iklan yang Anda butuhkan, dalam satu platform" [level=3] [ref=e390]:
+            - text: Semua format iklan yang
+            - text: Anda butuhkan, dalam satu
+            - text: platform
+          - list [ref=e391]:
+            - listitem [ref=e392]: URL-ke-video, gambar-ke-video, atau mulai dari nol
+            - listitem [ref=e393]: "Pilih gaya Anda: UGC autentik atau sinematik yang dipoles"
+            - listitem [ref=e394]: Buat selusin variasi sekaligus
+          - button "MULAI GRATIS" [ref=e395] [cursor=pointer]:
+            - img [ref=e397]
+            - generic [ref=e404]: MULAI GRATIS
+        - generic [ref=e408]:
+          - generic [ref=e409] [cursor=pointer]:
+            - img "Car mirror" [ref=e410]
+            - generic:
+              - img
+          - generic [ref=e411] [cursor=pointer]:
+            - img "Woman" [ref=e412]
+            - generic:
+              - img
+          - generic [ref=e413] [cursor=pointer]:
+            - img "Lemons" [ref=e414]
+            - generic:
+              - img
+          - generic [ref=e415] [cursor=pointer]:
+            - generic [ref=e416]:
+              - generic [ref=e417]: ☀
+              - generic [ref=e418]: Energy Without Jitters
+              - generic [ref=e419]: No sugars, only pure health
+            - img "Product" [ref=e420]
+            - generic [ref=e421]: Learn More
+          - generic [ref=e422] [cursor=pointer]:
+            - img "Main product" [ref=e423]
+            - generic:
+              - img
+          - generic [ref=e424] [cursor=pointer]:
+            - img "Man" [ref=e425]
+            - generic:
+              - img
+      - generic [ref=e427]:
+        - generic [ref=e430]:
+          - generic [ref=e431]:
+            - img "Bag" [ref=e433]
+            - img "Yoga" [ref=e435]
+            - img "Fashion" [ref=e437]
+          - generic [ref=e438]:
+            - img [ref=e440]
+            - img [ref=e443]
+            - img [ref=e447]
+            - img [ref=e450]
+            - generic [ref=e454]:
+              - img [ref=e456]
+              - generic [ref=e459]: Launch
+            - img [ref=e461]
+        - generic [ref=e463]:
+          - generic [ref=e464]:
+            - img [ref=e466]
+            - generic [ref=e469]: Peluncuran
+          - heading "Dorong langsung ke saluran sosial secara instan" [level=3] [ref=e470]:
+            - text: Dorong langsung ke
+            - text: saluran sosial secara
+            - text: instan
+          - list [ref=e471]:
+            - listitem [ref=e472]: Hubungkan akun iklan Anda sekali, luncurkan selamanya
+            - listitem [ref=e473]: Dioptimalkan otomatis sesuai spesifikasi tiap platform
+            - listitem [ref=e474]: Pengujian A/B bawaan di seluruh kampanye
+          - button "HUBUNGKAN & LUNCURKAN" [ref=e475] [cursor=pointer]:
+            - img [ref=e477]
+            - generic [ref=e484]: HUBUNGKAN & LUNCURKAN
+      - generic [ref=e488]:
+        - generic [ref=e489]:
+          - generic [ref=e490]: Pricing Plans
+          - heading "Investasi Untuk Cuan Lo." [level=2] [ref=e491]
+          - paragraph [ref=e492]: Pilih paket yang sesuai dengan skala bisnis lo. Dari gratisan sampe unlimited, semua dapet akses AI terbaik.
+        - generic [ref=e493]:
+          - generic [ref=e494]:
+            - generic [ref=e495]:
+              - heading "Starter" [level=3] [ref=e496]
+              - generic [ref=e498]: Gratis
+              - paragraph [ref=e499]: Untuk seller pemula yang baru mulai eksplor video AI.
+            - generic [ref=e500]:
+              - generic [ref=e501]: Fitur Utama
+              - generic [ref=e502]:
+                - img [ref=e504]
+                - generic [ref=e506]: 5 Video AI / bulan
+              - generic [ref=e507]:
+                - img [ref=e509]
+                - generic [ref=e511]: 1 Akun Media Sosial
+              - generic [ref=e512]:
+                - img [ref=e514]
+                - generic [ref=e516]: Kualitas 720p
+              - generic [ref=e517]:
+                - img [ref=e519]
+                - generic [ref=e521]: Watermark Nexo Clip
+              - generic [ref=e522]:
+                - img [ref=e524]
+                - generic [ref=e526]: Komunitas Support
+            - link "Mulai Gratis" [ref=e527] [cursor=pointer]:
+              - /url: https://app.nexoclip.com
+              - text: Mulai Gratis
+              - img [ref=e528]
+          - generic [ref=e530]:
+            - generic [ref=e531]: Paling Populer
+            - generic [ref=e532]:
+              - heading "Pro Seller" [level=3] [ref=e533]
+              - generic [ref=e534]:
+                - generic [ref=e535]: Rp 249rb
+                - generic [ref=e536]: /bulan
+              - paragraph [ref=e537]: Solusi lengkap untuk scale jualan lo di semua marketplace.
+            - generic [ref=e538]:
+              - generic [ref=e539]: Fitur Utama
+              - generic [ref=e540]:
+                - img [ref=e542]
+                - generic [ref=e544]: Unlimited Video AI
+              - generic [ref=e545]:
+                - img [ref=e547]
+                - generic [ref=e549]: Unlimited Akun Sosial
+              - generic [ref=e550]:
+                - img [ref=e552]
+                - generic [ref=e554]: Kualitas 1080p (Full HD)
+              - generic [ref=e555]:
+                - img [ref=e557]
+                - generic [ref=e559]: Tanpa Watermark
+              - generic [ref=e560]:
+                - img [ref=e562]
+                - generic [ref=e564]: Official API Integration
+              - generic [ref=e565]:
+                - img [ref=e567]
+                - generic [ref=e569]: Priority Support
+            - link "Pilih Paket Pro" [ref=e570] [cursor=pointer]:
+              - /url: https://app.nexoclip.com
+              - text: Pilih Paket Pro
+              - img [ref=e571]
+          - generic [ref=e573]:
+            - generic [ref=e574]:
+              - heading "Brand Master" [level=3] [ref=e575]
+              - generic [ref=e576]:
+                - generic [ref=e577]: Rp 599rb
+                - generic [ref=e578]: /bulan
+              - paragraph [ref=e579]: Untuk agensi atau brand besar yang butuh performa maksimal.
+            - generic [ref=e580]:
+              - generic [ref=e581]: Fitur Utama
+              - generic [ref=e582]:
+                - img [ref=e584]
+                - generic [ref=e586]: Semua Fitur Pro
+              - generic [ref=e587]:
+                - img [ref=e589]
+                - generic [ref=e591]: Custom AI Model Training
+              - generic [ref=e592]:
+                - img [ref=e594]
+                - generic [ref=e596]: Bulk URL Import (100+)
+              - generic [ref=e597]:
+                - img [ref=e599]
+                - generic [ref=e601]: Advanced Analytics Export
+              - generic [ref=e602]:
+                - img [ref=e604]
+                - generic [ref=e606]: Dedicated Manager
+              - generic [ref=e607]:
+                - img [ref=e609]
+                - generic [ref=e611]: Early Access Fitur Baru
+            - link "Hubungi Penjualan" [ref=e612] [cursor=pointer]:
+              - /url: https://app.nexoclip.com
+              - text: Hubungi Penjualan
+              - img [ref=e613]
+        - generic [ref=e615]:
+          - generic [ref=e616]:
+            - img [ref=e617]
+            - text: Secure Payment
+          - generic [ref=e620]:
+            - img [ref=e621]
+            - text: Instant Access
+          - generic [ref=e623]:
+            - img [ref=e624]
+            - text: No Credit Card Required
+  - contentinfo [ref=e627]:
+    - generic [ref=e629]:
+      - generic [ref=e630]:
+        - generic [ref=e631]:
+          - img "Nexo Clip" [ref=e634]
+          - paragraph [ref=e635]: "Platform AI All-in-One #1. 7 tools AI untuk bikin konten, analisa performa, dan scale jualan — dari klip viral sampai riset ads, semua di satu tempat."
+          - generic [ref=e636]:
+            - paragraph [ref=e637]: PT. Nexo Clip Teknologi Indonesia
+            - paragraph [ref=e638]: Jl. Raya Boulevard Permata Medang
+            - paragraph [ref=e639]: Medang, Pagedangan, Tangerang, Banten
+            - paragraph [ref=e640]: "T: 0851-8316-2659"
+        - generic [ref=e641]:
+          - generic [ref=e642]:
+            - heading "Content Studio" [level=4] [ref=e643]
+            - link "Klip Otomatis" [ref=e644] [cursor=pointer]:
+              - /url: /features/ai-clipping
+            - link "Listicle AI Pro" [ref=e645] [cursor=pointer]:
+              - /url: /features/auto-editing
+            - link "Lab Thumbnail" [ref=e646] [cursor=pointer]:
+              - /url: /features/lab-thumbnail
+            - link "Avatar Creator" [ref=e647] [cursor=pointer]:
+              - /url: /features/avatar-creator
+            - link "Editor Video" [ref=e648] [cursor=pointer]:
+              - /url: /features/video-editor
+          - generic [ref=e649]:
+            - heading "Intelligence" [level=4] [ref=e650]
+            - link "Analisis Video" [ref=e651] [cursor=pointer]:
+              - /url: /features/content-analytics
+            - link "Riset Ads" [ref=e652] [cursor=pointer]:
+              - /url: /features/content-analytics#riset
+            - link "Performance Ads" [ref=e653] [cursor=pointer]:
+              - /url: /features/content-analytics#performance
+            - link "Afiliasi Hub" [ref=e654] [cursor=pointer]:
+              - /url: /features/affiliate-hub
+          - generic [ref=e655]:
+            - heading "Resources" [level=4] [ref=e656]
+            - link "Pricing" [ref=e657] [cursor=pointer]:
+              - /url: https://app.nexoclip.com
+            - link "Blog & Tips" [ref=e658] [cursor=pointer]:
+              - /url: /blog
+            - link "Help Center" [ref=e659] [cursor=pointer]:
+              - /url: /help
+            - link "FAQs" [ref=e660] [cursor=pointer]:
+              - /url: https://app.nexoclip.com
+          - generic [ref=e661]:
+            - heading "Company" [level=4] [ref=e662]
+            - link "About Us" [ref=e663] [cursor=pointer]:
+              - /url: /about
+            - link "AI Ethics" [ref=e664] [cursor=pointer]:
+              - /url: /ai-ethics
+            - link "Terms of Service" [ref=e665] [cursor=pointer]:
+              - /url: /terms
+            - link "Privacy Policy" [ref=e666] [cursor=pointer]:
+              - /url: /privacy
+            - link "Refund Policy" [ref=e667] [cursor=pointer]:
+              - /url: /refund
+      - generic [ref=e668]:
+        - generic [ref=e669]:
+          - paragraph [ref=e670]: © 2026 Nexo Clip. Built for Winners and Hustlers.
+          - link "Lihat di Google Maps" [ref=e671] [cursor=pointer]:
+            - /url: https://share.google/oUvygvjcgEFYDf7ml
+            - img [ref=e672]
+            - text: Lihat di Google Maps
+        - generic [ref=e675]:
+          - link "Instagram" [ref=e676] [cursor=pointer]:
+            - /url: https://www.instagram.com/nexoclip.official/
+            - img [ref=e678]
+          - link "TikTok" [ref=e680] [cursor=pointer]:
+            - /url: https://www.tiktok.com/@nexoclip.com
+            - img [ref=e682]
+          - link "YouTube" [ref=e684] [cursor=pointer]:
+            - /url: https://www.youtube.com/@nexoclipyt
+            - img [ref=e686]
+          - link "X Twitter" [ref=e688] [cursor=pointer]:
+            - /url: https://twitter.com/nexoclip.com
+            - img [ref=e690]
+          - link "LinkedIn" [ref=e692] [cursor=pointer]:
+            - /url: https://www.linkedin.com/company/nexoclip
+            - img [ref=e694]
+  - alert [ref=e696]

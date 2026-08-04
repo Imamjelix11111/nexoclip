@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>NexoClip - Listicle AI Pro</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary": "#5f5e5c",
+                        "inverse-on-surface": "#f1f1ec",
+                        "secondary": "#5e5f5a",
+                        "on-surface": "#1a1c19",
+                        "surface-container-lowest": "#ffffff",
+                        "outline": "#88726c",
+                        "error": "#ba1a1a",
+                        "surface-container-low": "#f4f4ef",
+                        "on-surface-variant": "#55433d",
+                        "on-primary-fixed": "#390b00",
+                        "on-tertiary-fixed": "#1c1c1a",
+                        "on-background": "#1a1c19",
+                        "on-tertiary-fixed-variant": "#474744",
+                        "background": "#fafaf5",
+                        "surface-container-high": "#e8e8e4",
+                        "primary-fixed": "#ffdbd0",
+                        "inverse-primary": "#ffb59e",
+                        "on-secondary": "#ffffff",
+                        "secondary-fixed-dim": "#c8c7c0",
+                        "surface": "#fafaf5",
+                        "on-tertiary": "#ffffff",
+                        "surface-dim": "#dadad5",
+                        "secondary-container": "#deddd7",
+                        "on-error": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "tertiary-fixed": "#e5e2de",
+                        "tertiary-container": "#94928f",
+                        "on-secondary-fixed": "#1b1c18",
+                        "surface-container": "#eeeee9",
+                        "on-primary-container": "#541400",
+                        "surface-tint": "#99462a",
+                        "surface-container-highest": "#e2e3de",
+                        "on-secondary-fixed-variant": "#474743",
+                        "on-tertiary-container": "#2b2b29",
+                        "secondary-fixed": "#e4e2dc",
+                        "primary-fixed-dim": "#ffb59e",
+                        "outline-variant": "#dbc1b9",
+                        "primary": "#99462a",
+                        "inverse-surface": "#2f312e",
+                        "surface-variant": "#e2e3de",
+                        "on-error-container": "#93000a",
+                        "primary-container": "#d97757",
+                        "error-container": "#ffdad6",
+                        "on-primary-fixed-variant": "#7a2f15",
+                        "on-secondary-container": "#61615c",
+                        "tertiary-fixed-dim": "#c8c6c3",
+                        "surface-bright": "#fafaf5"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Inter"],
+                        "display": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        body { font-family: 'Inter', sans-serif; }
+        .scene-card-gradient {
+            background: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.6) 100%);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface min-h-screen flex flex-col">
+<!-- Shared TopNavBar -->
+<header class="bg-[#F7F7F2] dark:bg-stone-950 text-[#D97757] dark:text-[#D97757] font-inter tracking-tight font-semibold border-b border-stone-200 dark:border-stone-800 flex justify-between items-center px-6 py-3 w-full docked full-width top-0 sticky z-50 flat no shadows">
+<div class="text-xl font-bold tracking-tighter text-stone-900 dark:text-stone-50">NexoClip</div>
+<nav class="hidden md:flex items-center gap-8">
+<a class="text-stone-900 dark:text-stone-50 border-b-2 border-[#D97757] pb-1 hover:text-[#D97757] transition-colors duration-200 scale-98 active:opacity-80 transition-all" href="#">Projects</a>
+<a class="text-stone-500 dark:text-stone-400 hover:text-[#D97757] transition-colors duration-200 scale-98 active:opacity-80 transition-all" href="#">Library</a>
+<a class="text-stone-500 dark:text-stone-400 hover:text-[#D97757] transition-colors duration-200 scale-98 active:opacity-80 transition-all" href="#">Team</a>
+</nav>
+<div class="flex items-center gap-4">
+<div class="hidden sm:flex items-center bg-surface-container rounded-full px-3 py-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-sm mr-2">search</span>
+<span class="text-xs uppercase tracking-widest font-bold">Search</span>
+</div>
+<button class="material-symbols-outlined p-2 text-stone-500 hover:text-[#D97757] transition-all">notifications</button>
+<button class="material-symbols-outlined p-2 text-stone-500 hover:text-[#D97757] transition-all">settings</button>
+<button class="bg-primary text-white px-5 py-2 rounded-full text-sm font-bold scale-98 active:opacity-80 transition-all">Create New</button>
+<img alt="User profile" class="w-8 h-8 rounded-full border border-outline-variant" data-alt="A professional studio portrait of a modern creative director with a clean, minimalist aesthetic. The lighting is soft and warm, reflecting the NexoClip brand identity with a neutral cream background. The individual has a confident yet approachable expression, styled with contemporary editorial fashion." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBjb1jz7uF0XndRfX6k65ogL--WS13px4SGnUibJkA-ha2o1wBsCrOcjAbhKIMPKB_oPIis6uzqWq3dkZPQQOM-nCQ2v_YIvSwXx6uaC4CZyBw7E5j_ZWH49iJt8D7cbeshdqDrIOMDccv6GCZfeaHtwfAFBSmg2I-P4UGcZ9_JIstJdWQLRoG2DkLxU6VhCO5tnbVcc-2csMkfQe1eL00KOx_54WDVLD2eAS7TAUjbpyOCBJD0wwIc20fXA40LsUHUebolnbktOOso"/>
+</div>
+</header>
+<main class="flex-1 flex overflow-hidden">
+<!-- Sidebar Config Panel (400px) -->
+<aside class="w-[400px] border-r border-border-soft bg-surface p-8 overflow-y-auto flex flex-col gap-8 shrink-0">
+<section>
+<h1 class="text-3xl font-extrabold tracking-tight text-on-surface mb-2">Listicle AI Pro</h1>
+<p class="text-text-muted text-sm leading-relaxed font-medium">Transform any topic into a high-retention viral listicle script and visual storyboard in seconds.</p>
+</section>
+<div class="space-y-6">
+<!-- Topic Input -->
+<div class="space-y-2">
+<label class="text-[10px] font-bold uppercase tracking-[0.1em] text-tertiary">Video Topic</label>
+<textarea class="w-full bg-white border border-border-soft rounded-xl p-4 text-sm focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none resize-none" placeholder="Enter your listicle hook..." rows="3">Top 5 Viral Products</textarea>
+</div>
+<!-- Stepper -->
+<div class="space-y-2">
+<label class="text-[10px] font-bold uppercase tracking-[0.1em] text-tertiary">Item Count</label>
+<div class="flex items-center justify-between bg-white border border-border-soft rounded-xl p-2 px-4">
+<button class="material-symbols-outlined text-primary hover:bg-surface-container p-1 rounded-md transition-colors">remove</button>
+<span class="font-bold text-on-surface">5 Items</span>
+<button class="material-symbols-outlined text-primary hover:bg-surface-container p-1 rounded-md transition-colors">add</button>
+</div>
+</div>
+<!-- Language -->
+<div class="space-y-2">
+<label class="text-[10px] font-bold uppercase tracking-[0.1em] text-tertiary">Script Language</label>
+<select class="w-full bg-white border border-border-soft rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary outline-none">
+<option>English (US)</option>
+<option>Spanish (ES)</option>
+<option>French (FR)</option>
+</select>
+</div>
+<!-- Visual Style -->
+<div class="space-y-3">
+<label class="text-[10px] font-bold uppercase tracking-[0.1em] text-tertiary">Visual Style</label>
+<div class="flex flex-wrap gap-2">
+<button class="px-4 py-2 rounded-full text-xs font-bold bg-primary text-white border border-primary transition-all">Viral</button>
+<button class="px-4 py-2 rounded-full text-xs font-bold bg-white text-tertiary border border-border-soft hover:border-primary hover:text-primary transition-all">Cinematic</button>
+<button class="px-4 py-2 rounded-full text-xs font-bold bg-white text-tertiary border border-border-soft hover:border-primary hover:text-primary transition-all">Minimalist</button>
+</div>
+</div>
+<!-- Generate Button -->
+<button class="w-full bg-primary-container text-on-primary-container py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all shadow-md mt-4">
+<span class="material-symbols-outlined">auto_awesome</span>
+                    Generate Listicle
+                </button>
+</div>
+<!-- Meta info -->
+<div class="mt-auto pt-8 border-t border-border-soft">
+<div class="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-tertiary">
+<span>Credits Remaining</span>
+<span>14 / 20</span>
+</div>
+<div class="w-full h-1.5 bg-surface-container rounded-full mt-2 overflow-hidden">
+<div class="w-[70%] h-full bg-primary-container"></div>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<section class="flex-1 bg-background overflow-y-auto p-12">
+<div class="max-w-4xl mx-auto space-y-12">
+<!-- Scene Card 1 -->
+<div class="group relative bg-white border border-border-soft rounded-lg overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300">
+<div class="grid grid-cols-1 md:grid-cols-12 gap-0">
+<!-- Visual Panel -->
+<div class="md:col-span-5 relative aspect-[9/16] overflow-hidden">
+<img class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" data-alt="A high-end product shot of a sleek crimson red athletic shoe placed centrally against a warm, minimalist studio backdrop. Soft, directional lighting highlights the texture of the fabric and the curves of the design. The aesthetic is clean and professional, using a warm color palette of cream and rust tones that align perfectly with the NexoClip brand identity." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBFkeQHXpNZltSSiOh0O5FV1dz-mMSOEe-EpFJsG_2gbK_oFOKU_IzrV8xJnBIaOOcdoDNzaK2QI3hQzBOUtUJFmBEaR4lSN-XuCKXVityE9irjuyjz6_6L8m0UdZOkaJF-gfm75EplEtnJMai8kDg0ZQfw4gMG1bwFYJ_ED0J2pD-LcF6RXH4CVUj6zcTvc6g2J0YqvNI0hja8PERpxqsEYXh1Gp32Fw8OTGxyxDEn6YUMylJaGAFt6BBGXX-G4dEivRwQg8YH8rqo"/>
+<div class="absolute inset-0 scene-card-gradient"></div>
+<div class="absolute top-6 left-6">
+<span class="bg-primary-container text-on-primary-container px-4 py-1.5 rounded-full text-xs font-black italic tracking-widest uppercase">Scene 01</span>
+</div>
+<div class="absolute bottom-6 left-6 right-6">
+<h3 class="text-white text-2xl font-black leading-tight tracking-tighter">The Ultimate Runner Pro</h3>
+</div>
+</div>
+<!-- Content Panel -->
+<div class="md:col-span-7 p-8 flex flex-col">
+<div class="mb-auto">
+<label class="text-[10px] font-bold uppercase tracking-[0.15em] text-primary block mb-3">AI Narrative Script</label>
+<p class="text-on-surface-variant text-lg leading-relaxed font-medium italic mb-6">
+                                    "Starting off our list at number five is the shoe that changed the game. Thousands of creators are calling this the most comfortable workout gear of 2024. Just look at that sleek crimson finish!"
+                                </p>
+<div class="space-y-4">
+<div class="flex items-start gap-4">
+<span class="material-symbols-outlined text-primary-container mt-1">movie_edit</span>
+<div>
+<p class="text-[10px] font-bold uppercase tracking-widest text-tertiary">Visual Prompt</p>
+<p class="text-sm text-on-surface/80">Macro shot panning across the heel texture, high contrast lighting, slow motion 60fps.</p>
+</div>
+</div>
+<div class="flex items-start gap-4">
+<span class="material-symbols-outlined text-primary-container mt-1">music_note</span>
+<div>
+<p class="text-[10px] font-bold uppercase tracking-widest text-tertiary">Audio Mood</p>
+<p class="text-sm text-on-surface/80">Upbeat lo-fi hip-hop with snappy percussion.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="flex items-center justify-end gap-3 mt-8">
+<button class="p-2 hover:bg-surface-container rounded-lg text-tertiary transition-colors"><span class="material-symbols-outlined">refresh</span></button>
+<button class="p-2 hover:bg-surface-container rounded-lg text-tertiary transition-colors"><span class="material-symbols-outlined">edit_note</span></button>
+<button class="px-4 py-2 bg-surface-container-high text-on-surface-variant rounded-full text-xs font-bold hover:bg-secondary-container transition-all">Preview Scene</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Scene Card 2 -->
+<div class="group relative bg-white border border-border-soft rounded-lg overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300">
+<div class="grid grid-cols-1 md:grid-cols-12 gap-0">
+<!-- Visual Panel -->
+<div class="md:col-span-5 relative aspect-[9/16] overflow-hidden">
+<img class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" data-alt="A minimalist white smartwatch displayed on a light gray stone surface. The lighting is bright and airy with soft shadows, creating an editorial, high-end technology look. The composition follows the NexoClip aesthetic with clean lines, warm tones, and a sophisticated atmosphere." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB3kfY7WFswVNtQ0ReGpppUCYhvyHlCPOpQfY1ua8qtDswIBgniG4jc8sWXjQfv-1R-cZMdwlXx609lD_77Vh4YKqZrsA2ZZqJTp_R8T7H1Rq1c-jH9-Vw13-quevK_XLW0Z9HaDKFRfA02rKdsk3cz-8knkGSn7EdpbaiIn13VqaRxGHwgC9wRxYueIAKWmRIBqMdrG7Q2vkJBk2fSQhLdEOz6tGy-wfTnF3OB26KGnN9v8f2JqgFC_Kj_n8wqdLQhvZomkaYx5vXT"/>
+<div class="absolute inset-0 scene-card-gradient"></div>
+<div class="absolute top-6 left-6">
+<span class="bg-primary-container text-on-primary-container px-4 py-1.5 rounded-full text-xs font-black italic tracking-widest uppercase">Scene 02</span>
+</div>
+<div class="absolute bottom-6 left-6 right-6">
+<h3 class="text-white text-2xl font-black leading-tight tracking-tighter">Minimalist Timekeeper X</h3>
+</div>
+</div>
+<!-- Content Panel -->
+<div class="md:col-span-7 p-8 flex flex-col">
+<div class="mb-auto">
+<label class="text-[10px] font-bold uppercase tracking-[0.15em] text-primary block mb-3">AI Narrative Script</label>
+<p class="text-on-surface-variant text-lg leading-relaxed font-medium italic mb-6">
+                                    "Next up, the wearable that actually looks like a piece of art. If you're tired of bulky tech, this minimalist masterpiece is for you. Elegant, functional, and viral for a reason."
+                                </p>
+<div class="space-y-4">
+<div class="flex items-start gap-4">
+<span class="material-symbols-outlined text-primary-container mt-1">movie_edit</span>
+<div>
+<p class="text-[10px] font-bold uppercase tracking-widest text-tertiary">Visual Prompt</p>
+<p class="text-sm text-on-surface/80">Overhead flat lay shot, clean shadows moving across the frame to show passage of time.</p>
+</div>
+</div>
+<div class="flex items-start gap-4">
+<span class="material-symbols-outlined text-primary-container mt-1">music_note</span>
+<div>
+<p class="text-[10px] font-bold uppercase tracking-widest text-tertiary">Audio Mood</p>
+<p class="text-sm text-on-surface/80">Soft ambient piano with a subtle ticking clock element.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="flex items-center justify-end gap-3 mt-8">
+<button class="p-2 hover:bg-surface-container rounded-lg text-tertiary transition-colors"><span class="material-symbols-outlined">refresh</span></button>
+<button class="p-2 hover:bg-surface-container rounded-lg text-tertiary transition-colors"><span class="material-symbols-outlined">edit_note</span></button>
+<button class="px-4 py-2 bg-surface-container-high text-on-surface-variant rounded-full text-xs font-bold hover:bg-secondary-container transition-all">Preview Scene</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Add Scene Button -->
+<button class="w-full py-8 border-2 border-dashed border-border-soft rounded-lg flex flex-col items-center justify-center gap-2 group hover:border-primary-container hover:bg-surface-container-low transition-all">
+<span class="material-symbols-outlined text-primary text-4xl group-hover:scale-110 transition-transform">add_circle</span>
+<span class="text-sm font-bold uppercase tracking-widest text-tertiary">Add Manual Scene</span>
+</button>
+</div>
+</section>
+</main>
+<!-- Floating Action for Export -->
+<div class="fixed bottom-10 right-10">
+<button class="flex items-center gap-3 bg-on-surface text-white px-8 py-4 rounded-full shadow-2xl hover:bg-primary transition-all active:scale-95">
+<span class="material-symbols-outlined">movie</span>
+<span class="font-bold tracking-tight">Export Full Video</span>
+</button>
+</div>
+</body></html>

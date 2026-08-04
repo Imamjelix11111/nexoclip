@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>NexoClip Distribution Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "primary-fixed-dim": "#ffb59e",
+                      "on-primary": "#ffffff",
+                      "surface-container-low": "#f4f4ef",
+                      "secondary-fixed-dim": "#c8c7c0",
+                      "surface-tint": "#99462a",
+                      "secondary": "#5e5f5a",
+                      "on-tertiary-container": "#2b2b29",
+                      "background": "#fafaf5",
+                      "outline": "#88726c",
+                      "on-secondary-container": "#61615c",
+                      "tertiary-container": "#94928f",
+                      "surface-container-high": "#e8e8e4",
+                      "on-error-container": "#93000a",
+                      "on-surface": "#1a1c19",
+                      "on-tertiary-fixed": "#1c1c1a",
+                      "error": "#ba1a1a",
+                      "tertiary-fixed": "#e5e2de",
+                      "surface-container-lowest": "#ffffff",
+                      "secondary-container": "#deddd7",
+                      "surface-dim": "#dadad5",
+                      "on-secondary": "#ffffff",
+                      "tertiary": "#5f5e5c",
+                      "on-primary-fixed-variant": "#7a2f15",
+                      "secondary-fixed": "#e4e2dc",
+                      "surface-variant": "#e2e3de",
+                      "surface-bright": "#fafaf5",
+                      "primary": "#99462a",
+                      "outline-variant": "#dbc1b9",
+                      "inverse-surface": "#2f312e",
+                      "on-tertiary": "#ffffff",
+                      "on-secondary-fixed-variant": "#474743",
+                      "surface-container": "#eeeee9",
+                      "error-container": "#ffdad6",
+                      "on-surface-variant": "#55433d",
+                      "surface-container-highest": "#e2e3de",
+                      "surface": "#fafaf5",
+                      "on-error": "#ffffff",
+                      "tertiary-fixed-dim": "#c8c6c3",
+                      "primary-fixed": "#ffdbd0",
+                      "on-secondary-fixed": "#1b1c18",
+                      "on-tertiary-fixed-variant": "#474744",
+                      "inverse-primary": "#ffb59e",
+                      "primary-container": "#d97757",
+                      "on-background": "#1a1c19",
+                      "inverse-on-surface": "#f1f1ec",
+                      "on-primary-fixed": "#390b00",
+                      "on-primary-container": "#541400"
+              },
+              "borderRadius": {
+                      "DEFAULT": "1rem",
+                      "lg": "2rem",
+                      "xl": "3rem",
+                      "full": "9999px"
+              },
+              "fontFamily": {
+                      "headline": ["Inter"],
+                      "display": ["Inter"],
+                      "body": ["Inter"],
+                      "label": ["Inter"]
+              }
+            },
+          }
+        }
+      </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        body { font-family: 'Inter', sans-serif; background-color: #F7F7F2; }
+      </style>
+</head>
+<body class="text-on-surface antialiased">
+<!-- TopNavBar -->
+<header class="bg-[#F7F7F2] dark:bg-stone-950 font-sans tracking-tight text-[#1D1D1B] dark:text-stone-100 docked full-width top-0 z-50 border-b border-[#E5E5E0] dark:border-stone-800 flat no shadows fixed w-full">
+<div class="flex justify-between items-center w-full px-6 py-3 max-w-full mx-auto">
+<div class="flex items-center gap-8">
+<span class="text-2xl font-bold text-[#1D1D1B] dark:text-stone-50 tracking-tighter">NexoClip</span>
+<nav class="hidden md:flex gap-6 items-center">
+<a class="text-[#6B6B66] dark:text-stone-400 hover:text-[#1D1D1B] dark:hover:text-stone-200 transition-colors" href="#">Discovery</a>
+<a class="text-[#6B6B66] dark:text-stone-400 hover:text-[#1D1D1B] dark:hover:text-stone-200 transition-colors" href="#">Workshop</a>
+<a class="text-[#D97757] font-bold border-b-2 border-[#D97757] pb-1" href="#">Distribution</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative hidden lg:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline-variant">search</span>
+<input class="bg-surface-container-low border-none rounded-full pl-10 pr-4 py-2 text-sm focus:ring-2 focus:ring-primary-container w-64" placeholder="Search projects..." type="text"/>
+</div>
+<button class="bg-primary-container text-on-primary px-5 py-2 rounded-full font-semibold text-sm active:scale-95 transition-transform hover:opacity-90">Create New</button>
+<div class="w-10 h-10 rounded-full overflow-hidden border border-outline-variant">
+<img alt="User Profile Avatar" data-alt="A professional studio headshot of a creative director in a minimalist environment with soft, warm overhead lighting. The composition is clean and editorial, featuring a person with a neutral expression against a subtle off-white background that matches the NexoClip brand aesthetic. The photography style is high-end and modern, with sharp focus and shallow depth of field." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBr5Eox2uK8w0jrEZP60OYL1Y_a6eDfwT8SBrE31yCtr6YOXDN6A_TmFK91aIK5Cp_Hfya7mGmAp8wwynb8BW_C1UewOzuZqRSkEcmyMt35Hk2JRRisI1qni2TgtRArXF-EkfPc8HCvDIX8tV_FiSnQp8FlU4R05EfpI2gWZAkOe9A2g8Zw1JJSfqiwiu-cRRicNG8LQ8YLZXJ966dpWNcuQ0AcSou7GyhXpewI_N95OxW6SoR8FhWtMXYzGWV7qNKHh9SxRRM_bATh"/>
+</div>
+</div>
+</div>
+</header>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-[60px] h-[calc(100vh-60px)] w-64 bg-white dark:bg-stone-900 border-r border-[#E5E5E0] dark:border-stone-800 flex flex-col p-4 gap-2 z-40">
+<div class="mb-8 px-4 pt-4">
+<div class="flex items-center gap-3 mb-2">
+<div class="w-8 h-8 bg-primary-container rounded flex items-center justify-center text-white">
+<span class="material-symbols-outlined text-lg">layers</span>
+</div>
+<h2 class="text-lg font-bold text-[#1D1D1B] dark:text-stone-50">Distribution</h2>
+</div>
+<p class="text-xs font-medium text-text-muted">Global Channel Manager</p>
+</div>
+<nav class="space-y-1 flex-1">
+<div class="bg-[#F7F7F2] dark:bg-stone-800 text-[#D97757] font-semibold rounded-lg px-4 py-2 flex items-center gap-3 cursor-pointer transition-all duration-200">
+<span class="material-symbols-outlined">hub</span>
+<span class="font-sans text-sm font-medium">Accounts</span>
+</div>
+<div class="text-[#6B6B66] dark:text-stone-400 hover:text-[#1D1D1B] px-4 py-2 flex items-center gap-3 transition-colors cursor-pointer hover:bg-[#F7F7F2] dark:hover:bg-stone-800/50">
+<span class="material-symbols-outlined">schedule_send</span>
+<span class="font-sans text-sm font-medium">Publishing Queue</span>
+</div>
+<div class="text-[#6B6B66] dark:text-stone-400 hover:text-[#1D1D1B] px-4 py-2 flex items-center gap-3 transition-colors cursor-pointer hover:bg-[#F7F7F2] dark:hover:bg-stone-800/50">
+<span class="material-symbols-outlined">history</span>
+<span class="font-sans text-sm font-medium">History</span>
+</div>
+<div class="text-[#6B6B66] dark:text-stone-400 hover:text-[#1D1D1B] px-4 py-2 flex items-center gap-3 transition-colors cursor-pointer hover:bg-[#F7F7F2] dark:hover:bg-stone-800/50">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-sans text-sm font-medium">Analytics</span>
+</div>
+</nav>
+<div class="mt-auto p-4 bg-surface-container-low rounded-xl">
+<p class="text-xs text-on-surface-variant mb-3 leading-relaxed">Expand your reach by connecting more platforms.</p>
+<button class="w-full bg-primary-container text-on-primary py-2 rounded-lg text-xs font-bold active:scale-95 transition-transform">Connect Account</button>
+</div>
+</aside>
+<!-- Main Content Layout -->
+<main class="ml-64 pt-[60px] min-h-screen grid grid-cols-12 gap-0">
+<!-- Left Column: Social Accounts -->
+<section class="col-span-3 border-r border-border-soft bg-white p-6 overflow-y-auto">
+<div class="flex justify-between items-center mb-8">
+<h3 class="text-lg font-bold tracking-tight text-on-surface">Akun Sosial</h3>
+<button class="flex items-center gap-1 text-primary text-sm font-bold bg-primary-fixed/30 px-3 py-1.5 rounded-full hover:bg-primary-fixed transition-colors">
+<span class="material-symbols-outlined text-sm">add</span>
+                    Tambah
+                </button>
+</div>
+<div class="space-y-4">
+<!-- TikTok Item -->
+<div class="p-4 rounded-xl bg-surface-container-low border border-transparent hover:border-outline-variant transition-all cursor-pointer group">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-black flex items-center justify-center text-white shrink-0">
+<span class="material-symbols-outlined">play_arrow</span>
+</div>
+<div class="flex-1 min-w-0">
+<p class="text-sm font-bold text-on-surface truncate">@nexocreator</p>
+<div class="flex items-center gap-1.5 mt-0.5">
+<span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+<span class="text-[10px] uppercase tracking-wider font-bold text-emerald-600">Aktif</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline-variant group-hover:text-primary transition-colors">chevron_right</span>
+</div>
+</div>
+<!-- YouTube Item -->
+<div class="p-4 rounded-xl border border-border-soft hover:bg-surface-container-low transition-all cursor-pointer group">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-red-600 flex items-center justify-center text-white shrink-0">
+<span class="material-symbols-outlined">video_library</span>
+</div>
+<div class="flex-1 min-w-0">
+<p class="text-sm font-bold text-on-surface truncate">@nexoclipstudio</p>
+<div class="flex items-center gap-1.5 mt-0.5">
+<span class="w-2 h-2 rounded-full bg-amber-500"></span>
+<span class="text-[10px] uppercase tracking-wider font-bold text-amber-600">Kadaluarsa</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline-variant group-hover:text-primary transition-colors">chevron_right</span>
+</div>
+</div>
+<!-- Instagram Item -->
+<div class="p-4 rounded-xl border border-border-soft hover:bg-surface-container-low transition-all cursor-pointer group">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 flex items-center justify-center text-white shrink-0">
+<span class="material-symbols-outlined">photo_camera</span>
+</div>
+<div class="flex-1 min-w-0">
+<p class="text-sm font-bold text-on-surface truncate">@nexoclip_id</p>
+<div class="flex items-center gap-1.5 mt-0.5">
+<span class="w-2 h-2 rounded-full bg-error"></span>
+<span class="text-[10px] uppercase tracking-wider font-bold text-error">Error</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline-variant group-hover:text-primary transition-colors">chevron_right</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Right Column: Queue/Antrian -->
+<section class="col-span-9 p-8 bg-[#F7F7F2]">
+<div class="max-w-4xl mx-auto">
+<div class="flex items-center gap-8 mb-8 border-b border-border-soft">
+<button class="pb-4 text-primary font-bold border-b-2 border-primary transition-all">Antrian</button>
+<button class="pb-4 text-text-muted font-medium hover:text-on-surface transition-all">Riwayat</button>
+</div>
+<div class="bg-surface-card rounded-lg shadow-sm border border-border-soft overflow-hidden">
+<table class="w-full text-left">
+<thead class="bg-surface-container-low border-b border-border-soft">
+<tr>
+<th class="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-text-muted">Platform &amp; Video</th>
+<th class="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-text-muted">Jadwal</th>
+<th class="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-text-muted">Status</th>
+<th class="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-text-muted text-right">Aksi</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-border-soft">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="px-6 py-5">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-lg bg-black flex items-center justify-center text-white shrink-0">
+<span class="material-symbols-outlined">play_arrow</span>
+</div>
+<div>
+<p class="text-sm font-bold text-on-surface">Video Promosi Lebaran</p>
+<p class="text-xs text-text-muted">TikTok • @nexocreator</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-5">
+<p class="text-sm font-medium text-on-surface">Hari ini</p>
+<p class="text-xs text-text-muted">14:00</p>
+</td>
+<td class="px-6 py-5">
+<span class="px-3 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 uppercase tracking-tight">PENDING</span>
+</td>
+<td class="px-6 py-5 text-right">
+<button class="text-primary text-xs font-bold hover:underline opacity-0 group-hover:opacity-100 transition-opacity">Batalkan</button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="px-6 py-5">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-lg bg-red-600 flex items-center justify-center text-white shrink-0">
+<span class="material-symbols-outlined">video_library</span>
+</div>
+<div>
+<p class="text-sm font-bold text-on-surface">Tutorial AI Editing</p>
+<p class="text-xs text-text-muted">YouTube • @nexoclipstudio</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-5">
+<p class="text-sm font-medium text-on-surface">Besok</p>
+<p class="text-xs text-text-muted">09:00</p>
+</td>
+<td class="px-6 py-5">
+<span class="px-3 py-1 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700 uppercase tracking-tight">SCHEDULED</span>
+</td>
+<td class="px-6 py-5 text-right">
+<button class="text-primary text-xs font-bold hover:underline opacity-0 group-hover:opacity-100 transition-opacity">Batalkan</button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="bg-primary-fixed/10 group">
+<td class="px-6 py-5">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-lg bg-black flex items-center justify-center text-white shrink-0">
+<span class="material-symbols-outlined">play_arrow</span>
+</div>
+<div>
+<p class="text-sm font-bold text-on-surface">Clip Viral Minggu Ini</p>
+<p class="text-xs text-text-muted">TikTok • @nexocreator</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-5">
+<p class="text-sm font-bold text-primary">Sekarang</p>
+<p class="text-xs text-primary/70">In Progress</p>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-lg animate-spin" style="font-variation-settings: 'wght' 600;">sync</span>
+<span class="px-3 py-1 rounded-full text-[10px] font-bold bg-primary text-on-primary uppercase tracking-tight">PUBLISHING</span>
+</div>
+</td>
+<td class="px-6 py-5 text-right">
+<button class="text-primary text-xs font-bold disabled:opacity-50" disabled="">Fixed Action</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Empty State Preview Hint (Editorial Element) -->
+<div class="mt-12 grid grid-cols-2 gap-6">
+<div class="bg-white p-8 rounded-lg border border-border-soft flex flex-col items-center text-center">
+<img class="w-full h-32 object-cover rounded-md mb-6 grayscale hover:grayscale-0 transition-all duration-500" data-alt="A futuristic workspace featuring high-end camera equipment, a high-resolution monitor displaying video editing software, and sleek cinematic lighting. The aesthetic is warm and minimalist, using the NexoClip palette of soft whites and muted rust accents. The image conveys a sense of professional creativity and technological advancement in a quiet, editorial setting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCdWR_MIBOCY4U5m6nGkpSKVEso4kgav5C76LR-aOUwhg3dF2Jhrayy0y1kyhSE9aDGjbn14SW18nAuEEP6k2ihg4PUExxdQ_0Wnw_hKVvGJoALuJj50ZwRglrB2Vcl5vaXVD66YjK5pCQBoJh4FiIw2GI5gfXLT9v3ODZwLdvQVU3PABcE4kjjtUn4qkIWo2vprq7f4esyN2lGV6eyr2U7s8UWd-ccx6Hcl_iHUBjIW-J9T_SV3ZpG9PejOXJ7pzDc-H61WtSNYfjZ"/>
+<h4 class="text-sm font-bold mb-2">Automate Your Workflow</h4>
+<p class="text-xs text-text-muted leading-relaxed">Let our AI agents handle the formatting and metadata optimization for every platform.</p>
+</div>
+<div class="bg-white p-8 rounded-lg border border-border-soft flex flex-col items-center text-center">
+<img class="w-full h-32 object-cover rounded-md mb-6 grayscale hover:grayscale-0 transition-all duration-500" data-alt="An artistic representation of social media connectivity, showing stylized glowing lines linking various platform logos like TikTok and YouTube in a three-dimensional space. The lighting is soft and high-key, maintaining a clean, professional aesthetic without harsh neon colors. The primary palette consists of sand, charcoal, and warm whites, consistent with a premium editorial design." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDiS9gyByc8sHreSQ8wXPXpWEYcVZhe4aIxUrovuPrQ8T_dLjfMQKdRb-7YmIfwup9_Zx3Azu7Qci0TeoqPEtxRtJgoziIMjxZtGRhymJEBca3tjDHIbMpFiITiC3ooTo8qfL7dKdcCIAuI1kvviWt8P5IZ5Q3ZRGv2AL54Cq0JcnqYHmR4GZBeA6vK9llvR7XhQmccjAdGAArzSimqPNIppysYba2HY7TxaT07PDQnslcRzbYNbsVYd7IXdY-WVmgUba0W9MjwZy3D"/>
+<h4 class="text-sm font-bold mb-2">Smart Scheduling</h4>
+<p class="text-xs text-text-muted leading-relaxed">We analyze your audience activity to suggest the perfect moment for maximum engagement.</p>
+</div>
+</div>
+</div>
+</section>
+</main>
+</body></html>

@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>NexoClip Library</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary-fixed": "#e5e2de",
+                    "surface": "#fafaf5",
+                    "on-secondary": "#ffffff",
+                    "on-secondary-container": "#61615c",
+                    "surface-container": "#eeeee9",
+                    "primary": "#99462a",
+                    "outline": "#88726c",
+                    "background": "#fafaf5",
+                    "tertiary": "#5f5e5c",
+                    "on-primary-fixed-variant": "#7a2f15",
+                    "on-primary-container": "#541400",
+                    "surface-dim": "#dadad5",
+                    "secondary-fixed": "#e4e2dc",
+                    "on-tertiary": "#ffffff",
+                    "on-primary-fixed": "#390b00",
+                    "primary-fixed": "#ffdbd0",
+                    "tertiary-fixed-dim": "#c8c6c3",
+                    "on-surface-variant": "#55433d",
+                    "surface-container-low": "#f4f4ef",
+                    "primary-container": "#d97757",
+                    "inverse-on-surface": "#f1f1ec",
+                    "on-tertiary-fixed": "#1c1c1a",
+                    "on-surface": "#1a1c19",
+                    "on-tertiary-container": "#2b2b29",
+                    "on-secondary-fixed-variant": "#474743",
+                    "inverse-primary": "#ffb59e",
+                    "error": "#ba1a1a",
+                    "tertiary-container": "#94928f",
+                    "surface-container-highest": "#e2e3de",
+                    "surface-container-high": "#e8e8e4",
+                    "secondary-container": "#deddd7",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary": "#5e5f5a",
+                    "inverse-surface": "#2f312e",
+                    "error-container": "#ffdad6",
+                    "primary-fixed-dim": "#ffb59e",
+                    "on-error": "#ffffff",
+                    "surface-bright": "#fafaf5",
+                    "on-error-container": "#93000a",
+                    "secondary-fixed-dim": "#c8c7c0",
+                    "on-tertiary-fixed-variant": "#474744",
+                    "on-secondary-fixed": "#1b1c18",
+                    "surface-tint": "#99462a",
+                    "on-background": "#1a1c19",
+                    "on-primary": "#ffffff",
+                    "outline-variant": "#dbc1b9",
+                    "surface-variant": "#e2e3de"
+            },
+            "borderRadius": {
+                    "DEFAULT": "1rem",
+                    "lg": "2rem",
+                    "xl": "3rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Inter"],
+                    "display": ["Inter"],
+                    "body": ["Inter"],
+                    "label": ["Inter"]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-background text-on-background antialiased">
+<!-- Side Navigation Bar -->
+<aside class="fixed left-0 top-0 h-full flex flex-col p-4 z-40 bg-white dark:bg-stone-950 h-screen w-64 border-r border-stone-200 dark:border-stone-800 font-inter text-sm font-medium">
+<div class="flex items-center gap-3 px-2 py-4 mb-6">
+<div class="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center text-white">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">movie_filter</span>
+</div>
+<div>
+<h1 class="text-lg font-black text-[#1D1D1B] dark:text-stone-100 tracking-tighter">NexoClip</h1>
+<p class="text-[10px] text-text-muted uppercase tracking-widest">Production Studio</p>
+</div>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 text-[#6B6B66] dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-900/50 rounded-xl hover:pl-2 transition-all duration-200" href="#">
+<span class="material-symbols-outlined">home</span>
+<span>Home</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-[#6B6B66] dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-900/50 rounded-xl hover:pl-2 transition-all duration-200" href="#">
+<span class="material-symbols-outlined">movie_filter</span>
+<span>Projects</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 bg-[#F7F7F2] dark:bg-stone-900 text-[#D97757] dark:text-[#E68A6E] rounded-xl font-bold hover:pl-2 transition-all duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">video_library</span>
+<span>Library</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-[#6B6B66] dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-900/50 rounded-xl hover:pl-2 transition-all duration-200" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span>Settings</span>
+</a>
+</nav>
+<div class="pt-4 border-t border-stone-200 dark:border-stone-800 space-y-1">
+<button class="w-full mb-4 py-3 bg-primary-container text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all">
+<span class="material-symbols-outlined">add_circle</span>
+<span>New Project</span>
+</button>
+<a class="flex items-center gap-3 px-4 py-2 text-[#6B6B66] dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-900/50 rounded-xl hover:pl-2 transition-all duration-200" href="#">
+<span class="material-symbols-outlined">help</span>
+<span>Help</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2 text-[#6B6B66] dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-900/50 rounded-xl hover:pl-2 transition-all duration-200" href="#">
+<span class="material-symbols-outlined">archive</span>
+<span>Archive</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-64 min-h-screen">
+<!-- Top Navigation Area -->
+<header class="flex justify-between items-center w-full px-8 py-6 sticky top-0 z-30 bg-[#F7F7F2] dark:bg-stone-900 border-b border-stone-200 dark:border-stone-800 font-inter tracking-tight antialiased">
+<div class="flex flex-col">
+<h2 class="text-[20px] font-semibold text-[#1D1D1B] dark:text-stone-100">Library</h2>
+<p class="text-[12px] text-[#6B6B66] dark:text-stone-400">Semua aset video kamu</p>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-4 mr-4">
+<a class="text-[#6B6B66] dark:text-stone-400 hover:text-[#1D1D1B] dark:hover:text-stone-200 transition-colors" href="#">Discovery</a>
+<a class="text-[#6B6B66] dark:text-stone-400 hover:text-[#1D1D1B] dark:hover:text-stone-200 transition-colors" href="#">Workshop</a>
+<a class="text-[#D97757] dark:text-[#E68A6E] border-b-2 border-[#D97757] pb-1 font-semibold" href="#">Library</a>
+<a class="text-[#6B6B66] dark:text-stone-400 hover:text-[#1D1D1B] dark:hover:text-stone-200 transition-colors" href="#">Assets</a>
+</div>
+<button class="p-2 text-[#6B6B66] hover:bg-stone-100 dark:hover:bg-stone-800 rounded-lg transition-all active:scale-95">
+<span class="material-symbols-outlined">refresh</span>
+</button>
+<button class="p-2 text-[#6B6B66] hover:bg-stone-100 dark:hover:bg-stone-800 rounded-lg transition-all active:scale-95 relative">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full border-2 border-surface"></span>
+</button>
+<div class="w-8 h-8 rounded-full overflow-hidden ml-2 border border-stone-200">
+<img class="w-full h-full object-cover" data-alt="A professional studio headshot of a creative director in a minimalist, bright office environment. The lighting is soft and natural, emphasizing a high-end editorial aesthetic. The background features warm off-white walls and subtle wooden textures, matching the NexoClip brand palette of professional, calm, and sophisticated design." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAmM5q021EgvaC-L55WQ1dFhkyAx92Rc6TNYuXgYhhcGT26G4zz6AW0Wg84uDafDH4pa6H5iLfuX8jTdGNvhRE9s7cXsncKQdeiBdR55Kf1kYOlTFyGySOSWa9iLBgmquGupcUS3eO5QmsLKC37Nk3D6OdK2DWoYNVv8kpJldeg1ErGpszNCKUs7AGafB7YeSEh5FWkz8DlnIu6A_cRp4OuYcEjz05sW9lscsOTsfEY48qsPTHpiRpTV1_cOyKTQsDxJz14CK9esqQ8"/>
+</div>
+</div>
+</header>
+<!-- Filters and Controls Area -->
+<section class="px-8 pt-8 pb-4">
+<div class="flex flex-col gap-6">
+<!-- Tabs -->
+<div class="flex items-center gap-8 border-b border-stone-200 overflow-x-auto whitespace-nowrap scrollbar-hide">
+<button class="pb-4 text-primary font-semibold border-b-2 border-primary transition-all">Semua</button>
+<button class="pb-4 text-text-muted hover:text-text-main transition-all">Auto Clip</button>
+<button class="pb-4 text-text-muted hover:text-text-main transition-all">UGC Agent</button>
+<button class="pb-4 text-text-muted hover:text-text-main transition-all">Listicle</button>
+<button class="pb-4 text-text-muted hover:text-text-main transition-all">Thumbnail</button>
+<button class="pb-4 text-text-muted hover:text-text-main transition-all">Video Editor</button>
+</div>
+<!-- Search & Sort -->
+<div class="flex flex-wrap items-center justify-between gap-4">
+<div class="flex items-center gap-4">
+<label class="flex items-center gap-3 cursor-pointer group">
+<div class="w-5 h-5 border-2 border-stone-300 rounded flex items-center justify-center group-hover:border-primary transition-colors">
+<div class="w-2.5 h-2.5 bg-primary rounded-sm opacity-0 checked-box"></div>
+</div>
+<span class="text-sm font-medium text-text-main">Pilih Semua</span>
+</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-[20px]">search</span>
+<input class="pl-10 pr-4 py-2 bg-white border border-stone-200 rounded-xl w-[300px] text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all" placeholder="Cari aset..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-sm text-text-muted">Urutkan:</span>
+<select class="bg-white border-none text-sm font-semibold text-text-main focus:ring-0 cursor-pointer">
+<option>Terbaru</option>
+<option>Terlama</option>
+<option>Nama</option>
+</select>
+</div>
+</div>
+</div>
+</section>
+<!-- Asset Grid -->
+<section class="px-8 pb-32">
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+<!-- Card 1: Active -->
+<article class="bg-white rounded-[16px] shadow-sm overflow-hidden hover:shadow-md transition-shadow group cursor-pointer border border-transparent hover:border-primary-container/20">
+<div class="aspect-[9/16] bg-stone-900 relative">
+<img class="w-full h-full object-cover" data-alt="A high-fashion cinematic vertical video frame showing a model walking through a sun-drenched architectural space with deep shadows. The lighting is dramatic and warm, echoing a luxury editorial style. The color palette consists of soft beiges, warm oranges, and deep charcoals, maintaining a professional and artistic atmosphere." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA82AYzil_XadRIAtJ1jMKgY4yNpi9HA9HHFANfxKDfT9ryQRBnjAbEDZ2Tx305wFMr3sHggvSBP2COpf9_qhEgh3wBccxRdF4umt497I6SzHCBlTzqopZ8cDXi9fV5hPR1vHYsm3tTop-QBG_eIO_XQ0FWy3zgHZBSeXLMeY2kcFTDUstC0tz6A-s3xriOMAc9_AynifsonDygFsjYusA4z6zAusuQoVUIU_WcX72p2cxQJdWY51-Y3BN6-rw6fyTbOM6C7dmEyjlv"/>
+<div class="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+<div class="w-14 h-14 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/30 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-white text-[36px]" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</div>
+</div>
+<div class="absolute top-4 left-4">
+<span class="bg-white/90 backdrop-blur px-2 py-1 rounded-md text-[10px] font-bold tracking-wider uppercase text-text-main">AUTO CLIP</span>
+</div>
+<div class="absolute top-4 right-4">
+<span class="bg-amber-100/90 backdrop-blur px-2 py-1 rounded-md text-[10px] font-bold text-amber-700 flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]">schedule</span>
+                                2 HARI LAGI
+                            </span>
+</div>
+<div class="absolute top-4 right-4 hidden">
+<!-- Overlay Checkbox -->
+<div class="w-6 h-6 bg-primary rounded-full flex items-center justify-center text-white shadow-lg">
+<span class="material-symbols-outlined text-[16px] font-bold">check</span>
+</div>
+</div>
+</div>
+<div class="p-4">
+<h3 class="text-[13px] font-medium text-text-main leading-snug line-clamp-2 mb-2">Review Gadget Terbaru 2025: Masa Depan Teknologi dalam Genggaman</h3>
+<p class="text-[11px] text-text-muted">autoclip · 14 Mei 2025</p>
+</div>
+</article>
+<!-- Card 2: Expired State -->
+<article class="bg-white rounded-[16px] shadow-sm overflow-hidden hover:shadow-md transition-shadow group border border-transparent">
+<div class="aspect-[9/16] bg-stone-900 relative">
+<img class="w-full h-full object-cover grayscale opacity-60" data-alt="A grayscale workspace with a laptop and coffee, presented in a vertical 9:16 aspect ratio. The lighting is soft but the colors are completely desaturated to represent an expired state. The mood is professional yet inactive, fitting the warm minimalist aesthetic but in a muted, silver-toned palette." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC9cWQ8qBT0ViT6xlV12puaK17m4zAsykH454-d8qKjXpgBnwPD-cRZmYjtJpCyfuO9GBqXmoabHFAx57If9W59AkWR_VLb6k86Cad3uDcdYvdc8PGutzUIk2cbaKeorwnSujg45Ox1XTggqA9zAvSR88ErlEgawVp3peWc0kISzKmav80viZtypS1c49Ys5I8t2t93f8ObMckEdIpWoL8wSc3LQgcBvpYxTVV0UMirmSm2qAWdlLGZ3A4KQ9U6S5aDO9VTa77AnUii"/>
+<div class="absolute inset-0 flex flex-col items-center justify-center bg-stone-900/40">
+<span class="material-symbols-outlined text-white/50 text-[48px] mb-4">timer_off</span>
+<button class="bg-primary text-white px-6 py-2 rounded-xl text-sm font-bold shadow-lg hover:bg-primary/90 active:scale-95 transition-all">Perpanjang</button>
+</div>
+<div class="absolute top-4 left-4">
+<span class="bg-white/90 backdrop-blur px-2 py-1 rounded-md text-[10px] font-bold tracking-wider uppercase text-text-main">UGC AGENT</span>
+</div>
+<div class="absolute top-4 right-4">
+<span class="bg-red-100/90 backdrop-blur px-2 py-1 rounded-md text-[10px] font-bold text-red-600 flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]">error</span>
+                                EXPIRED
+                            </span>
+</div>
+</div>
+<div class="p-4 bg-stone-50">
+<h3 class="text-[13px] font-medium text-text-muted leading-snug line-clamp-2 mb-2">Unboxing Experience: Premium Leather Accessories for Digital Nomads</h3>
+<p class="text-[11px] text-text-muted">ugc_agent · 10 Mei 2025</p>
+</div>
+</article>
+<!-- Card 3: Standard -->
+<article class="bg-white rounded-[16px] shadow-sm overflow-hidden hover:shadow-md transition-shadow group cursor-pointer border border-transparent hover:border-primary-container/20">
+<div class="aspect-[9/16] bg-stone-900 relative">
+<img class="w-full h-full object-cover" data-alt="A vibrant vertical scene of a lush green forest at sunrise, with light rays piercing through the morning mist. The overall aesthetic is professional, calm, and high-resolution. The lighting is natural and high-key, aligning with the NexoClip 'Intellectual Calm' principles of using soft colors and generous light." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBdvBqx1E6qdQGBkBsGhMnkfz_VmYnikOQgSDlfOqcScZQ4pTnlNDxDTgqMi7oraQSC1T_sXBmbWkIJVZxhi8fWNExQC16_shYphtfooV-BmnL1bY_W6ARZ4l7BGJ_5QlbxCbH1nvdkfuVSYRbCGqa0FTzKP-fIoex9j_0Njd1aBvK2mohURoJrnQwRwGc2-vhnwQ8ee7rxdKlgyiVNU0DX0MLiCHF8f5tV7FuBE4KWcaCckKJ0BM65GgnoJIrUxhjjXoUcaUfkfMX6"/>
+<div class="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+<div class="w-14 h-14 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/30 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-white text-[36px]" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</div>
+</div>
+<div class="absolute top-4 left-4">
+<span class="bg-white/90 backdrop-blur px-2 py-1 rounded-md text-[10px] font-bold tracking-wider uppercase text-text-main">LISTICLE</span>
+</div>
+<div class="absolute top-4 right-4">
+<span class="bg-amber-100/90 backdrop-blur px-2 py-1 rounded-md text-[10px] font-bold text-amber-700 flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]">schedule</span>
+                                14 HARI LAGI
+                            </span>
+</div>
+</div>
+<div class="p-4">
+<h3 class="text-[13px] font-medium text-text-main leading-snug line-clamp-2 mb-2">5 Tempat Hidden Gem di Bali untuk Digital Nomad Tahun 2025</h3>
+<p class="text-[11px] text-text-muted">listicle · 15 Mei 2025</p>
+</div>
+</article>
+<!-- Card 4: Standard -->
+<article class="bg-white rounded-[16px] shadow-sm overflow-hidden hover:shadow-md transition-shadow group cursor-pointer border border-transparent hover:border-primary-container/20">
+<div class="aspect-[9/16] bg-stone-900 relative">
+<img class="w-full h-full object-cover" data-alt="A vertical shot focusing on retro-modern electronics, featuring a minimalist aesthetic and soft morning light. The colors are warm and muted, consistent with the NexoClip palette of sand, rust, and charcoal. The visual style is crisp and editorial, feeling like a page from a high-end design magazine." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAVs-ojsqdRaqejTqCvf5OtKtibDYW_KqhdeSj7IpKsVwJ-UOdkfm7bHEaGTrG9u8o5F5tTI6u3hX5EHkHs_DSpIayim3MVVML2f7iXS_T_izRp2wxmn6GUwaw6GSUhbo_3NTkEMZy2Fm5XQ2zfbtmR34yn6MLg7LlS4qETfFSKwaeWSraAjU01jsF2MKfCD6wEJlFK2jjEBiodY-HPpn34Jv3Ytm_eqQNXJGVRRx2EQj7_lNRjH2BLoIOWUjsWiJWvQICLXnoqSfOS"/>
+<div class="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+<div class="w-14 h-14 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/30 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-white text-[36px]" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</div>
+</div>
+<div class="absolute top-4 left-4">
+<span class="bg-white/90 backdrop-blur px-2 py-1 rounded-md text-[10px] font-bold tracking-wider uppercase text-text-main">AUTO CLIP</span>
+</div>
+<div class="absolute top-4 right-4">
+<span class="bg-amber-100/90 backdrop-blur px-2 py-1 rounded-md text-[10px] font-bold text-amber-700 flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]">schedule</span>
+                                5 HARI LAGI
+                            </span>
+</div>
+</div>
+<div class="p-4">
+<h3 class="text-[13px] font-medium text-text-main leading-snug line-clamp-2 mb-2">Evolusi Desain Konsol Game: Dari Retro hingga Minimalis Modern</h3>
+<p class="text-[11px] text-text-muted">autoclip · 14 Mei 2025</p>
+</div>
+</article>
+<!-- Card 5: Selected State -->
+<article class="bg-white rounded-[16px] shadow-sm overflow-hidden hover:shadow-md transition-shadow group cursor-pointer border-2 border-primary">
+<div class="aspect-[9/16] bg-stone-900 relative">
+<img class="w-full h-full object-cover" data-alt="A close-up vertical shot of professional photography equipment on a white marble surface. The lighting is soft and directional, creating elegant highlights. The aesthetic is clean, professional, and sophisticated, mirroring an editor's refined workspace. The color palette emphasizes whites, grays, and subtle metallic tones." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDLcVCx6w7ud9fzasK7msbIqAeA5PHJ8QZSj62i9cAUcEkFuWY6iG61sy75xg2RysvYEIy8RZ3qs3EG0A7Nm07blYNnF9jGa191nnmF75GkstSRAfbzpQF1YuxiuGXM1AErHQwyigBBm6Hdg96zVOCh55yBdXPmp7b7_qwbmnmVI4XxRq8IbetumUodr7PFnng8POcL6h-lkvQE6nzBvHMIL4uQBAvkK5WehJ6kfYfNTJC4kYzqN03V50gE6z7ox3UHJie6KtQnW16L"/>
+<div class="absolute inset-0 bg-primary/20 flex items-center justify-center">
+<div class="w-14 h-14 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/30">
+<span class="material-symbols-outlined text-white text-[36px]" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</div>
+</div>
+<div class="absolute top-4 left-4">
+<span class="bg-white/90 backdrop-blur px-2 py-1 rounded-md text-[10px] font-bold tracking-wider uppercase text-text-main">VIDEO EDITOR</span>
+</div>
+<div class="absolute top-4 right-4">
+<div class="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white shadow-xl scale-110">
+<span class="material-symbols-outlined text-[20px] font-bold">check</span>
+</div>
+</div>
+</div>
+<div class="p-4">
+<h3 class="text-[13px] font-medium text-text-main leading-snug line-clamp-2 mb-2">Tips Fotografi Produk: Cara Mengambil Gambar Berstandar Majalah</h3>
+<p class="text-[11px] text-text-muted">video_editor · 14 Mei 2025</p>
+</div>
+</article>
+<!-- Card 6: Standard -->
+<article class="bg-white rounded-[16px] shadow-sm overflow-hidden hover:shadow-md transition-shadow group cursor-pointer border border-transparent hover:border-primary-container/20">
+<div class="aspect-[9/16] bg-stone-900 relative">
+<img class="w-full h-full object-cover" data-alt="A clean, minimalist workspace featuring high-end technology and coding aesthetics in a vertical frame. The lighting is cool and even, perfect for a high-tech editorial look. The color palette is composed of light grays, pristine whites, and soft shadow tones, emphasizing NexoClip's agentic transparency and intellectual calm." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBYJEb0hB1BIZwbXY4m0V6DFtEZllOZmP6f2zFTr04SnTmY3WikRYT9kNgjUKW-IRHLW7QzALOC1a2Bs7GDunH9MdFUqitbs00NCyo4l-VrTlIHFEHbQzlDXVw4Qg-cfbfIpjswVaaX8t_R04c3AdUmXaUCQBhFpPmD6kz9v3HQw9ylY_TVfcSp6C10RSijiDKYjvsGf8KR7jQ6L133jWNXkxpKHjBcmC-W_qOAsWr_vPPajMkAK7HharAzcmGXVZT2TX-mrVuuliXt"/>
+<div class="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+<div class="w-14 h-14 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/30 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-white text-[36px]" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</div>
+</div>
+<div class="absolute top-4 left-4">
+<span class="bg-white/90 backdrop-blur px-2 py-1 rounded-md text-[10px] font-bold tracking-wider uppercase text-text-main">AUTO CLIP</span>
+</div>
+<div class="absolute top-4 right-4">
+<span class="bg-amber-100/90 backdrop-blur px-2 py-1 rounded-md text-[10px] font-bold text-amber-700 flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]">schedule</span>
+                                12 HARI LAGI
+                            </span>
+</div>
+</div>
+<div class="p-4">
+<h3 class="text-[13px] font-medium text-text-main leading-snug line-clamp-2 mb-2">Panduan Awal Menjadi Software Engineer: Road Map Menuju Karir Sukses</h3>
+<p class="text-[11px] text-text-muted">autoclip · 13 Mei 2025</p>
+</div>
+</article>
+</div>
+</section>
+<!-- Bulk Actions Bar -->
+<div class="fixed bottom-8 left-1/2 -translate-x-1/2 ml-32 bg-white/80 backdrop-blur-xl border border-stone-200 px-6 py-4 rounded-2xl shadow-2xl z-50 flex items-center gap-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
+<div class="flex items-center gap-3 pr-8 border-r border-stone-200">
+<div class="w-8 h-8 bg-primary-container text-white rounded-lg flex items-center justify-center font-bold text-sm">3</div>
+<span class="text-sm font-semibold text-text-main whitespace-nowrap">Aset dipilih</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-text-main hover:bg-stone-100 transition-colors">
+<span class="material-symbols-outlined text-[20px]">download</span>
+                    Unduh Semua
+                </button>
+<button class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-error hover:bg-error/10 transition-colors">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+                    Hapus
+                </button>
+</div>
+<button class="p-2 text-text-muted hover:text-text-main transition-colors">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+</main>
+</body></html>

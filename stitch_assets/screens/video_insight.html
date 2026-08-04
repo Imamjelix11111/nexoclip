@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary": "#5f5e5c",
+                        "inverse-on-surface": "#f1f1ec",
+                        "secondary": "#5e5f5a",
+                        "on-surface": "#1a1c19",
+                        "surface-container-lowest": "#ffffff",
+                        "outline": "#88726c",
+                        "error": "#ba1a1a",
+                        "surface-container-low": "#f4f4ef",
+                        "on-surface-variant": "#55433d",
+                        "on-primary-fixed": "#390b00",
+                        "on-tertiary-fixed": "#1c1c1a",
+                        "on-background": "#1a1c19",
+                        "on-tertiary-fixed-variant": "#474744",
+                        "background": "#fafaf5",
+                        "surface-container-high": "#e8e8e4",
+                        "primary-fixed": "#ffdbd0",
+                        "inverse-primary": "#ffb59e",
+                        "on-secondary": "#ffffff",
+                        "secondary-fixed-dim": "#c8c7c0",
+                        "surface": "#fafaf5",
+                        "on-tertiary": "#ffffff",
+                        "surface-dim": "#dadad5",
+                        "secondary-container": "#deddd7",
+                        "on-error": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "tertiary-fixed": "#e5e2de",
+                        "tertiary-container": "#94928f",
+                        "on-secondary-fixed": "#1b1c18",
+                        "surface-container": "#eeeee9",
+                        "on-primary-container": "#541400",
+                        "surface-tint": "#99462a",
+                        "surface-container-highest": "#e2e3de",
+                        "on-secondary-fixed-variant": "#474743",
+                        "on-tertiary-container": "#2b2b29",
+                        "secondary-fixed": "#e4e2dc",
+                        "primary-fixed-dim": "#ffb59e",
+                        "outline-variant": "#dbc1b9",
+                        "primary": "#99462a",
+                        "inverse-surface": "#2f312e",
+                        "surface-variant": "#e2e3de",
+                        "on-error-container": "#93000a",
+                        "primary-container": "#d97757",
+                        "error-container": "#ffdad6",
+                        "on-primary-fixed-variant": "#7a2f15",
+                        "on-secondary-container": "#61615c",
+                        "tertiary-fixed-dim": "#c8c6c3",
+                        "surface-bright": "#fafaf5"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Inter"],
+                        "display": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .editorial-shadow { box-shadow: 0 4px 24px -2px rgba(29, 29, 27, 0.05); }
+    </style>
+</head>
+<body class="bg-[#F7F7F2] text-[#1D1D1B] min-h-screen">
+<!-- TopNavBar -->
+<header class="bg-[#F7F7F2] dark:bg-stone-950 border-b border-stone-200 dark:border-stone-800 sticky top-0 z-50 flex justify-between items-center px-6 py-3 w-full">
+<div class="flex items-center gap-8">
+<span class="text-xl font-bold tracking-tighter text-stone-900 dark:text-stone-50">NexoClip</span>
+<nav class="hidden md:flex gap-6">
+<a class="font-inter tracking-tight font-semibold text-stone-500 dark:text-stone-400 hover:text-[#D97757] transition-colors duration-200" href="#">Projects</a>
+<a class="font-inter tracking-tight font-semibold text-stone-900 dark:text-stone-50 border-b-2 border-[#D97757] pb-1 hover:text-[#D97757] transition-colors duration-200" href="#">Library</a>
+<a class="font-inter tracking-tight font-semibold text-stone-500 dark:text-stone-400 hover:text-[#D97757] transition-colors duration-200" href="#">Team</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="hidden lg:flex items-center bg-surface-container-low px-3 py-1.5 rounded-full border border-border-soft">
+<span class="material-symbols-outlined text-sm text-text-muted">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-sm w-48" placeholder="Search insights..." type="text"/>
+</div>
+<button class="material-symbols-outlined text-stone-500 hover:text-[#D97757] transition-all">notifications</button>
+<button class="material-symbols-outlined text-stone-500 hover:text-[#D97757] transition-all">settings</button>
+<button class="bg-[#D97757] text-white px-4 py-2 rounded-full text-sm font-semibold hover:opacity-90 transition-all scale-98 active:opacity-80">Create New</button>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-stone-200">
+<img alt="User profile" class="w-full h-full object-cover" data-alt="A high-end professional headshot of a creative director in a minimalist studio setting. The lighting is soft and cinematic, following an editorial aesthetic with warm off-white backgrounds and deep charcoal tones. The subject is calm and confident, reflecting a sophisticated AI-powered workspace environment with premium textures and muted colors." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBG2Dt1dyu2mIMNEo5w42w8ml-NrwLSl-UJULWa0tLr-kAl1Fx4Sqrgz0RcdBBwxoBXHX_ha5yHepUePRb-H5w0KS_HJ6cyfEv0N5etIH1Gdw-UG9OkjlhSKo4aCb2kyQ22YAyKfnQ-LEoorx6klwoi-CEj99oYWA2lV8GqnUPNMpXi4f1TdVTITNP-Jz8EIlER-3bg_CX4GIa6wQ_A_vatxpb-wjU1F-sUT80ybC5ezvY0AL17zJi538rw6tWIVWI9OE3x1aC-LOVv"/>
+</div>
+</div>
+</header>
+<div class="flex">
+<!-- SideNavBar -->
+<aside class="bg-[#F7F7F2] dark:bg-stone-900 h-screen w-64 border-r border-stone-200 dark:border-stone-800 fixed left-0 top-0 pt-20 hidden lg:flex flex-col py-8 z-40">
+<div class="px-6 mb-8">
+<div class="flex items-center gap-3 p-3 bg-white rounded-xl border border-border-soft editorial-shadow">
+<div class="w-10 h-10 bg-primary-container rounded-lg flex items-center justify-center text-white">
+<span class="material-symbols-outlined">movie</span>
+</div>
+<div>
+<p class="text-sm font-black text-stone-900 dark:text-stone-100 uppercase tracking-widest">Studio Workspace</p>
+<p class="text-[10px] text-text-muted font-medium uppercase tracking-widest">Editorial Mode</p>
+</div>
+</div>
+</div>
+<nav class="flex-1">
+<a class="flex items-center gap-3 text-stone-500 dark:text-stone-400 pl-5 py-3 font-inter text-sm font-medium uppercase tracking-widest hover:bg-stone-100 dark:hover:bg-stone-800 transition-all" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span>Overview</span>
+</a>
+<a class="flex items-center gap-3 text-stone-900 dark:text-stone-50 font-bold border-l-4 border-[#D97757] pl-4 py-3 bg-stone-100/50 dark:bg-stone-800/50 font-inter text-sm uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span>Insights</span>
+</a>
+<a class="flex items-center gap-3 text-stone-500 dark:text-stone-400 pl-5 py-3 font-inter text-sm font-medium uppercase tracking-widest hover:bg-stone-100 dark:hover:bg-stone-800 transition-all" href="#">
+<span class="material-symbols-outlined">movie</span>
+<span>Content</span>
+</a>
+<a class="flex items-center gap-3 text-stone-500 dark:text-stone-400 pl-5 py-3 font-inter text-sm font-medium uppercase tracking-widest hover:bg-stone-100 dark:hover:bg-stone-800 transition-all" href="#">
+<span class="material-symbols-outlined">share</span>
+<span>Distribution</span>
+</a>
+<a class="flex items-center gap-3 text-stone-500 dark:text-stone-400 pl-5 py-3 font-inter text-sm font-medium uppercase tracking-widest hover:bg-stone-100 dark:hover:bg-stone-800 transition-all" href="#">
+<span class="material-symbols-outlined">shopping_bag</span>
+<span>Commerce</span>
+</a>
+<a class="flex items-center gap-3 text-stone-500 dark:text-stone-400 pl-5 py-3 font-inter text-sm font-medium uppercase tracking-widest hover:bg-stone-100 dark:hover:bg-stone-800 transition-all" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span>System</span>
+</a>
+</nav>
+<div class="mt-auto px-4 pb-8 space-y-2">
+<div class="p-4 bg-primary-container/10 rounded-2xl border border-[#D97757]/20">
+<p class="text-[10px] font-bold text-[#D97757] uppercase tracking-widest mb-1">Current Plan</p>
+<p class="text-sm font-bold text-text-main mb-3">Enterprise Pro</p>
+<button class="w-full py-2 bg-[#D97757] text-white text-[11px] font-bold uppercase tracking-widest rounded-lg hover:opacity-90 transition-opacity">Upgrade Plan</button>
+</div>
+<div class="pt-4 border-t border-stone-200">
+<a class="flex items-center gap-3 text-stone-500 dark:text-stone-400 pl-4 py-2 font-inter text-[11px] font-medium uppercase tracking-widest hover:text-[#D97757] transition-all" href="#">
+<span class="material-symbols-outlined text-sm">help_outline</span>
+                        Help
+                    </a>
+<a class="flex items-center gap-3 text-stone-500 dark:text-stone-400 pl-4 py-2 font-inter text-[11px] font-medium uppercase tracking-widest hover:text-[#D97757] transition-all" href="#">
+<span class="material-symbols-outlined text-sm">chat_bubble_outline</span>
+                        Feedback
+                    </a>
+</div>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 lg:ml-64 p-6 md:p-10">
+<header class="mb-10">
+<h1 class="text-4xl font-extrabold tracking-tight text-text-main mb-6">Video Insights</h1>
+<!-- Account Selector Tabs -->
+<div class="flex gap-2 p-1 bg-surface-container-low rounded-2xl w-fit border border-border-soft">
+<button class="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-white editorial-shadow text-sm font-bold text-text-main transition-all">
+<svg class="w-4 h-4 fill-current" viewbox="0 0 24 24"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1.04-.1z"></path></svg>
+                        TikTok
+                    </button>
+<button class="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-medium text-text-muted hover:text-text-main transition-all">
+<svg class="w-4 h-4 fill-current" viewbox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"></path></svg>
+                        YouTube
+                    </button>
+</div>
+</header>
+<!-- Metric Cards Row -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+<div class="bg-white p-6 rounded-3xl border border-border-soft editorial-shadow">
+<div class="flex justify-between items-start mb-4">
+<span class="p-2 bg-surface-container rounded-xl material-symbols-outlined text-primary">visibility</span>
+<span class="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full uppercase tracking-widest">+12.4%</span>
+</div>
+<p class="text-text-muted text-xs font-bold uppercase tracking-widest mb-1">Total Views</p>
+<h3 class="text-3xl font-black text-text-main tracking-tight">1.2M</h3>
+</div>
+<div class="bg-white p-6 rounded-3xl border border-border-soft editorial-shadow">
+<div class="flex justify-between items-start mb-4">
+<span class="p-2 bg-surface-container rounded-xl material-symbols-outlined text-primary">favorite</span>
+<span class="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full uppercase tracking-widest">+8.2%</span>
+</div>
+<p class="text-text-muted text-xs font-bold uppercase tracking-widest mb-1">Total Likes</p>
+<h3 class="text-3xl font-black text-text-main tracking-tight">84.2K</h3>
+</div>
+<div class="bg-white p-6 rounded-3xl border border-border-soft editorial-shadow">
+<div class="flex justify-between items-start mb-4">
+<span class="p-2 bg-surface-container rounded-xl material-symbols-outlined text-primary">chat_bubble</span>
+<span class="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-1 rounded-full uppercase tracking-widest">-2.1%</span>
+</div>
+<p class="text-text-muted text-xs font-bold uppercase tracking-widest mb-1">Total Comments</p>
+<h3 class="text-3xl font-black text-text-main tracking-tight">12.8K</h3>
+</div>
+<div class="bg-white p-6 rounded-3xl border border-border-soft editorial-shadow">
+<div class="flex justify-between items-start mb-4">
+<span class="p-2 bg-surface-container rounded-xl material-symbols-outlined text-primary">share</span>
+<span class="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full uppercase tracking-widest">+18.5%</span>
+</div>
+<p class="text-text-muted text-xs font-bold uppercase tracking-widest mb-1">Total Shares</p>
+<h3 class="text-3xl font-black text-text-main tracking-tight">5.6K</h3>
+</div>
+</div>
+<!-- Main: Video Performance Table -->
+<div class="bg-white rounded-3xl border border-border-soft overflow-hidden editorial-shadow">
+<div class="p-6 border-b border-border-soft flex justify-between items-center bg-white/50 backdrop-blur-sm sticky top-0 z-10">
+<h2 class="text-lg font-bold tracking-tight text-text-main">Performance Rankings</h2>
+<div class="flex gap-3">
+<button class="flex items-center gap-2 px-4 py-2 border border-border-soft rounded-xl text-xs font-bold uppercase tracking-widest text-text-muted hover:bg-surface-container transition-all">
+<span class="material-symbols-outlined text-sm">filter_list</span>
+                            Filter
+                        </button>
+<button class="flex items-center gap-2 px-4 py-2 border border-border-soft rounded-xl text-xs font-bold uppercase tracking-widest text-text-muted hover:bg-surface-container transition-all">
+<span class="material-symbols-outlined text-sm">download</span>
+                            Export
+                        </button>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low">
+<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-text-muted">Video Asset</th>
+<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-text-muted">Status</th>
+<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-text-muted text-right">Views</th>
+<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-text-muted text-right">Likes</th>
+<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-text-muted text-right">CTR</th>
+<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-text-muted text-right">Published</th>
+<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-text-muted"></th>
+</tr>
+</thead>
+<tbody class="divide-y divide-border-soft">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="px-6 py-4">
+<div class="flex items-center gap-4">
+<div class="w-12 h-20 bg-surface-container rounded-lg overflow-hidden flex-shrink-0 border border-border-soft">
+<img alt="Video thumbnail" class="w-full h-full object-cover" data-alt="A vertical 9:16 cinematography still of a professional chef preparing a vibrant gourmet dish. The lighting is focused and warm, highlighting the textures of the ingredients against a dark, editorial kitchen background. The composition is artistic and high-resolution, matching a premium production studio aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBygleU059AWJyJNmd01YuHT7e_2E6aBQoZh347kpzCW7H1VIgkYBCRnc_SSnev8RW9rEEtrlQVZzx9cPIdnGALS_XPAiNE64uTzZ5bepjH-D_K6cE6lBE3q7eNsd5t-ujN69oBVJD41HwhAuH2kabwBrWPJa7ms4XpzJa1oDiC9upC-8BDpNQFH_0IupcJuDFvU2vRx0OqhqaNZiLCPQju7ciZXXMpgShvWWGuibpQfoVkH8FsHZuWt_yUVGf5sIWZCy7r88NGAocO"/>
+</div>
+<div>
+<p class="text-sm font-bold text-text-main line-clamp-1 group-hover:text-primary transition-colors">Summer Collection: Behind the Scenes</p>
+<p class="text-[10px] text-text-muted font-medium">campaign_v1_final.mp4</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-50 text-green-700 text-[10px] font-bold uppercase tracking-widest border border-green-100">
+<span class="w-1 h-1 rounded-full bg-green-500"></span>
+                                        Active
+                                    </span>
+</td>
+<td class="px-6 py-4 text-right">
+<p class="text-sm font-bold text-text-main">452.8K</p>
+</td>
+<td class="px-6 py-4 text-right">
+<p class="text-sm font-bold text-text-main">32.1K</p>
+</td>
+<td class="px-6 py-4 text-right">
+<p class="text-sm font-bold text-text-main">8.4%</p>
+</td>
+<td class="px-6 py-4 text-right text-sm text-text-muted font-medium">Oct 12, 2023</td>
+<td class="px-6 py-4 text-right">
+<button class="material-symbols-outlined text-text-muted hover:text-text-main transition-colors">more_vert</button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="px-6 py-4">
+<div class="flex items-center gap-4">
+<div class="w-12 h-20 bg-surface-container rounded-lg overflow-hidden flex-shrink-0 border border-border-soft">
+<img alt="Video thumbnail" class="w-full h-full object-cover" data-alt="A vertical 9:16 cinematography still of an urban landscape at sunset. The shot features soft lens flares and a sophisticated color palette of amber and deep blues. Minimalist and professional production quality, perfectly suited for an editorial video insights interface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC9tF1ANsJJIpDrs1sUlkqBj6WN9LMe9bXBA5-0PMWi5vIn-FlUkxnSGSwGfmprAvqs9Ys3Vp8PANhMjGe-_4Gzjv2SgwPd6WeOsq0H88osAN1WxagImDTAQqrRJk-a2JgIixKYKi-wKvxbYWNLKSocM0nfDua4VmX6ypCc7KULcxkksm9mk1LRrfKOpMYdCRokl-2mqLTXaIp60VYQawieZJLl0_M8xlwz5lQms4eJzcANt5w5cisUrF-7QAqN1x0FdTf7X3j5p3jr"/>
+</div>
+<div>
+<p class="text-sm font-bold text-text-main line-clamp-1 group-hover:text-primary transition-colors">Product Reveal: The New NeoSwitch</p>
+<p class="text-[10px] text-text-muted font-medium">product_reveal_tiktok.mp4</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-50 text-green-700 text-[10px] font-bold uppercase tracking-widest border border-green-100">
+<span class="w-1 h-1 rounded-full bg-green-500"></span>
+                                        Active
+                                    </span>
+</td>
+<td class="px-6 py-4 text-right">
+<p class="text-sm font-bold text-text-main">289.4K</p>
+</td>
+<td class="px-6 py-4 text-right">
+<p class="text-sm font-bold text-text-main">19.5K</p>
+</td>
+<td class="px-6 py-4 text-right">
+<p class="text-sm font-bold text-text-main">6.2%</p>
+</td>
+<td class="px-6 py-4 text-right text-sm text-text-muted font-medium">Oct 10, 2023</td>
+<td class="px-6 py-4 text-right">
+<button class="material-symbols-outlined text-text-muted hover:text-text-main transition-colors">more_vert</button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="px-6 py-4">
+<div class="flex items-center gap-4">
+<div class="w-12 h-20 bg-surface-container rounded-lg overflow-hidden flex-shrink-0 border border-border-soft">
+<img alt="Video thumbnail" class="w-full h-full object-cover" data-alt="A vertical 9:16 cinematography still focusing on high-tech equipment in a clean, minimalist laboratory setting. The image uses cool tones with warm wood accents, emphasizing precise engineering and advanced technology. Professional editorial lighting and high contrast." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDo2NiZ8ya5Yg4ylSx7Y7qsyvSw2uGxK1lZq8tCL9iEBzbkqsHZRE1EahKfyssrazjpknjwMxE2ZqdhC1GXTXj4p_1Qdy7mkOjLKSQjTAAX74qaZGtSkHFuX4Yyvl0JEzwuSHswCNY4X0GL70R7Cxt1iKDF2mlpSdt2FmOdovdNgdZ1fhOiNdss4ocBXCZgNZUdQOz5jIc13KrJ-0CjWWcQZ9STWySAlH_LXUsJfMyIYrDoKTVq6spzvTSa-NNp2K30ZO5KRtiaBO7H"/>
+</div>
+<div>
+<p class="text-sm font-bold text-text-main line-clamp-1 group-hover:text-primary transition-colors">How-To: Mastering the Interface</p>
+<p class="text-[10px] text-text-muted font-medium">tutorial_01_final.mp4</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 text-[10px] font-bold uppercase tracking-widest border border-amber-100">
+<span class="w-1 h-1 rounded-full bg-amber-500"></span>
+                                        Processing
+                                    </span>
+</td>
+<td class="px-6 py-4 text-right">
+<p class="text-sm font-bold text-text-main">12.1K</p>
+</td>
+<td class="px-6 py-4 text-right">
+<p class="text-sm font-bold text-text-main">842</p>
+</td>
+<td class="px-6 py-4 text-right">
+<p class="text-sm font-bold text-text-main">12.1%</p>
+</td>
+<td class="px-6 py-4 text-right text-sm text-text-muted font-medium">Oct 14, 2023</td>
+<td class="px-6 py-4 text-right">
+<button class="material-symbols-outlined text-text-muted hover:text-text-main transition-colors">more_vert</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="p-6 border-t border-border-soft flex justify-between items-center bg-surface-container-low/50">
+<p class="text-xs font-medium text-text-muted uppercase tracking-widest">Showing 1-10 of 42 Videos</p>
+<div class="flex gap-2">
+<button class="p-2 border border-border-soft rounded-lg hover:bg-white transition-all disabled:opacity-50" disabled="">
+<span class="material-symbols-outlined text-sm">chevron_left</span>
+</button>
+<button class="p-2 border border-border-soft rounded-lg hover:bg-white transition-all">
+<span class="material-symbols-outlined text-sm">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- Mobile BottomNavBar -->
+<nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 px-6 py-3 flex justify-between items-center z-50">
+<button class="flex flex-col items-center gap-1 text-[#D97757]">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">analytics</span>
+<span class="text-[10px] font-bold uppercase tracking-widest">Insights</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-stone-400">
+<span class="material-symbols-outlined">movie</span>
+<span class="text-[10px] font-bold uppercase tracking-widest">Content</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-stone-400">
+<span class="material-symbols-outlined">add_circle</span>
+<span class="text-[10px] font-bold uppercase tracking-widest">Create</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-stone-400">
+<span class="material-symbols-outlined">share</span>
+<span class="text-[10px] font-bold uppercase tracking-widest">Distro</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-stone-400">
+<span class="material-symbols-outlined">person</span>
+<span class="text-[10px] font-bold uppercase tracking-widest">Account</span>
+</button>
+</nav>
+</body></html>

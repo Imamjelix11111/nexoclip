@@ -1,0 +1,104 @@
+- generic [active] [ref=e1]:
+  - heading "Directory listing for /" [level=1] [ref=e2]
+  - separator [ref=e3]
+  - list [ref=e4]:
+    - listitem [ref=e5]:
+      - link ".claude/" [ref=e6] [cursor=pointer]:
+        - /url: .claude/
+    - listitem [ref=e7]:
+      - link ".gemini/" [ref=e8] [cursor=pointer]:
+        - /url: .gemini/
+    - listitem [ref=e9]:
+      - link ".git/" [ref=e10] [cursor=pointer]:
+        - /url: .git/
+    - listitem [ref=e11]:
+      - link ".gitignore" [ref=e12] [cursor=pointer]:
+        - /url: .gitignore
+    - listitem [ref=e13]:
+      - link ".next/" [ref=e14] [cursor=pointer]:
+        - /url: .next/
+    - listitem [ref=e15]:
+      - link ".pi/" [ref=e16] [cursor=pointer]:
+        - /url: .pi/
+    - listitem [ref=e17]:
+      - link ".prettierignore" [ref=e18] [cursor=pointer]:
+        - /url: .prettierignore
+    - listitem [ref=e19]:
+      - link ".prettierrc" [ref=e20] [cursor=pointer]:
+        - /url: .prettierrc
+    - listitem [ref=e21]:
+      - link ".sisyphus/" [ref=e22] [cursor=pointer]:
+        - /url: .sisyphus/
+    - listitem [ref=e23]:
+      - link ".tasks/" [ref=e24] [cursor=pointer]:
+        - /url: .tasks/
+    - listitem [ref=e25]:
+      - link "_backup_landing_page_/" [ref=e26] [cursor=pointer]:
+        - /url: _backup_landing_page_/
+    - listitem [ref=e27]:
+      - link "app/" [ref=e28] [cursor=pointer]:
+        - /url: app/
+    - listitem [ref=e29]:
+      - link "bun.lockb" [ref=e30] [cursor=pointer]:
+        - /url: bun.lockb
+    - listitem [ref=e31]:
+      - link "components/" [ref=e32] [cursor=pointer]:
+        - /url: components/
+    - listitem [ref=e33]:
+      - link "components.json" [ref=e34] [cursor=pointer]:
+        - /url: components.json
+    - listitem [ref=e35]:
+      - link "creatify-landing-page-clone-3/" [ref=e36] [cursor=pointer]:
+        - /url: creatify-landing-page-clone-3/
+    - listitem [ref=e37]:
+      - link "docs/" [ref=e38] [cursor=pointer]:
+        - /url: docs/
+    - listitem [ref=e39]:
+      - link "eslint.config.mjs" [ref=e40] [cursor=pointer]:
+        - /url: eslint.config.mjs
+    - listitem [ref=e41]:
+      - link "hooks/" [ref=e42] [cursor=pointer]:
+        - /url: hooks/
+    - listitem [ref=e43]:
+      - link "lib/" [ref=e44] [cursor=pointer]:
+        - /url: lib/
+    - listitem [ref=e45]:
+      - link "next-env.d.ts" [ref=e46] [cursor=pointer]:
+        - /url: next-env.d.ts
+    - listitem [ref=e47]:
+      - link "next.config.mjs" [ref=e48] [cursor=pointer]:
+        - /url: next.config.mjs
+    - listitem [ref=e49]:
+      - link "node_modules/" [ref=e50] [cursor=pointer]:
+        - /url: node_modules/
+    - listitem [ref=e51]:
+      - link "out/" [ref=e52] [cursor=pointer]:
+        - /url: out/
+    - listitem [ref=e53]:
+      - link "package-lock.json" [ref=e54] [cursor=pointer]:
+        - /url: package-lock.json
+    - listitem [ref=e55]:
+      - link "package.json" [ref=e56] [cursor=pointer]:
+        - /url: package.json
+    - listitem [ref=e57]:
+      - link "postcss.config.mjs" [ref=e58] [cursor=pointer]:
+        - /url: postcss.config.mjs
+    - listitem [ref=e59]:
+      - link "public/" [ref=e60] [cursor=pointer]:
+        - /url: public/
+    - listitem [ref=e61]:
+      - link "README.md" [ref=e62] [cursor=pointer]:
+        - /url: README.md
+    - listitem [ref=e63]:
+      - link "scripts/" [ref=e64] [cursor=pointer]:
+        - /url: scripts/
+    - listitem [ref=e65]:
+      - link "TODO.md" [ref=e66] [cursor=pointer]:
+        - /url: TODO.md
+    - listitem [ref=e67]:
+      - link "tsconfig.json" [ref=e68] [cursor=pointer]:
+        - /url: tsconfig.json
+    - listitem [ref=e69]:
+      - link "tsconfig.tsbuildinfo" [ref=e70] [cursor=pointer]:
+        - /url: tsconfig.tsbuildinfo
+  - separator [ref=e71]

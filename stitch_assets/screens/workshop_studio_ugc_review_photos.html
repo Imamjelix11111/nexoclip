@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>NexoClip Workshop Studio</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary-fixed-variant": "#474743",
+                        "outline-variant": "#dbc1b9",
+                        "primary-fixed": "#ffdbd0",
+                        "primary": "#99462a",
+                        "on-tertiary-container": "#2b2b29",
+                        "tertiary-container": "#94928f",
+                        "secondary": "#5e5f5a",
+                        "inverse-on-surface": "#f1f1ec",
+                        "on-error-container": "#93000a",
+                        "on-secondary-container": "#61615c",
+                        "on-tertiary-fixed-variant": "#474744",
+                        "surface-container-highest": "#e2e3de",
+                        "tertiary-fixed-dim": "#c8c6c3",
+                        "on-background": "#1a1c19",
+                        "on-primary-container": "#541400",
+                        "tertiary": "#5f5e5c",
+                        "surface-dim": "#dadad5",
+                        "inverse-primary": "#ffb59e",
+                        "secondary-container": "#deddd7",
+                        "on-secondary-fixed": "#1b1c18",
+                        "surface-container": "#eeeee9",
+                        "on-surface": "#1a1c19",
+                        "on-surface-variant": "#55433d",
+                        "secondary-fixed": "#e4e2dc",
+                        "on-error": "#ffffff",
+                        "primary-fixed-dim": "#ffb59e",
+                        "surface-variant": "#e2e3de",
+                        "surface-container-lowest": "#ffffff",
+                        "primary-container": "#d97757",
+                        "on-secondary": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "tertiary-fixed": "#e5e2de",
+                        "on-primary-fixed": "#390b00",
+                        "error-container": "#ffdad6",
+                        "background": "#fafaf5",
+                        "surface-bright": "#fafaf5",
+                        "on-primary": "#ffffff",
+                        "surface-tint": "#99462a",
+                        "secondary-fixed-dim": "#c8c7c0",
+                        "error": "#ba1a1a",
+                        "on-primary-fixed-variant": "#7a2f15",
+                        "outline": "#88726c",
+                        "surface-container-high": "#e8e8e4",
+                        "inverse-surface": "#2f312e",
+                        "surface-container-low": "#f4f4ef",
+                        "surface": "#fafaf5",
+                        "on-tertiary-fixed": "#1c1c1a"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #F7F7F2; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .scene-card-shadow { box-shadow: 0 4px 20px -2px rgba(0,0,0,0.05); }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e5e5e0; border-radius: 10px; }
+    </style>
+</head>
+<body class="text-on-surface antialiased overflow-x-hidden">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center px-8 h-16 w-full sticky top-0 z-50 bg-[#F7F7F2] dark:bg-stone-950 border-b border-stone-200 dark:border-stone-800 transition-colors">
+<div class="flex items-center gap-8">
+<span class="text-xl font-bold tracking-tighter text-stone-900 dark:text-stone-50">NexoClip</span>
+<nav class="hidden md:flex items-center gap-6">
+<a class="text-orange-700 dark:text-orange-500 border-b-2 border-orange-700 dark:border-orange-500 pb-1 font-semibold" href="#">Workshop</a>
+<a class="text-stone-500 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-200 transition-colors" href="#">Library</a>
+<a class="text-stone-500 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-200 transition-colors" href="#">Analytics</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-900 rounded-full transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-900 rounded-full transition-colors">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<div class="h-8 w-8 rounded-full overflow-hidden border border-stone-200">
+<img alt="Editor Profile" class="w-full h-full object-cover" data-alt="professional headshot of a digital editor in a bright minimalist studio setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBqyNIoAfw-1IbWE-uzASbtzD0LzjRt2N_WWDnzKDQ3y0MoUz_tGotbzFOPzYBwHs3To9g2kTQmP-iflbUkFfiau77M_ucK1ib__Myxt_VhG6S002-xZjd9o1Yjpuinssm0NvnTUANPdTsGaF6nniVcY4iAKtekRcjCwyNy2LL_OJm5PB73f34q3K9zQKl-iVroMXl8RscFWBAw0mKbFeyT1OHAHyq43sJmDQ5MoM2e2hAGJXYc1pVkCzVe_3rV3GLWhF2VDKq3WXgT"/>
+</div>
+</div>
+</header>
+<main class="flex min-h-[calc(100vh-64px)] w-full pt-6 px-8 gap-8">
+<!-- Scene List Canvas -->
+<div class="flex-1 max-w-4xl space-y-12 pb-24">
+<div class="flex flex-col gap-1">
+<h1 class="text-3xl font-bold tracking-tight text-on-surface">Workshop Studio</h1>
+<p class="text-text-muted">Campaign: Cream Hoodie Mirror Review</p>
+</div>
+<!-- Scene 01 -->
+<section class="bg-surface-container-lowest rounded-lg p-8 scene-card-shadow flex gap-8">
+<div class="w-1/3 shrink-0">
+<div class="aspect-[9/16] w-full rounded-lg overflow-hidden bg-surface-container shadow-inner group relative">
+<img class="w-full h-full object-cover" data-alt="beautiful Asian woman in a minimalist bedroom walking towards a large floor mirror holding a folded cream-colored oversized hoodie, soft natural lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDHzaPWx3xNYOXugaOS5Od-9zGC4hJJy4Tp4igj6UDu_ggGJLAk-CJQHWDRa0-VWLRILiEpZ_FT39Jnx8Fwefd_UxoSRQJjKxb2jcbLRwEazA_74gQhdfloXDgZYO0HKFPFGUplNROu-hz4zLaBfVUZYBIJ0sICYzGRlq8nFBIJ-vpNxAZ6jPdoU3KavAzKxcqK4UpmL7KjDHSZFXXvT1Fnsp2_tc-mQezZrj_wNzDccuDFcvMOfZLAeA3VQolwZV4WUui3-QRCDCIC"/>
+<div class="absolute top-4 left-4 bg-black/40 backdrop-blur-md text-white text-[10px] px-2 py-1 rounded-full uppercase tracking-widest font-bold">Scene 01</div>
+</div>
+</div>
+<div class="flex-1 flex flex-col gap-6">
+<div class="flex justify-between items-start">
+<div class="space-y-4 w-full">
+<div>
+<label class="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-2 block">Template Mode</label>
+<div class="flex p-1 bg-surface-container rounded-full w-max">
+<button class="px-4 py-1.5 rounded-full text-xs font-semibold bg-primary-container text-on-primary-container shadow-sm">UGC</button>
+<button class="px-4 py-1.5 rounded-full text-xs font-semibold text-text-muted hover:text-on-surface">Commercial</button>
+<button class="px-4 py-1.5 rounded-full text-xs font-semibold text-text-muted hover:text-on-surface">Cinematic</button>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div>
+<label class="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-2 block">Lipsync Language</label>
+<div class="relative">
+<select class="w-full bg-surface-container-low border-none rounded-lg text-sm px-4 py-2.5 appearance-none focus:ring-2 focus:ring-primary-container">
+<option>Indonesia</option>
+<option>English (US)</option>
+<option>Japanese</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-2.5 text-text-muted pointer-events-none">expand_more</span>
+</div>
+</div>
+<div class="flex items-end">
+<button class="w-full bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-sm font-semibold py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-sm">mic</span> Add Voiceover
+                                    </button>
+</div>
+</div>
+</div>
+</div>
+<div>
+<label class="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-2 block">Voiceover Script</label>
+<textarea class="w-full bg-surface-container-low border-none rounded-lg text-sm p-4 min-h-[80px] focus:ring-2 focus:ring-primary-container leading-relaxed" placeholder="Enter script here...">Hey guys! I just got this new cream hoodie and I'm obsessed. Let's try it on together!</textarea>
+</div>
+<div>
+<label class="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-2 block">Visual Direction</label>
+<input class="w-full bg-surface-container-low border-none rounded-lg text-sm px-4 py-2.5 focus:ring-2 focus:ring-primary-container" type="text" value="Casual walk-in, warm lifestyle lighting, soft focus background."/>
+</div>
+<div class="bg-surface-container/50 p-4 rounded-lg border border-outline-variant/30">
+<div class="flex justify-between items-center mb-2">
+<span class="text-[10px] font-bold uppercase tracking-widest text-primary">AI Video Prompt</span>
+<button class="text-[10px] font-bold text-on-surface-variant hover:text-primary transition-colors flex items-center gap-1 uppercase">
+<span class="material-symbols-outlined text-xs">content_copy</span> Copy Prompt
+                            </button>
+</div>
+<p class="text-xs text-text-muted italic leading-relaxed">"Hyper-realistic mirror selfie video, beautiful young Asian woman approaching mirror with hoodie, 4k, soft cinematic lighting, warm morning glow, natural movement."</p>
+</div>
+</div>
+</section>
+<!-- Scene 02 -->
+<section class="bg-surface-container-lowest rounded-lg p-8 scene-card-shadow flex gap-8">
+<div class="w-1/3 shrink-0">
+<div class="aspect-[9/16] w-full rounded-lg overflow-hidden bg-surface-container shadow-inner group relative">
+<img class="w-full h-full object-cover" data-alt="young Asian woman wearing an oversized cream-colored hoodie, looking at her reflection in a mirror, adjusting the fit, stylish streetwear vibe" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBXytGGLLtqRv2yK_p8fP2Sfz-WHdHzj-xh4hITdnofWYprvZBcpW_vq2CndPo-c0_Wt-qvtaW4njjNhBrCOECHMhvLuL3MGIGHI_T_aJdJB0EyjjDPMnHaLuNoeDGzUko0wNd_NaSeSTRn4myk3OvA9rGEumTfMrhSOVTZB1cJ6fiHbDfUcq6qr4elliOW52Fuh8pGZ9O5iQttc6BMhrGpTvri5JsIlhXilq47VPZhdRTNI-K3es3XJn1zIk85Rr2jknrs-9lQmJtG"/>
+<div class="absolute top-4 left-4 bg-black/40 backdrop-blur-md text-white text-[10px] px-2 py-1 rounded-full uppercase tracking-widest font-bold">Scene 02</div>
+</div>
+</div>
+<div class="flex-1 flex flex-col gap-6">
+<div class="grid grid-cols-2 gap-4">
+<div>
+<label class="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-2 block">Template Mode</label>
+<div class="flex p-1 bg-surface-container rounded-full w-max">
+<button class="px-4 py-1.5 rounded-full text-xs font-semibold bg-primary-container text-on-primary-container">UGC</button>
+<button class="px-4 py-1.5 rounded-full text-xs font-semibold text-text-muted">Commercial</button>
+</div>
+</div>
+<div class="flex items-end">
+<button class="w-full bg-primary/10 text-primary text-sm font-semibold py-2.5 rounded-lg border border-primary/20">
+<span class="material-symbols-outlined text-sm align-middle mr-1">check_circle</span> Script Synced
+                            </button>
+</div>
+</div>
+<div>
+<label class="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-2 block">Voiceover Script</label>
+<textarea class="w-full bg-surface-container-low border-none rounded-lg text-sm p-4 min-h-[80px] focus:ring-2 focus:ring-primary-container leading-relaxed">It fits perfectly. The oversized look is exactly what I wanted for those cozy days. Look at the silhouette!</textarea>
+</div>
+<div>
+<label class="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-2 block">Visual Direction</label>
+<input class="w-full bg-surface-container-low border-none rounded-lg text-sm px-4 py-2.5 focus:ring-2 focus:ring-primary-container" type="text" value="Medium shot, model turning slightly to show hoodie fit and sleeve length."/>
+</div>
+<div class="bg-surface-container/50 p-4 rounded-lg border border-outline-variant/30">
+<div class="flex justify-between items-center mb-2">
+<span class="text-[10px] font-bold uppercase tracking-widest text-primary">AI Video Prompt</span>
+<button class="text-[10px] font-bold text-on-surface-variant hover:text-primary transition-colors flex items-center gap-1 uppercase">
+<span class="material-symbols-outlined text-xs">content_copy</span> Copy Prompt
+                            </button>
+</div>
+<p class="text-xs text-text-muted italic leading-relaxed">"Video of Asian woman posing in mirror wearing cream hoodie, showing oversized fit, natural aesthetic, aesthetic bedroom decor, soft focus."</p>
+</div>
+</div>
+</section>
+<!-- Scene 03 -->
+<section class="bg-surface-container-lowest rounded-lg p-8 scene-card-shadow flex gap-8">
+<div class="w-1/3 shrink-0">
+<div class="aspect-[9/16] w-full rounded-lg overflow-hidden bg-surface-container shadow-inner group relative">
+<img class="w-full h-full object-cover" data-alt="extreme close-up of cream-colored thick cotton hoodie fabric texture, high quality knit details, soft macro photography" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAGjiQ_yFJ9SsCnWFj0f-XKMhzEix0kRayqJmMHou9ponEiiuip25tvoLazxjjCE6V0OJDJuTP4G6YL6nXbCKXjOW2tt3zxZ2NYnfoi2tH7o8fB0JwbU34hWGkE3KlcSKx3-r8woMd5U5aoYc87K5a-NGo2NJO9jVNVlLi3Oyw_cFp1uzxf4u6QJSIjRcT1D5k4e1FFgbgfyiBOFzT8N04veOPNXNaXEhlg4KD-1LCeMkO7jylxTDGHfyfiQ0taKZMIUJc8roPmlyVs"/>
+<div class="absolute top-4 left-4 bg-black/40 backdrop-blur-md text-white text-[10px] px-2 py-1 rounded-full uppercase tracking-widest font-bold">Scene 03</div>
+</div>
+</div>
+<div class="flex-1 flex flex-col gap-6">
+<div class="grid grid-cols-2 gap-4">
+<div>
+<label class="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-2 block">Template Mode</label>
+<div class="flex p-1 bg-surface-container rounded-full w-max">
+<button class="px-4 py-1.5 rounded-full text-xs font-semibold bg-primary-container text-on-primary-container">UGC</button>
+<button class="px-4 py-1.5 rounded-full text-xs font-semibold text-text-muted">Commercial</button>
+</div>
+</div>
+</div>
+<div>
+<label class="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-2 block">Voiceover Script</label>
+<textarea class="w-full bg-surface-container-low border-none rounded-lg text-sm p-4 min-h-[80px] focus:ring-2 focus:ring-primary-container leading-relaxed">Just feel this quality! It's 100% premium cotton, super soft on the inside and heavy-weight. Perfect for winter.</textarea>
+</div>
+<div>
+<label class="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-2 block">Visual Direction</label>
+<input class="w-full bg-surface-container-low border-none rounded-lg text-sm px-4 py-2.5 focus:ring-2 focus:ring-primary-container" type="text" value="Macro lens detail of the fabric, fingers touching the material lightly."/>
+</div>
+<div class="bg-surface-container/50 p-4 rounded-lg border border-outline-variant/30">
+<div class="flex justify-between items-center mb-2">
+<span class="text-[10px] font-bold uppercase tracking-widest text-primary">AI Video Prompt</span>
+<button class="text-[10px] font-bold text-on-surface-variant hover:text-primary transition-colors flex items-center gap-1 uppercase">
+<span class="material-symbols-outlined text-xs">content_copy</span> Copy Prompt
+                            </button>
+</div>
+<p class="text-xs text-text-muted italic leading-relaxed">"Macro video shot of heavy cream cotton fabric, soft shadows, extremely detailed texture, slow-motion hand grazing the fabric."</p>
+</div>
+</div>
+</section>
+<!-- Scene 04 -->
+<section class="bg-surface-container-lowest rounded-lg p-8 scene-card-shadow flex gap-8">
+<div class="w-1/3 shrink-0">
+<div class="aspect-[9/16] w-full rounded-lg overflow-hidden bg-surface-container shadow-inner group relative">
+<img class="w-full h-full object-cover" data-alt="Asian woman in cream hoodie smiling brightly at the camera in mirror reflection, giving a thumbs up, joyful and authentic UGC style" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB0K-AcoYrmLzFLNQflXOevC82DZuXnMNCTbFyDSBBJgXcDD-oYj4YLooqJyEea9bSB6kFofSvmAO6GuzxFOxiN_biBi6LnhCpUmByCRJgcU2n14Qp6vPXp3HcO-Oxl3ajOQSnXyjx5b3oFSZvswE6wKyz9eMInABTNS8IElsSq0sgcjacraasGB5gJhgR48QbPTTazSjm-NyhWSANlZW05y4jlxq7NBqbIP-na8zXkdqHcIfwJV4HPfBwXb29eUy_kLnDdqKbHhVjr"/>
+<div class="absolute top-4 left-4 bg-black/40 backdrop-blur-md text-white text-[10px] px-2 py-1 rounded-full uppercase tracking-widest font-bold">Scene 04</div>
+</div>
+</div>
+<div class="flex-1 flex flex-col gap-6">
+<div class="grid grid-cols-2 gap-4">
+<div>
+<label class="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-2 block">Template Mode</label>
+<div class="flex p-1 bg-surface-container rounded-full w-max">
+<button class="px-4 py-1.5 rounded-full text-xs font-semibold bg-primary-container text-on-primary-container">UGC</button>
+<button class="px-4 py-1.5 rounded-full text-xs font-semibold text-text-muted">Commercial</button>
+</div>
+</div>
+</div>
+<div>
+<label class="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-2 block">Voiceover Script</label>
+<textarea class="w-full bg-surface-container-low border-none rounded-lg text-sm p-4 min-h-[80px] focus:ring-2 focus:ring-primary-container leading-relaxed">Highly recommend this one! Go grab yours before they're sold out. See you in the next one!</textarea>
+</div>
+<div>
+<label class="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-2 block">Visual Direction</label>
+<input class="w-full bg-surface-container-low border-none rounded-lg text-sm px-4 py-2.5 focus:ring-2 focus:ring-primary-container" type="text" value="Model smiling and giving thumbs up to the mirror camera, friendly goodbye gesture."/>
+</div>
+<div class="bg-surface-container/50 p-4 rounded-lg border border-outline-variant/30">
+<div class="flex justify-between items-center mb-2">
+<span class="text-[10px] font-bold uppercase tracking-widest text-primary">AI Video Prompt</span>
+<button class="text-[10px] font-bold text-on-surface-variant hover:text-primary transition-colors flex items-center gap-1 uppercase">
+<span class="material-symbols-outlined text-xs">content_copy</span> Copy Prompt
+                            </button>
+</div>
+<p class="text-xs text-text-muted italic leading-relaxed">"POV mirror camera video, Asian woman smiling and giving thumbs up, wearing cream hoodie, positive vibe, soft bright daylight."</p>
+</div>
+</div>
+</section>
+</div>
+<!-- Producer Sidebar (Fixed/Sticky Right) -->
+<aside class="w-80 h-[calc(100vh-88px)] sticky top-[80px] z-40 bg-white dark:bg-stone-900 rounded-l-3xl border-l border-stone-200 dark:border-stone-800 shadow-xl dark:shadow-none flex flex-col">
+<div class="p-6 border-b border-stone-100 dark:border-stone-800">
+<div class="flex items-center gap-3 mb-1">
+<span class="text-lg font-bold text-stone-900 dark:text-stone-50">Producer</span>
+<div class="flex items-center gap-1 px-2 py-0.5 bg-green-100 dark:bg-green-900/30 rounded-full">
+<div class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
+<span class="text-[10px] font-bold text-green-700 dark:text-green-400 uppercase">System Online</span>
+</div>
+</div>
+<p class="text-xs text-stone-500 dark:text-stone-400">Global Settings &amp; Production</p>
+</div>
+<div class="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8">
+<!-- Status & Progress -->
+<div class="space-y-3">
+<div class="flex justify-between items-end">
+<label class="text-[10px] font-bold uppercase tracking-widest text-text-muted">Analyzing Assets</label>
+<span class="text-xs font-bold text-primary">78%</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[78%] rounded-full"></div>
+</div>
+</div>
+<!-- Tabs -->
+<div class="flex gap-2 p-1 bg-surface-container rounded-lg">
+<button class="flex-1 flex flex-col items-center gap-1 py-3 rounded-md bg-white shadow-sm text-primary">
+<span class="material-symbols-outlined text-xl">palette</span>
+<span class="text-[10px] font-bold uppercase">Visuals</span>
+</button>
+<button class="flex-1 flex flex-col items-center gap-1 py-3 rounded-md text-text-muted hover:bg-white/50 transition-colors">
+<span class="material-symbols-outlined text-xl">audiotrack</span>
+<span class="text-[10px] font-bold uppercase">Audio</span>
+</button>
+<button class="flex-1 flex flex-col items-center gap-1 py-3 rounded-md text-text-muted hover:bg-white/50 transition-colors">
+<span class="material-symbols-outlined text-xl">description</span>
+<span class="text-[10px] font-bold uppercase">Script</span>
+</button>
+</div>
+<!-- Toggles -->
+<div class="space-y-4">
+<div class="flex justify-between items-center">
+<span class="text-sm font-medium text-on-surface">Auto-Sync Audio</span>
+<button class="w-10 h-6 bg-primary-container rounded-full relative transition-colors p-1">
+<div class="absolute right-1 top-1 h-4 w-4 bg-white rounded-full shadow-sm"></div>
+</button>
+</div>
+<div class="flex justify-between items-center">
+<span class="text-sm font-medium text-on-surface">High-Fidelity Render</span>
+<button class="w-10 h-6 bg-surface-container rounded-full relative transition-colors p-1">
+<div class="absolute left-1 top-1 h-4 w-4 bg-white rounded-full shadow-sm"></div>
+</button>
+</div>
+</div>
+<!-- Stats Summary -->
+<div class="p-4 bg-surface-container-low rounded-xl border border-outline-variant/30 space-y-3">
+<div class="flex justify-between text-xs">
+<span class="text-text-muted">Total Scenes</span>
+<span class="font-bold text-on-surface">04</span>
+</div>
+<div class="flex justify-between text-xs">
+<span class="text-text-muted">Estimated Duration</span>
+<span class="font-bold text-on-surface">0:45s</span>
+</div>
+<div class="flex justify-between text-xs">
+<span class="text-text-muted">Voiceover Speed</span>
+<span class="font-bold text-on-surface">1.0x</span>
+</div>
+</div>
+</div>
+<!-- Footer Actions -->
+<div class="p-6 bg-white dark:bg-stone-900 space-y-3 mt-auto border-t border-stone-100 dark:border-stone-800">
+<button class="w-full bg-primary text-white font-bold py-4 rounded-xl shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined">movie_filter</span>
+                    Produce Full Video
+                </button>
+<button class="w-full border-2 border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 font-bold py-3.5 rounded-xl hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors">
+                    Export Draft
+                </button>
+</div>
+</aside>
+</main>
+</body></html>

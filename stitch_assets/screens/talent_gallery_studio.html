@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=Playfair+Display:ital,wght@1,500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "primary-container": "#d97757",
+            "tertiary-fixed": "#e5e2de",
+            "on-primary-fixed-variant": "#7a2f15",
+            "on-primary-fixed": "#390b00",
+            "on-secondary": "#ffffff",
+            "secondary-fixed": "#e4e2dc",
+            "tertiary-fixed-dim": "#c8c6c3",
+            "surface-container": "#eeeee9",
+            "on-surface": "#1a1c19",
+            "error-container": "#ffdad6",
+            "surface-container-low": "#f4f4ef",
+            "primary-fixed": "#ffdbd0",
+            "tertiary-container": "#94928f",
+            "inverse-primary": "#ffb59e",
+            "surface": "#fafaf5",
+            "tertiary": "#5f5e5c",
+            "surface-container-highest": "#e2e3de",
+            "on-secondary-fixed": "#1b1c18",
+            "on-secondary-container": "#61615c",
+            "on-primary-container": "#541400",
+            "on-error": "#ffffff",
+            "surface-container-lowest": "#ffffff",
+            "surface-dim": "#dadad5",
+            "on-secondary-fixed-variant": "#474743",
+            "on-primary": "#ffffff",
+            "secondary-container": "#deddd7",
+            "surface-variant": "#e2e3de",
+            "on-tertiary-fixed-variant": "#474744",
+            "secondary-fixed-dim": "#c8c7c0",
+            "inverse-surface": "#2f312e",
+            "secondary": "#5e5f5a",
+            "on-tertiary": "#ffffff",
+            "primary": "#99462a",
+            "inverse-on-surface": "#f1f1ec",
+            "outline": "#88726c",
+            "surface-container-high": "#e8e8e4",
+            "primary-fixed-dim": "#ffb59e",
+            "outline-variant": "#dbc1b9",
+            "on-tertiary-fixed": "#1c1c1a",
+            "on-tertiary-container": "#2b2b29",
+            "surface-tint": "#99462a",
+            "on-surface-variant": "#55433d",
+            "on-error-container": "#93000a",
+            "surface-bright": "#fafaf5",
+            "on-background": "#1a1c19",
+            "background": "#fafaf5",
+            "error": "#ba1a1a"
+          },
+          "borderRadius": {
+            "DEFAULT": "1rem",
+            "lg": "2rem",
+            "xl": "3rem",
+            "full": "9999px"
+          },
+          "fontFamily": {
+            "headline": ["Inter", "sans-serif"],
+            "body": ["Inter", "sans-serif"],
+            "label": ["Inter", "sans-serif"],
+            "serif": ["Playfair Display", "serif"]
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    body {
+      background-color: #F7F7F2;
+      color: #1D1D1B;
+    }
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    .fine-divider {
+      border-color: #E5E5E0;
+    }
+    .serif-italic {
+      font-family: 'Playfair Display', serif;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body class="font-body selection:bg-primary-container selection:text-white">
+<!-- TopNavBar Navigation Shell -->
+<nav class="flex justify-between items-center w-full px-6 py-4 max-w-full bg-[#F7F7F2] dark:bg-stone-950 font-inter tracking-tight font-medium docked full-width top-0 border-b border-[#E5E5E0] dark:border-stone-800 flat no shadows transition-all duration-200 ease-in-out fixed z-50">
+<div class="text-2xl font-bold tracking-tighter text-[#1D1D1B] dark:text-stone-100">NexoClip</div>
+<div class="hidden md:flex items-center gap-8">
+<a class="text-[#6B6B66] dark:text-stone-400 hover:text-[#1D1D1B] transition-colors" href="#">Studio</a>
+<a class="text-[#6B6B66] dark:text-stone-400 hover:text-[#1D1D1B] transition-colors" href="#">Assets</a>
+<a class="text-[#6B6B66] dark:text-stone-400 hover:text-[#1D1D1B] transition-colors" href="#">Archive</a>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 rounded-full hover:bg-stone-100 dark:hover:bg-stone-900/50 transition-colors">
+<span class="material-symbols-outlined text-stone-600">notifications</span>
+</button>
+<button class="p-2 rounded-full hover:bg-stone-100 dark:hover:bg-stone-900/50 transition-colors">
+<span class="material-symbols-outlined text-stone-600">account_circle</span>
+</button>
+</div>
+</nav>
+<!-- SideNavBar Navigation Shell -->
+<aside class="fixed left-0 top-16 h-[calc(100vh-4rem)] flex flex-col p-4 bg-[#F7F7F2] dark:bg-stone-950 font-inter text-sm docked left-0 w-64 border-r border-[#E5E5E0] dark:border-stone-800 flat no shadows hidden md:flex">
+<div class="mb-8 px-4">
+<h2 class="text-lg font-bold text-[#1D1D1B] dark:text-stone-100">Categories</h2>
+<p class="text-xs text-[#6B6B66] dark:text-stone-400">Filter production talent</p>
+</div>
+<div class="flex flex-col gap-1">
+<a class="flex items-center gap-3 bg-[#FFFFFF] dark:bg-stone-900 text-[#1D1D1B] dark:text-stone-100 font-semibold rounded-lg px-4 py-2 shadow-sm scale-98 active:opacity-80 transition-transform" href="#">
+<span class="material-symbols-outlined text-orange-700">group</span>
+<span>All Talent</span>
+</a>
+<a class="flex items-center gap-3 text-[#6B6B66] dark:text-stone-400 px-4 py-2 hover:bg-[#E5E5E0] dark:hover:bg-stone-800 transition-transform scale-98 active:opacity-80" href="#">
+<span class="material-symbols-outlined">face</span>
+<span>Actors</span>
+</a>
+<a class="flex items-center gap-3 text-[#6B6B66] dark:text-stone-400 px-4 py-2 hover:bg-[#E5E5E0] dark:hover:bg-stone-800 transition-transform scale-98 active:opacity-80" href="#">
+<span class="material-symbols-outlined">mic</span>
+<span>Voiceover</span>
+</a>
+<a class="flex items-center gap-3 text-[#6B6B66] dark:text-stone-400 px-4 py-2 hover:bg-[#E5E5E0] dark:hover:bg-stone-800 transition-transform scale-98 active:opacity-80" href="#">
+<span class="material-symbols-outlined">video_camera_front</span>
+<span>Creators</span>
+</a>
+<a class="flex items-center gap-3 text-[#6B6B66] dark:text-stone-400 px-4 py-2 hover:bg-[#E5E5E0] dark:hover:bg-stone-800 transition-transform scale-98 active:opacity-80" href="#">
+<span class="material-symbols-outlined">accessibility_new</span>
+<span>Models</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="md:ml-64 pt-20 pb-12 px-6 lg:px-12 min-h-screen">
+<!-- Discovery State Header -->
+<header class="max-w-6xl mx-auto mb-12">
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
+<div>
+<h1 class="text-4xl md:text-5xl font-black tracking-tighter mb-2">Talent Gallery</h1>
+<p class="serif-italic text-xl text-[#6B6B66]">Curated ensemble for your next visual masterpiece.</p>
+</div>
+<div class="relative w-full md:w-96">
+<input class="w-full bg-white border border-[#E5E5E0] rounded-full px-6 py-3 pl-12 focus:outline-none focus:ring-2 focus:ring-[#D97757] transition-all" placeholder="Search talent, skills, or styles..." type="text"/>
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-stone-400">search</span>
+</div>
+</div>
+<!-- Filter Chips -->
+<div class="flex flex-wrap gap-3">
+<button class="px-5 py-2 rounded-full bg-[#1D1D1B] text-white text-sm font-bold tracking-tight">All</button>
+<button class="px-5 py-2 rounded-full bg-white border border-[#E5E5E0] text-[#6B6B66] text-sm font-bold tracking-tight hover:border-[#D97757] transition-colors">Actors</button>
+<button class="px-5 py-2 rounded-full bg-white border border-[#E5E5E0] text-[#6B6B66] text-sm font-bold tracking-tight hover:border-[#D97757] transition-colors">Voiceover</button>
+<button class="px-5 py-2 rounded-full bg-white border border-[#E5E5E0] text-[#6B6B66] text-sm font-bold tracking-tight hover:border-[#D97757] transition-colors">Models</button>
+<button class="px-5 py-2 rounded-full bg-white border border-[#E5E5E0] text-[#6B6B66] text-sm font-bold tracking-tight hover:border-[#D97757] transition-colors">Creators</button>
+<button class="px-5 py-2 rounded-full bg-white border border-[#E5E5E0] text-[#6B6B66] text-sm font-bold tracking-tight hover:border-[#D97757] transition-colors">AI-Generated</button>
+</div>
+</header>
+<!-- Talent Grid -->
+<section class="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+<!-- Card 1 -->
+<div class="group relative bg-white p-3 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+<div class="aspect-square w-full rounded-lg overflow-hidden bg-stone-100 mb-4">
+<img alt="Talent portrait" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="Close-up studio portrait of a woman with curly hair looking directly into the camera with soft editorial lighting and a neutral background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAC_nUvoTaoDb0IaYE1SJUfAvMIkQOMsF3mYVVH7yZaTzvGH0NGFCfN4Hnnq34SoayFRDLD8BqNupDpZxLlYWba6eaezCs6nPtgd9yS2-xZqpzpJ3xYypigYpjUogIyoV2XZ6zZewLRzmsFbjvUAHhItL4PCz0G7XHBDnBtPRkfhPgl5-H924sJb5cLQugV42WKjHImdQZhpsv_g6LAgaAdXsTwRdNZ639N3tGjkpk1MjkW6VH-Fq9M6SqgTLJel1GWfsgFNBg6FeWI"/>
+</div>
+<div class="px-2 pb-2">
+<div class="flex justify-between items-center mb-1">
+<h3 class="text-lg font-black tracking-tight">Elena Vance</h3>
+<span class="text-[10px] font-bold tracking-widest uppercase bg-[#F7F7F2] text-[#D97757] px-2 py-0.5 rounded">Model</span>
+</div>
+<p class="text-sm text-[#6B6B66] truncate">High-fashion, Editorial, Commercial</p>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="group relative bg-white p-3 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+<div class="aspect-square w-full rounded-lg overflow-hidden bg-stone-100 mb-4">
+<img alt="Talent portrait" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="Professional headshot of a smiling man with clean-cut appearance in a crisp white shirt against a soft gray editorial background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBLSDYV_4A4B3L8QSpyuPw5KR0wFQ6w5Kr2zdOTqpXddf4gAdsh6AHxc48uIIPwEp20gMQScFfLlb-vnqSNlfPbUN9p3VyiTYc4Sf1HtGa7acUom0jg2SYeOfhkAJdilA7_CQ2jPsq34j_-HCaNDjj843O7yx8tkVT2TEGdAEAqCkqXQ8HfSpd6EbLmwNBNeMj_y03suLfoZWJEuPnqmSOTYfj_3i5TQ8KsYmesKMMTL-gn780ml_3kEB4uldRbtztDAjTjqT8NJbo2"/>
+</div>
+<div class="px-2 pb-2">
+<div class="flex justify-between items-center mb-1">
+<h3 class="text-lg font-black tracking-tight">Marcus Thorne</h3>
+<span class="text-[10px] font-bold tracking-widest uppercase bg-[#F7F7F2] text-[#D97757] px-2 py-0.5 rounded">Actor</span>
+</div>
+<p class="text-sm text-[#6B6B66] truncate">Dramatic, Theatre, Voice-Over</p>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="group relative bg-white p-3 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+<div class="aspect-square w-full rounded-lg overflow-hidden bg-stone-100 mb-4">
+<img alt="Talent portrait" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="Cinematic portrait of a young woman with a focused expression, wearing modern streetwear, set in an urban environment with soft bokeh" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDfYNsvaMih1qHilQE1b1NawUaXpzZellkyo9Kb2hMZqLVOvtPsXTnAvKCPDelnM6Xh2v2CWOupNnmwJevhPcrxNCPksyq-coxBSdwigjXYumXmLMKiEgmA4IFkobtL0PrK76FFURx98MQ3ynfVShutcTZaXA6BazpNXT9BxtL-gLJFppYR-zhSwa17bQIYBFgDXXU1K-j3TtY-_BUxBmylEAmBN_CHkNvdwBxZfNokDOQiRlBD-NYFNtRs1k8am3hpVgu7kL7yNGsi"/>
+</div>
+<div class="px-2 pb-2">
+<div class="flex justify-between items-center mb-1">
+<h3 class="text-lg font-black tracking-tight">Sasha Blue</h3>
+<span class="text-[10px] font-bold tracking-widest uppercase bg-[#F7F7F2] text-[#D97757] px-2 py-0.5 rounded">Creator</span>
+</div>
+<p class="text-sm text-[#6B6B66] truncate">Lifestyle, Tech, Street Style</p>
+</div>
+</div>
+<!-- Card 4 -->
+<div class="group relative bg-white p-3 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+<div class="aspect-square w-full rounded-lg overflow-hidden bg-stone-100 mb-4">
+<img alt="Talent portrait" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="Warmly lit portrait of a mature man with distinguished features and a kind smile, clean architectural background, professional aesthetic" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC5UH2R-n-m8_TYVE7z1PGM7TyDbUJp79xRCyG3rXI57_3dnah2jQKB_ncKTXZB2rmt8TEESPm3IS1QmVKjOs5wRwAM1zthWe2RKAC_Szm2_yhEvVGaXT3-JXEJfdEjm76_QcJuoPK08omPv9fMWczULaBwCGsFYaueXCumTTaNvFjIliBKmMUsv5RwdNgFBAwxKuJEGsuuvQsB90-InWb1LDeFD0hSqfDbKJba-ycJYyVZQNGeiijpvL03fccr34OOZKdmPq2jzi39"/>
+</div>
+<div class="px-2 pb-2">
+<div class="flex justify-between items-center mb-1">
+<h3 class="text-lg font-black tracking-tight">David Chen</h3>
+<span class="text-[10px] font-bold tracking-widest uppercase bg-[#F7F7F2] text-[#D97757] px-2 py-0.5 rounded">Voiceover</span>
+</div>
+<p class="text-sm text-[#6B6B66] truncate">Baritone, Narrative, Corporate</p>
+</div>
+</div>
+<!-- Card 5 -->
+<div class="group relative bg-white p-3 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+<div class="aspect-square w-full rounded-lg overflow-hidden bg-stone-100 mb-4">
+<img alt="Talent portrait" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="Vibrant portrait of a woman laughing, natural sunlight, garden setting, highly realistic and warm editorial style" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCRUJvUV9XdxWAwzc4L7sQXyn8zJwOsU0eel0wl-7PvktGxo9IWzkpnJByR49-SCuhK8p760-q5w9RJ_4F55_pvM4PU5TnRpeIeA298aieCPAGHXtXv5vqAbY1X3tn7s8gDxY7cjGgkoLGks9ckX2BJNmk21x3G_8lGc0rFyddd1oEroXPtD4kMTMxE6xHnuVQH8XoHjFkqZSv23G8MommPoGmoUQH3W6WXyZgKSWiA7erfJ6j4b6z-Xwd0eEXSAxf-GSxekuVmJsg9"/>
+</div>
+<div class="px-2 pb-2">
+<div class="flex justify-between items-center mb-1">
+<h3 class="text-lg font-black tracking-tight">Maya Rodriguez</h3>
+<span class="text-[10px] font-bold tracking-widest uppercase bg-[#F7F7F2] text-[#D97757] px-2 py-0.5 rounded">Actor</span>
+</div>
+<p class="text-sm text-[#6B6B66] truncate">Comedy, Commercial, Motion Capture</p>
+</div>
+</div>
+<!-- Card 6 -->
+<div class="group relative bg-white p-3 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+<div class="aspect-square w-full rounded-lg overflow-hidden bg-stone-100 mb-4">
+<img alt="Talent portrait" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="Striking black and white portrait of a man with strong facial structure and thoughtful expression, high contrast studio lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBNbAxn6ppfJbw4d2zR2JLVeWw3i53d0FBlN_jLB9bZAk_OwGzjSAGfvDxzQBhnef1ZCaSgu7unPK8ioRNhjFl6AS7wgTJd0EyWEEkVaml6mySvEVB4S_JPvwnqRatvjrVCHZfHbvfUWQF2VVeDhVzceg9TdXKpNwVKZhsXOdenSNE4Ki_LMM7yS0ZlwT5tPC8cZI-G2WY5-4y3DsyFF0vKTPTSnkAXzNsJPthz3wg1cw4GpVi1Qy5Ae9E9BPkwOK9wuLIuWyptGTgJ"/>
+</div>
+<div class="px-2 pb-2">
+<div class="flex justify-between items-center mb-1">
+<h3 class="text-lg font-black tracking-tight">Julian Blackwood</h3>
+<span class="text-[10px] font-bold tracking-widest uppercase bg-[#F7F7F2] text-[#D97757] px-2 py-0.5 rounded">Model</span>
+</div>
+<p class="text-sm text-[#6B6B66] truncate">Fitness, Runway, High-Fashion</p>
+</div>
+</div>
+<!-- Card 7 -->
+<div class="group relative bg-white p-3 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+<div class="aspect-square w-full rounded-lg overflow-hidden bg-stone-100 mb-4">
+<img alt="Talent portrait" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="Candid-style portrait of a man with glasses and a creative look, working in a sunlit studio filled with plants" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC5iTLM-fPmzkuUFGiJA4khp3wLQ4y7vGRMlc7-nDq5jJRap-0HTxNHBnOUPeA4X9u128rR9mn11f0cPB2vqSxjedRDIbtm05Xs40c6H3vl5w3rAT2BHGM_4wpxWSKJ_KtKXWEPS2VLphhJ_k7VjK8ED5iYK7bPkWBpJn38cOtrZjJedkmKBOkExCkhWO8hxJwxk8_uQkpIvjhoic3SeS-pE7iErQWNgx9H3iJXv1WXIGPIHQiGp1wtypeafEJ1HNVmcmywwpCOFY3A"/>
+</div>
+<div class="px-2 pb-2">
+<div class="flex justify-between items-center mb-1">
+<h3 class="text-lg font-black tracking-tight">Liam O'Connor</h3>
+<span class="text-[10px] font-bold tracking-widest uppercase bg-[#F7F7F2] text-[#D97757] px-2 py-0.5 rounded">Creator</span>
+</div>
+<p class="text-sm text-[#6B6B66] truncate">Tech Reviewer, Documentary Maker</p>
+</div>
+</div>
+<!-- Card 8 -->
+<div class="group relative bg-white p-3 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+<div class="aspect-square w-full rounded-lg overflow-hidden bg-stone-100 mb-4">
+<img alt="Talent portrait" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="Profile portrait of a woman with red hair and freckles, soft natural window light, artistic and ethereal editorial vibe" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCC4pxE-4sZrU7z22MixgWqkzhL-jqq9ptQ7QHIgtiPD3vtUlYOB-EXBq-MCYO-N8F5eu19CdmVPbpvb3lEidinm_8qiVX4cqgN7f0FsFYfmU8UcOKGChNYpg1zuHeKjPs-7QjkhLx9aD7vPJJAzAsSN5F7Y_ThPirIbpt12s74nzqDvGr7szqyaeXoWjt28B4OqDr5FHpWwpieVj4qsna45Y3wlyFMuBmiUbzNEvX9Lforv3i6B5Hms8_SSz-6EasZJqoKNkXqOnVm"/>
+</div>
+<div class="px-2 pb-2">
+<div class="flex justify-between items-center mb-1">
+<h3 class="text-lg font-black tracking-tight">Fiona Reed</h3>
+<span class="text-[10px] font-bold tracking-widest uppercase bg-[#F7F7F2] text-[#D97757] px-2 py-0.5 rounded">Voiceover</span>
+</div>
+<p class="text-sm text-[#6B6B66] truncate">Warm, Sophisticated, Animation</p>
+</div>
+</div>
+</section>
+<!-- Asymmetric Call to Action Section -->
+<section class="max-w-6xl mx-auto mt-24 py-16 border-t border-[#E5E5E0]">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+<div class="relative">
+<div class="absolute -top-6 -left-6 w-24 h-24 bg-[#D97757]/10 rounded-full blur-2xl"></div>
+<h2 class="text-4xl font-black tracking-tighter mb-6 leading-tight">Can't find the perfect <span class="serif-italic font-normal">character</span>?</h2>
+<p class="text-[#6B6B66] text-lg mb-8 leading-relaxed">Our AI agents can help you design custom avatars or source specialized talent from our global extended network in minutes.</p>
+<button class="bg-[#D97757] text-white px-8 py-4 rounded-full font-bold tracking-tight hover:opacity-90 transition-opacity flex items-center gap-2">
+<span>Consult Casting Agent</span>
+<span class="material-symbols-outlined">auto_awesome</span>
+</button>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="aspect-[4/5] rounded-xl overflow-hidden bg-stone-200 translate-y-8">
+<img alt="Portrait thumb" class="w-full h-full object-cover" data-alt="Artistic high-fashion portrait with dramatic shadows and minimalist composition" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCg_0QYU9-GGKx3uuJhLo07p49DdvvRINN5OHXoK-T_25_w7GRp8nkhj0xn-G0QJpE_JCLoX8xEPIpqEEyDh_sDU4U-gPZQMVDDGGtfeoyPyB1fO4U2PkgfwJKPfL6wC4ivjb-lJthA3MX8LHJ6Wx4CphTOoCJdjnyyTj3UL3dCfc6pI40fn_3RW0X_hlJI9wJX7zRId5HiTVqtbvixjnqxhk8NCX2RwsAC-9fq77fQv8K2vneyuXIToyl643D-btU33VQOR-pjekyC"/>
+</div>
+<div class="aspect-[4/5] rounded-xl overflow-hidden bg-stone-200">
+<img alt="Portrait thumb" class="w-full h-full object-cover" data-alt="Bright and airy commercial headshot of a person with a genuine smile in a white modern studio" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDvssk6dKRX8UjSU16Mruh0qnbjYMIAd0UG5-rgwwZX4MAoTh9hozS3rAtyNDgS7oh8dPn8LLWGP8TUfbCzU_qGt0bnZSW98FpqOcWacly6cmVMoVPZvwqqvN_gTWE_qf5GWwyh7cl7wVf6VZjefPQo9sPRoZNgTXFL8QGebFKNR0B5BudstT9NAbXl9AuPct_j06CzN0XXddnhLIr_MoiKgP3gXGvwqxZxgiGU5UQehAJNa4sFOJ7thgP2ulJpjGZDeJDKL1Gfp4uX"/>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Mobile Bottom NavBar -->
+<nav class="md:hidden fixed bottom-0 left-0 right-0 bg-[#F7F7F2] border-t border-[#E5E5E0] px-6 py-3 flex justify-between items-center z-50">
+<a class="flex flex-col items-center gap-1 text-[#D97757]" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">group</span>
+<span class="text-[10px] font-bold">Talent</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-[#6B6B66]" href="#">
+<span class="material-symbols-outlined">movie</span>
+<span class="text-[10px] font-bold">Studio</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-[#6B6B66]" href="#">
+<span class="material-symbols-outlined">folder</span>
+<span class="text-[10px] font-bold">Assets</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-[#6B6B66]" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="text-[10px] font-bold">Account</span>
+</a>
+</nav>
+</body></html>

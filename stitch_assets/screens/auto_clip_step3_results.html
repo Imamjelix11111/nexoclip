@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "secondary-container": "#deddd7",
+            "primary-container": "#d97757",
+            "primary": "#99462a",
+            "on-surface": "#1a1c19",
+            "error": "#ba1a1a",
+            "secondary-fixed-dim": "#c8c7c0",
+            "error-container": "#ffdad6",
+            "on-tertiary-fixed-variant": "#474744",
+            "on-primary-container": "#541400",
+            "on-secondary-fixed": "#1b1c18",
+            "on-secondary-container": "#61615c",
+            "inverse-primary": "#ffb59e",
+            "surface-container": "#eeeee9",
+            "secondary": "#5e5f5a",
+            "on-primary-fixed": "#390b00",
+            "on-primary": "#ffffff",
+            "surface-bright": "#fafaf5",
+            "outline-variant": "#dbc1b9",
+            "on-tertiary": "#ffffff",
+            "surface": "#fafaf5",
+            "on-error": "#ffffff",
+            "surface-dim": "#dadad5",
+            "tertiary-container": "#94928f",
+            "background": "#fafaf5",
+            "on-secondary-fixed-variant": "#474743",
+            "primary-fixed": "#ffdbd0",
+            "on-background": "#1a1c19",
+            "inverse-on-surface": "#f1f1ec",
+            "surface-variant": "#e2e3de",
+            "surface-tint": "#99462a",
+            "inverse-surface": "#2f312e",
+            "surface-container-lowest": "#ffffff",
+            "outline": "#88726c",
+            "secondary-fixed": "#e4e2dc",
+            "on-secondary": "#ffffff",
+            "on-primary-fixed-variant": "#7a2f15",
+            "surface-container-low": "#f4f4ef",
+            "on-surface-variant": "#55433d",
+            "on-tertiary-container": "#2b2b29",
+            "surface-container-high": "#e8e8e4",
+            "tertiary-fixed": "#e5e2de",
+            "tertiary": "#5f5e5c",
+            "tertiary-fixed-dim": "#c8c6c3",
+            "primary-fixed-dim": "#ffb59e",
+            "surface-container-highest": "#e2e3de",
+            "on-tertiary-fixed": "#1c1c1a",
+            "on-error-container": "#93000a"
+          },
+          "borderRadius": {
+            "DEFAULT": "1rem",
+            "lg": "2rem",
+            "xl": "3rem",
+            "full": "9999px"
+          },
+          "fontFamily": {
+            "headline": ["Inter"],
+            "display": ["Inter"],
+            "body": ["Inter"],
+            "label": ["Inter"]
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    body { font-family: 'Inter', sans-serif; }
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    .clip-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 2rem;
+    }
+    @media (max-width: 640px) {
+      .clip-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body class="bg-background text-on-background min-h-screen">
+<!-- TopAppBar Component -->
+<header class="sticky top-0 z-50 flex justify-between items-center w-full px-8 py-4 bg-opacity-90 backdrop-blur-md bg-[#F7F7F2] dark:bg-stone-950 border-b border-stone-200 dark:border-stone-800">
+<div class="flex items-center gap-8">
+<span class="text-2xl font-black tracking-tighter text-[#D97757] dark:text-orange-500">NexoClip</span>
+<nav class="hidden md:flex items-center gap-6">
+<a class="text-stone-500 dark:text-stone-400 font-medium hover:text-stone-900 dark:hover:text-stone-200 hover:bg-stone-100/50 dark:hover:bg-stone-800/50 transition-all duration-200 rounded-lg px-3 py-1" href="#">Discovery</a>
+<a class="text-stone-500 dark:text-stone-400 font-medium hover:text-stone-900 dark:hover:text-stone-200 hover:bg-stone-100/50 dark:hover:bg-stone-800/50 transition-all duration-200 rounded-lg px-3 py-1" href="#">Workshop</a>
+<a class="text-[#D97757] dark:text-orange-400 font-bold border-b-2 border-[#D97757] dark:border-orange-400 pb-1" href="#">Library</a>
+<a class="text-stone-500 dark:text-stone-400 font-medium hover:text-stone-900 dark:hover:text-stone-200 hover:bg-stone-100/50 dark:hover:bg-stone-800/50 transition-all duration-200 rounded-lg px-3 py-1" href="#">Analytics</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2">
+<button class="p-2 text-stone-500 hover:bg-stone-100/50 rounded-lg transition-all"><span class="material-symbols-outlined">notifications</span></button>
+<button class="p-2 text-stone-500 hover:bg-stone-100/50 rounded-lg transition-all"><span class="material-symbols-outlined">settings</span></button>
+</div>
+<button class="bg-primary text-on-primary px-5 py-2 rounded-full font-semibold text-sm active:scale-95 transition-all">Create Clip</button>
+</div>
+</header>
+<main class="max-w-[860px] mx-auto px-6 py-12">
+<!-- Step Indicator -->
+<div class="flex items-center justify-center mb-16">
+<div class="flex items-center w-full max-w-md">
+<div class="relative flex flex-col items-center group">
+<div class="w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center text-sm font-bold">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">check</span>
+</div>
+<span class="absolute -bottom-8 text-[10px] uppercase tracking-widest font-bold text-on-surface-variant">Upload</span>
+</div>
+<div class="flex-1 h-[2px] bg-primary mx-2"></div>
+<div class="relative flex flex-col items-center group">
+<div class="w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center text-sm font-bold">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">check</span>
+</div>
+<span class="absolute -bottom-8 text-[10px] uppercase tracking-widest font-bold text-on-surface-variant">Process</span>
+</div>
+<div class="flex-1 h-[2px] bg-outline-variant mx-2"></div>
+<div class="relative flex flex-col items-center group">
+<div class="w-8 h-8 rounded-full border-2 border-primary text-primary flex items-center justify-center text-sm font-bold bg-surface">
+            3
+          </div>
+<span class="absolute -bottom-8 text-[10px] uppercase tracking-widest font-bold text-primary">Results</span>
+</div>
+</div>
+</div>
+<!-- Content Header -->
+<div class="flex items-end justify-between mb-10">
+<div>
+<h1 class="text-4xl font-black tracking-tight text-on-surface mb-2">5 Klip Ditemukan</h1>
+<p class="text-text-muted text-sm tracking-wide">AI telah mengkurasi momen-momen terbaik dari video Anda.</p>
+</div>
+<button class="flex items-center gap-2 bg-primary-container text-on-primary-container px-6 py-3 rounded-full font-bold hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined">download</span>
+        Unduh Semua
+      </button>
+</div>
+<!-- Clip Grid -->
+<div class="clip-grid">
+<!-- Card 1 -->
+<div class="bg-surface-card rounded-lg overflow-hidden border border-border-soft group hover:shadow-xl transition-all duration-300">
+<div class="relative aspect-[9/16] bg-stone-900 overflow-hidden">
+<img class="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-500" data-alt="A dynamic portrait video frame showing a high-energy urban dance performance under neon streetlights at twilight. The cinematic lighting emphasizes the dancer's sharp movements with warm amber and cool teal highlights. The editorial AI aesthetic is clean and professional, focusing on the high-fidelity texture of the clothing and the blurred city background. The mood is vibrant and ready for viral social media distribution." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC7wB3jW7Rp6Gw_pPob5SPMnsUe45InQkF7X7C5ppLgbTjkj0hNlOOlTmsaMXp5oO_ex8UfwCQ2VPOl8nQrO8dVxBZZoyEnG04qAvyoUTPRDr81Dqr3vqUCxqFvS09eqqkgABrq-IbPng9X7J35ENwNLLzXuXrzrs6tEHgw7O2flgpPMwKGzt69qJT9SYnzEy3edQwj0OBHANI3R1Qrn8h0dPOgOJd-uj9X660Y659puHn6QihxKG7TbFI6RDsEvTVZV-CeoFGC3SsZ"/>
+<div class="absolute inset-0 flex items-center justify-center">
+<div class="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-white text-4xl" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</div>
+</div>
+<div class="absolute top-4 right-4 bg-black/60 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded">0:28</div>
+</div>
+<div class="p-5">
+<span class="text-[10px] font-bold text-primary tracking-[0.2em] uppercase mb-1 block">CLIP #1</span>
+<h3 class="text-on-surface font-semibold line-clamp-2 mb-4 leading-relaxed">Momen paling viral di detik ke 45 saat transisi pencahayaan dramatis dimulai.</h3>
+<div class="flex items-center justify-between pt-4 border-t border-border-soft">
+<div class="flex gap-1">
+<button class="p-2 hover:bg-surface-container rounded-full transition-colors text-on-surface-variant"><span class="material-symbols-outlined text-xl">share</span></button>
+<button class="p-2 hover:bg-surface-container rounded-full transition-colors text-on-surface-variant"><span class="material-symbols-outlined text-xl">download</span></button>
+</div>
+<button class="text-xs font-bold uppercase tracking-widest text-primary hover:underline px-2">Preview</button>
+</div>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="bg-surface-card rounded-lg overflow-hidden border border-border-soft group hover:shadow-xl transition-all duration-300">
+<div class="relative aspect-[9/16] bg-stone-900 overflow-hidden">
+<img class="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-500" data-alt="A vertical video thumbnail capturing a serene mountain landscape at sunrise with soft mist rolling through the valleys. The editorial style is minimalist and high-end, utilizing a warm sand and rust color palette typical of a premium creative studio. The composition is balanced, featuring a single pine tree in the foreground as a focal point against the vast, atmospheric peaks. The overall tone is peaceful and sophisticated." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDAS-lg9NuvMHa8FMRfyEX0oHQow7rAhJFWlIOGMIDijWHMsnZcBnsGAG1hCo3jzZqiXzk9Qs8kREujH8f8Lcx4VloPmB5BH1Phr6PTysNRYed2pJCluE-I8dybvsj2kS4ufYVtPHOpmJJ3WHBIelsmqg_mLLlEUfkyYqKyE0NMnnBLgDLSPR5BrfHFkqtRCFtNocH39wpoyFutqaZpnNIMCYfxVC9GprCf8GFSVnTG7GQlxMDTNN5GLKPV6nNBGRqcBHmbD3w-Mexg"/>
+<div class="absolute inset-0 flex items-center justify-center">
+<div class="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-white text-4xl" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</div>
+</div>
+<div class="absolute top-4 right-4 bg-black/60 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded">0:15</div>
+</div>
+<div class="p-5">
+<span class="text-[10px] font-bold text-primary tracking-[0.2em] uppercase mb-1 block">CLIP #2</span>
+<h3 class="text-on-surface font-semibold line-clamp-2 mb-4 leading-relaxed">Highlight pemandangan sinematik yang sempurna untuk latar belakang narasi.</h3>
+<div class="flex items-center justify-between pt-4 border-t border-border-soft">
+<div class="flex gap-1">
+<button class="p-2 hover:bg-surface-container rounded-full transition-colors text-on-surface-variant"><span class="material-symbols-outlined text-xl">share</span></button>
+<button class="p-2 hover:bg-surface-container rounded-full transition-colors text-on-surface-variant"><span class="material-symbols-outlined text-xl">download</span></button>
+</div>
+<button class="text-xs font-bold uppercase tracking-widest text-primary hover:underline px-2">Preview</button>
+</div>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="bg-surface-card rounded-lg overflow-hidden border border-border-soft group hover:shadow-xl transition-all duration-300">
+<div class="relative aspect-[9/16] bg-stone-900 overflow-hidden">
+<img class="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-500" data-alt="A focused close-up shot of creative professionals collaborating in a bright, modern studio filled with natural light. The frame is vertical, showing hands gesturing over a sleek digital tablet displaying colorful video editing timelines. The aesthetic is clean-cut, editorial, and intellectual, with a primary color palette of off-white, muted charcoal, and rust-orange accents. The lighting is soft and diffuse, creating a calm and productive atmosphere." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCYPzbeTxLpvov7HjlRXePj1mFShdRzuY2-t1E75PnpyW7ToCe43fcupor7RWpfTXYDGk-d419Px9TyvXXtB6gw1TBar2bea4wjAHxOsa0HWLOJDCPBOJK69PHAuPt_JlYfnN-k1lVcrzUUGDwQYmddiWbVbdkp7KmlcVtg--co--TsJZciZXkVFpeJJBWjh7vGn0PN43toQYZe1FNvU7WhU7jaGswoRiPWP3soBw0uicMjBCiZXsvjFNffuAvz1ee2uvlyxHRS0M32"/>
+<div class="absolute inset-0 flex items-center justify-center">
+<div class="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-white text-4xl" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</div>
+</div>
+<div class="absolute top-4 right-4 bg-black/60 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded">0:42</div>
+</div>
+<div class="p-5">
+<span class="text-[10px] font-bold text-primary tracking-[0.2em] uppercase mb-1 block">CLIP #3</span>
+<h3 class="text-on-surface font-semibold line-clamp-2 mb-4 leading-relaxed">Interaksi tim yang autentik, memberikan kesan profesional pada brand Anda.</h3>
+<div class="flex items-center justify-between pt-4 border-t border-border-soft">
+<div class="flex gap-1">
+<button class="p-2 hover:bg-surface-container rounded-full transition-colors text-on-surface-variant"><span class="material-symbols-outlined text-xl">share</span></button>
+<button class="p-2 hover:bg-surface-container rounded-full transition-colors text-on-surface-variant"><span class="material-symbols-outlined text-xl">download</span></button>
+</div>
+<button class="text-xs font-bold uppercase tracking-widest text-primary hover:underline px-2">Preview</button>
+</div>
+</div>
+</div>
+<!-- Card 4 -->
+<div class="bg-surface-card rounded-lg overflow-hidden border border-border-soft group hover:shadow-xl transition-all duration-300">
+<div class="relative aspect-[9/16] bg-stone-900 overflow-hidden">
+<img class="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-500" data-alt="A high-tech digital interface overlaying a vertical shot of a modern city at night. Glowing data streams and holographic geometric patterns pulse in a sophisticated muted rust and charcoal color scheme. The visual style is advanced yet understated, avoiding neon tropes for a more editorial Anthropic-inspired look. The mood is agentic and transparent, showcasing the power of AI processing in a professional context." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDLfMRyLNvTFYh2o4I0NGjMsoGxX61B8oM-wPZ3D6loTPc3AuxRNspJ6uyiSVoteuWetOvQor8VOHlRAxV-iS4fEoMXZmZcWt7FftV9lh4c9fULti4IDWzm3iOOnTCngVyFwDG7LTImPyCUv4TTLgAb3fewZ_itaM6yjQCovtOJuxDZgX6eQRqmvhL1ZGfgTESantgG34gBuhsHY1mrXBdKDXZ-bfeXoWKKw1PQeGfReIfInpsljtSx7WOPllMSKqMwKtSX3E5clquU"/>
+<div class="absolute inset-0 flex items-center justify-center">
+<div class="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-white text-4xl" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</div>
+</div>
+<div class="absolute top-4 right-4 bg-black/60 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded">0:33</div>
+</div>
+<div class="p-5">
+<span class="text-[10px] font-bold text-primary tracking-[0.2em] uppercase mb-1 block">CLIP #4</span>
+<h3 class="text-on-surface font-semibold line-clamp-2 mb-4 leading-relaxed">Visualisasi data futuristik yang diolah langsung oleh AI NexoClip.</h3>
+<div class="flex items-center justify-between pt-4 border-t border-border-soft">
+<div class="flex gap-1">
+<button class="p-2 hover:bg-surface-container rounded-full transition-colors text-on-surface-variant"><span class="material-symbols-outlined text-xl">share</span></button>
+<button class="p-2 hover:bg-surface-container rounded-full transition-colors text-on-surface-variant"><span class="material-symbols-outlined text-xl">download</span></button>
+</div>
+<button class="text-xs font-bold uppercase tracking-widest text-primary hover:underline px-2">Preview</button>
+</div>
+</div>
+</div>
+<!-- Card 5 -->
+<div class="bg-surface-card rounded-lg overflow-hidden border border-border-soft group hover:shadow-xl transition-all duration-300">
+<div class="relative aspect-[9/16] bg-stone-900 overflow-hidden">
+<img class="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-500" data-alt="A portrait-oriented close-up of a high-end microphone in a dark, moody recording studio. Subtle, warm accent lighting catches the metallic texture of the equipment. The style is premium and professional, focusing on intellectual calm and high-quality production standards. The color palette features deep shadows and warm wood tones, creating an editorial feel that emphasizes clarity and audio-visual excellence." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBfm2k9RprIHlJMw_9cQtB50JuEPLrJOtcgCipzxzElWQQDhlVrMl2sSAFfihgJGqCSW7HcJgBTtBfw03dHMatCmEEX-sdAA7JW19ppWw_uZF969qFUEBsdDignuRnGkMMv1sPhDgB8MGyWBHFugSpCtT_dZg4NLCUss7G8r8cWZaLIx-MysSsu8kiGr86cpu6DmAJBcfLyj6O4io7Z1msvTaCKscrpFDyBRnQzESr5cXN2prPzYzW4ijhOk6Zb9r37zK5M5uch7IV9"/>
+<div class="absolute inset-0 flex items-center justify-center">
+<div class="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-white text-4xl" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</div>
+</div>
+<div class="absolute top-4 right-4 bg-black/60 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded">0:21</div>
+</div>
+<div class="p-5">
+<span class="text-[10px] font-bold text-primary tracking-[0.2em] uppercase mb-1 block">CLIP #5</span>
+<h3 class="text-on-surface font-semibold line-clamp-2 mb-4 leading-relaxed">Segmen audio terbaik dengan kejernihan suara yang dioptimalkan otomatis.</h3>
+<div class="flex items-center justify-between pt-4 border-t border-border-soft">
+<div class="flex gap-1">
+<button class="p-2 hover:bg-surface-container rounded-full transition-colors text-on-surface-variant"><span class="material-symbols-outlined text-xl">share</span></button>
+<button class="p-2 hover:bg-surface-container rounded-full transition-colors text-on-surface-variant"><span class="material-symbols-outlined text-xl">download</span></button>
+</div>
+<button class="text-xs font-bold uppercase tracking-widest text-primary hover:underline px-2">Preview</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Footer Action -->
+<div class="mt-16 pt-8 border-t border-border-soft text-center">
+<p class="text-text-muted text-sm mb-6">Butuh perubahan lebih detail? Buka di editor untuk kustomisasi penuh.</p>
+<div class="flex justify-center gap-4">
+<button class="px-8 py-3 rounded-full border-2 border-outline text-on-surface font-bold hover:bg-surface-container transition-colors">Kembali ke Draft</button>
+<button class="px-8 py-3 rounded-full bg-on-surface text-surface font-bold hover:opacity-90 transition-opacity">Edit di Workshop</button>
+</div>
+</div>
+</main>
+<!-- SideNavBar Component (Hidden on small screens) -->
+<aside class="hidden lg:flex flex-col justify-between py-8 h-screen w-64 border-r fixed left-0 top-0 bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-800 shadow-sm z-40">
+<div>
+<div class="px-6 mb-10">
+<div class="flex items-center gap-3 mb-1">
+<div class="w-8 h-8 rounded-lg bg-primary-container flex items-center justify-center text-white font-bold">N</div>
+<div>
+<h4 class="text-sm font-bold text-on-surface">Studio Tools</h4>
+<p class="text-[10px] text-text-muted font-bold tracking-widest">V0.1 ALPHA</p>
+</div>
+</div>
+</div>
+<nav class="space-y-1 pr-4">
+<a class="flex items-center gap-4 px-6 py-3 text-stone-500 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-800/50 rounded-r-full group transition-transform hover:translate-x-1" href="#">
+<span class="material-symbols-outlined text-xl">folder_open</span>
+<span class="font-['Inter'] text-sm uppercase tracking-widest font-semibold">Assets</span>
+</a>
+<a class="flex items-center gap-4 px-6 py-3 text-stone-500 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-800/50 rounded-r-full group transition-transform hover:translate-x-1" href="#">
+<span class="material-symbols-outlined text-xl">auto_awesome</span>
+<span class="font-['Inter'] text-sm uppercase tracking-widest font-semibold">Templates</span>
+</a>
+<a class="flex items-center gap-4 px-6 py-3 text-stone-500 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-800/50 rounded-r-full group transition-transform hover:translate-x-1" href="#">
+<span class="material-symbols-outlined text-xl">mic</span>
+<span class="font-['Inter'] text-sm uppercase tracking-widest font-semibold">Audio</span>
+</a>
+<a class="flex items-center gap-4 px-6 py-3 text-stone-500 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-800/50 rounded-r-full group transition-transform hover:translate-x-1" href="#">
+<span class="material-symbols-outlined text-xl">palette</span>
+<span class="font-['Inter'] text-sm uppercase tracking-widest font-semibold">Styles</span>
+</a>
+</nav>
+</div>
+<div class="px-6 space-y-6">
+<div class="p-4 bg-primary-fixed rounded-xl">
+<p class="text-xs font-bold text-on-primary-fixed-variant mb-3">Upgrade for 4K rendering and team collaboration.</p>
+<button class="w-full bg-primary text-on-primary py-2 rounded-lg text-xs font-bold active:scale-95 transition-all">Upgrade Plan</button>
+</div>
+<div class="space-y-1">
+<a class="flex items-center gap-3 text-text-muted hover:text-on-surface transition-colors py-2" href="#">
+<span class="material-symbols-outlined text-lg">help_outline</span>
+<span class="text-xs font-bold uppercase tracking-widest">Help</span>
+</a>
+<a class="flex items-center gap-3 text-error hover:opacity-80 transition-colors py-2" href="#">
+<span class="material-symbols-outlined text-lg">logout</span>
+<span class="text-xs font-bold uppercase tracking-widest">Logout</span>
+</a>
+</div>
+</div>
+</aside>
+</body></html>
