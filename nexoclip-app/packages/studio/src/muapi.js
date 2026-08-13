@@ -1,4 +1,4 @@
-import { getModelById, getVideoModelById, getI2IModelById, getI2VModelById, getV2VModelById, getRecastModelById, getLipSyncModelById, getAudioModelById } from './models.js';
+import { getModelById, getVideoModelById, getI2IModelById, getI2VModelById, getV2VModelById, getRecastModelById, getLipSyncModelById, getAudioModelById, OPENROUTER_IMAGE_MODEL_MAP } from './models.js';
 
 // In an http(s) browser we route through the host app's proxy (Next.js routes
 // under /api/* re-issue the call server-side) so api.muapi.ai CORS is bypassed.
@@ -60,46 +60,34 @@ async function submitAndPoll(endpoint, payload, key, onRequestId, maxAttempts = 
     return { ...result, url: outputUrl };
 }
 
-export async function generateImage(apiKey, params) {
-    const modelInfo = getModelById(params.model);
-    const endpoint = modelInfo?.endpoint || params.model;
-    const payload = { prompt: params.prompt };
+export async function generateImage(_apiKey, params) {
+    const model = OPENROUTER_IMAGE_MODEL_MAP[params.model];
+    if (!model) throw new Error(`Image model is not available on OpenRouter: ${params.model}`);
+    const payload = { model, prompt: params.prompt };
     if (params.aspect_ratio) payload.aspect_ratio = params.aspect_ratio;
     if (params.resolution) payload.resolution = params.resolution;
     if (params.quality) payload.quality = params.quality;
-    if (params.image_url) { 
-        payload.image_url = params.image_url; 
-        payload.strength = params.strength || 0.6; 
-    } else if (params.images_list) {
-        payload.images_list = params.images_list;
-    } else {
-        payload.image_url = null;
-    }
-    if (params.seed && params.seed !== -1) payload.seed = params.seed;
-    return submitAndPoll(endpoint, payload, apiKey, params.onRequestId, 60);
+    if (params.image_url) payload.input_references = [{ type: 'image_url', image_url: { url: params.image_url } }];
+    if (params.images_list?.length) payload.input_references = params.images_list.map((url) => ({ type: 'image_url', image_url: { url } }));
+    if (params.seed !== undefined && params.seed !== -1) payload.seed = params.seed;
+    const response = await fetch('/api/openrouter/images', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    if (!response.ok) throw new Error(`OpenRouter image request failed: ${response.status}`);
+    return response.json();
 }
 
-export async function generateI2I(apiKey, params) {
-    const modelInfo = getI2IModelById(params.model);
-    const endpoint = modelInfo?.endpoint || params.model;
-    const payload = {};
-    if (params.prompt) payload.prompt = params.prompt;
-    const imageField = modelInfo?.imageField || 'image_url';
+export async function generateI2I(_apiKey, params) {
+    const model = OPENROUTER_IMAGE_MODEL_MAP[params.model];
+    if (!model) throw new Error(`Image model is not available on OpenRouter: ${params.model}`);
+    const payload = { model, prompt: params.prompt || '' };
+    const imageField = 'image_url';
     const imagesList = params.images_list?.length > 0 ? params.images_list : (params.image_url ? [params.image_url] : null);
-    if (imagesList) {
-        if (imageField === 'images_list') payload.images_list = imagesList;
-        else payload[imageField] = imagesList[0];
-    }
-    if (modelInfo?.swapField && params.swap_url) {
-        payload[modelInfo.swapField] = params.swap_url;
-    }
+    if (imagesList) payload.input_references = imagesList.map((url) => ({ type: 'image_url', image_url: { url } }));
     if (params.aspect_ratio) payload.aspect_ratio = params.aspect_ratio;
     if (params.resolution) payload.resolution = params.resolution;
     if (params.quality) payload.quality = params.quality;
-    if (modelInfo?.inputs?.name) {
-        payload.name = params.name || modelInfo.inputs.name.default;
-    }
-    return submitAndPoll(endpoint, payload, apiKey, params.onRequestId, 60);
+    const response = await fetch('/api/openrouter/images', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    if (!response.ok) throw new Error(`OpenRouter image request failed: ${response.status}`);
+    return response.json();
 }
 
 export async function generateVideo(apiKey, params) {

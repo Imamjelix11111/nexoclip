@@ -3336,6 +3336,33 @@ export const t2iModels = [
   }
 ];
 
+export const OPENROUTER_IMAGE_MODEL_MAP = {
+  'nano-banana': 'google/gemini-2.5-flash-image',
+  'nano-banana-pro': 'google/gemini-3-pro-image',
+  'nano-banana-2': 'google/gemini-3.1-flash-image',
+  'nano-banana-2-lite': 'google/gemini-3.1-flash-lite-image',
+  'gpt-image-2': 'openai/gpt-image-2',
+  'flux-2-pro': 'black-forest-labs/flux.2-pro',
+  'flux-2-flex': 'black-forest-labs/flux.2-flex',
+  'flux-2-max': 'black-forest-labs/flux.2-max',
+  'bytedance-seedream-v4.5': 'bytedance-seed/seedream-4.5',
+  'seedream-5.0': 'bytedance-seed/seedream-5-0-pro',
+  'qwen-image': 'qwen/qwen-image-3',
+  'grok-imagine-text-to-image': 'x-ai/grok-imagine-image-2.0',
+  'flux-2-pro-edit': 'black-forest-labs/flux.2-pro',
+  'flux-2-flex-edit': 'black-forest-labs/flux.2-flex',
+  'gpt-image-2-edit': 'openai/gpt-image-2',
+  'nano-banana-edit': 'google/gemini-2.5-flash-image',
+  'nano-banana-pro-edit': 'google/gemini-3-pro-image',
+  'nano-banana-2-edit': 'google/gemini-3.1-flash-image',
+  'nano-banana-2-lite-edit': 'google/gemini-3.1-flash-lite-image',
+  'flux-redux': 'black-forest-labs/flux.2-pro',
+  'qwen-image-edit': 'qwen/qwen-image-3',
+  'qwen-image-edit-plus': 'qwen/qwen-image-3-pro',
+  'bytedance-seedream-v4.5-edit': 'bytedance-seed/seedream-4.5',
+  'seedream-5.0-edit': 'bytedance-seed/seedream-5-0-pro',
+};
+
 export const getModelById = (id) => t2iModels.find(m => m.id === id);
 
 export const getAspectRatiosForModel = (modelId) => {
@@ -19399,6 +19426,9 @@ export const i2vModels = [
 ];
 
 export const getI2IModelById = (id) => i2iModels.find(m => m.id === id);
+
+export const openRouterT2IModels = t2iModels.filter((model) => OPENROUTER_IMAGE_MODEL_MAP[model.id]);
+export const openRouterI2IModels = i2iModels.filter((model) => OPENROUTER_IMAGE_MODEL_MAP[model.id]);
 export const getI2VModelById = (id) => i2vModels.find(m => m.id === id);
 
 export const getMaxImagesForI2VModel = (modelId) => {

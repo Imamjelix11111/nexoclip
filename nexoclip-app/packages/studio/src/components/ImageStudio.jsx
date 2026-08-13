@@ -10,8 +10,8 @@ import MobileGenerationActions, {
   GenerationCopyButtons,
 } from "./MobileGenerationActions.jsx";
 import {
-  t2iModels,
-  i2iModels,
+  openRouterT2IModels,
+  openRouterI2IModels,
   getAspectRatiosForModel,
   getResolutionsForModel,
   getQualityFieldForModel,
@@ -589,19 +589,19 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
       id: "all",
       label: "All",
       entries: [
-        ...t2iModels.map((model) => ({ model, category: "t2i" })),
-        ...i2iModels.map((model) => ({ model, category: "i2i" })),
+        ...openRouterT2IModels.map((model) => ({ model, category: "t2i" })),
+        ...openRouterI2IModels.map((model) => ({ model, category: "i2i" })),
       ],
     },
     {
       id: "t2i",
       label: "Text to Image",
-      entries: t2iModels.map((model) => ({ model, category: "t2i" })),
+      entries: openRouterT2IModels.map((model) => ({ model, category: "t2i" })),
     },
     {
       id: "i2i",
       label: "Image to Image",
-      entries: i2iModels.map((model) => ({ model, category: "i2i" })),
+      entries: openRouterI2IModels.map((model) => ({ model, category: "i2i" })),
     },
   ];
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -904,13 +904,13 @@ export default function ImageStudio({
 
   // ── Model / mode state ──────────────────────────────────────────────────
   const [imageMode, setImageMode] = useState(false); // false=t2i, true=i2i
-  const [selectedModelId, setSelectedModelId] = useState(t2iModels[0].id);
-  const [selectedModelName, setSelectedModelName] = useState(t2iModels[0].name);
+  const [selectedModelId, setSelectedModelId] = useState(openRouterT2IModels[0].id);
+  const [selectedModelName, setSelectedModelName] = useState(openRouterT2IModels[0].name);
   const [selectedAr, setSelectedAr] = useState(
-    t2iModels[0].inputs?.aspect_ratio?.default || "1:1",
+    openRouterT2IModels[0].inputs?.aspect_ratio?.default || "1:1",
   );
   const [selectedQuality, setSelectedQuality] = useState(() => {
-    const resolutions = getResolutionsForModel(t2iModels[0].id);
+    const resolutions = getResolutionsForModel(openRouterT2IModels[0].id);
     return resolutions[0] || null;
   });
   const [selectedEffect, setSelectedEffect] = useState("");
@@ -1068,7 +1068,7 @@ export default function ImageStudio({
   }, [droppedFiles, onFilesHandled, processDroppedImages]);
 
   // ── Derived: current model lists & helpers ───────────────────────────────
-  const currentModels = imageMode ? i2iModels : t2iModels;
+  const currentModels = imageMode ? openRouterI2IModels : openRouterT2IModels;
   const currentAspectRatios = imageMode
     ? getAspectRatiosForI2IModel(selectedModelId)
     : getAspectRatiosForModel(selectedModelId);
@@ -1094,7 +1094,7 @@ export default function ImageStudio({
         // Many models follow conventions, but some have completely irregular names —
         // those are handled via a hardcoded exceptions map.
         const curId = selectedModelId;
-        const i2iIds = new Set(i2iModels.map((m) => m.id));
+        const i2iIds = new Set(openRouterI2IModels.map((m) => m.id));
 
         // Hardcoded exceptions for models with irregular t2i → i2i naming
         const EXCEPTIONS = {
@@ -1109,7 +1109,7 @@ export default function ImageStudio({
           'ideogram-v3-t2i':             'ideogram-v3-reframe',
         };
 
-        const findI2I = (id) => i2iModels.find((m) => m.id === id) ?? null;
+        const findI2I = (id) => openRouterI2IModels.find((m) => m.id === id) ?? null;
 
         const target =
           // 0. Hardcoded exceptions for irregular names
@@ -1123,9 +1123,9 @@ export default function ImageStudio({
           // 4. text-to-image → image-to-image (e.g. gpt4o-text-to-image, midjourney-v7, grok-imagine)
           (curId.includes('text-to-image') && findI2I(curId.replace('text-to-image', 'image-to-image'))) ||
           // 5. Prefix match fallback (e.g. minimax-image-01 → minimax-image-01-subject-reference)
-          i2iModels.find((m) => m.id.startsWith(curId)) ||
+          openRouterI2IModels.find((m) => m.id.startsWith(curId)) ||
           // 6. No sibling exists — use first i2i model
-          i2iModels[0];
+          openRouterI2IModels[0];
 
         const ars = getAspectRatiosForI2IModel(target.id);
         const resolutions = getResolutionsForI2IModel(target.id);
@@ -1148,7 +1148,7 @@ export default function ImageStudio({
 
     // Find the t2i parent of the currently selected i2i model (reverse of upload logic)
     const curId = selectedModelId;
-    const findT2I = (id) => id ? (t2iModels.find((m) => m.id === id) ?? null) : null;
+    const findT2I = (id) => id ? (openRouterT2IModels.find((m) => m.id === id) ?? null) : null;
 
     // Reverse exceptions map (i2i → t2i for irregular names)
     const REVERSE_EXCEPTIONS = {
@@ -1174,7 +1174,7 @@ export default function ImageStudio({
       // 4. image-to-image → text-to-image (e.g. gpt4o-image-to-image → gpt4o-text-to-image)
       (curId.includes('image-to-image') && findT2I(curId.replace('image-to-image', 'text-to-image'))) ||
       // 5. No parent found — use first t2i model
-      t2iModels[0];
+      openRouterT2IModels[0];
 
     const ars = getAspectRatiosForModel(target.id);
     const resolutions = getResolutionsForModel(target.id);
@@ -1234,7 +1234,7 @@ export default function ImageStudio({
     setPrompt("");
     setUploadedImageUrls([]);
     setImageMode(false);
-    const firstT2I = t2iModels[0];
+    const firstT2I = openRouterT2IModels[0];
     const ars = getAspectRatiosForModel(firstT2I.id);
     const resolutions = getResolutionsForModel(firstT2I.id);
     setSelectedModelId(firstT2I.id);
@@ -1303,9 +1303,12 @@ export default function ImageStudio({
 
       results.forEach((res) => {
         if (res && res.url) {
+          const output = res.outputs?.[0];
+          const outputUrl = res.url || output?.url;
+          if (outputUrl) {
           const entry = {
-            id: res.id || Math.random().toString(36).substring(7),
-            url: res.url,
+            id: res.id || res.providerRequestId || Math.random().toString(36).substring(7),
+            url: outputUrl,
             prompt: prompt.trim(),
             model: selectedModelId,
             aspect_ratio: selectedAr,
@@ -1313,11 +1316,12 @@ export default function ImageStudio({
           };
           addToHistory(entry);
           onGenerationComplete?.({
-            url: res.url,
+            url: outputUrl,
             model: selectedModelId,
             prompt: prompt.trim(),
             type: "image",
           });
+          }
         }
       });
     } catch (e) {
