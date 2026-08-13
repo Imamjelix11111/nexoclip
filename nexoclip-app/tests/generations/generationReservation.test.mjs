@@ -1,0 +1,54 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createImageGenerationJobWithReservation } from '../../src/services/generationService.js';
+
+function poolFor({ existing = null, balance = '10', pricing = { pricingVersion: { id: 'pv1', version: 3 }, rule: { operation: 'image_generation', unit: 'job', unitPrice: '2.500000' } } } = {}) {
+  const calls = [];
+  const client = {
+    async query(text, values) {
+      calls.push({ text, values });
+      if (text === 'BEGIN' || text === 'COMMIT' || text === 'ROLLBACK') return { rows: [] };
+      if (/FROM generation_jobs/.test(text) && /idempotency_key/.test(text)) return { rows: existing ? [existing] : [] };
+      if (/FROM pricing_rules/.test(text)) return { rows: [{ pricing_version_id: pricing.pricingVersion.id, pricing_version: pricing.pricingVersion.version, operation: pricing.rule.operation, unit: pricing.rule.unit, unit_price: pricing.rule.unitPrice }] };
+      if (/INSERT INTO credit_accounts/.test(text)) return { rows: [{ workspace_id: 'w1', balance }] };
+      if (/FROM credit_accounts/.test(text)) return { rows: [{ workspace_id: 'w1', balance }] };
+      if (/UPDATE credit_accounts/.test(text)) return { rows: [{ workspace_id: 'w1', balance: '7.500000' }] };
+      if (/INSERT INTO credit_ledger/.test(text)) return { rows: [{ id: 'ledger-1', amount: '-2.500000' }] };
+      if (/INSERT INTO generation_jobs/.test(text)) return { rows: [{ id: 'g1', status: 'queued', estimated_cost: '2.500000', pricing_version_id: 'pv1' }] };
+      return { rows: [] };
+    },
+    release() {},
+  };
+  return { calls, async connect() { return client; }, async query(text, values) { calls.push({ text, values }); return { rows: [] }; } };
+}
+
+test('reserves priced credits and creates the generation job in one transaction', async () => {
+  const pool = poolFor();
+  const job = await createImageGenerationJobWithReservation(pool, 'w1', {
+    prompt: 'fox', model: 'flux-dev', idempotencyKey: 'request-1', operation: 'image_generation',
+  });
+  assert.equal(job.id, 'g1');
+  assert.equal(pool.calls[0].text, 'BEGIN');
+  assert.match(pool.calls.find((call) => /INSERT INTO credit_ledger/.test(call.text)).text, /INSERT INTO credit_ledger/);
+  assert.match(pool.calls.find((call) => /INSERT INTO generation_jobs/.test(call.text)).text, /estimated_cost/);
+  assert.equal(pool.calls.at(-1).text, 'COMMIT');
+});
+
+test('returns an idempotent existing job without reserving credits again', async () => {
+  const pool = poolFor({ existing: { id: 'g-existing', status: 'queued' } });
+  const job = await createImageGenerationJobWithReservation(pool, 'w1', {
+    prompt: 'fox', model: 'flux-dev', idempotencyKey: 'request-1', operation: 'image_generation',
+  });
+  assert.equal(job.id, 'g-existing');
+  assert.equal(pool.calls.filter((call) => /INSERT INTO credit_ledger/.test(call.text)).length, 0);
+  assert.equal(pool.calls.at(-1).text, 'COMMIT');
+});
+
+test('rejects reservation when the workspace balance is insufficient', async () => {
+  const pool = poolFor({ balance: '2' });
+  await assert.rejects(
+    createImageGenerationJobWithReservation(pool, 'w1', { prompt: 'fox', model: 'flux-dev', idempotencyKey: 'request-1', operation: 'image_generation' }),
+    /Insufficient credits/,
+  );
+  assert.equal(pool.calls.at(-1).text, 'ROLLBACK');
+});

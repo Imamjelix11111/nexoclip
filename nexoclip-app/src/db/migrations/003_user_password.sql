@@ -1,0 +1,6 @@
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS password_hash TEXT;
+
+ALTER TABLE users
+  ALTER COLUMN email SET NOT NULL,
+  ALTER COLUMN password_hash SET NOT NULL;

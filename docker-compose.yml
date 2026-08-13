@@ -1,0 +1,66 @@
+# Monorepo orchestrator. Run from the repo root: `docker compose up --build`.
+#   nexoclip-app         -> ./nexoclip-app        (Next.js app)
+#   ai-storyboard        -> ./nexoclip-app/services/vimax (Python agent behind web/server.mjs)
+#   nexoclip-postgres    -> database
+services:
+  nexoclip-postgres:
+    image: postgres:16-alpine
+    container_name: nexoclip-postgres
+    environment:
+      POSTGRES_DB: nexoclip
+      POSTGRES_USER: nexoclip
+      POSTGRES_PASSWORD: nexoclip_dev
+    ports:
+      - "5434:5432"
+    volumes:
+      - nexoclip-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexoclip -d nexoclip"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  ai-storyboard:
+    build: ./nexoclip-app/services/vimax
+    container_name: ai-storyboard
+    environment:
+      VIMAX_WEB_HOST: 0.0.0.0
+      VIMAX_WEB_PORT: 4173
+    volumes:
+      - ai-storyboard-work:/app/.working_dir
+      - ai-storyboard-state:/app/.vimax
+    restart: unless-stopped
+
+  nexoclip-app:
+    build: ./nexoclip-app
+    container_name: nexoclip-app
+    ports:
+      - "3005:3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
+      # Where the Next proxy forwards /api/vimax/* — the standalone engine service.
+      VIMAX_SERVICE_URL: http://ai-storyboard:4173
+      # Server-only MuAPI key (set via shell env or a root .env file). Never NEXT_PUBLIC_.
+      MUAPI_API_KEY: ${MUAPI_API_KEY:-}
+      # Google OAuth (server-only). Pin the origin so the redirect_uri matches what
+      # is registered in the Google Cloud console.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_OAUTH_ORIGIN: ${GOOGLE_OAUTH_ORIGIN:-}
+    depends_on:
+      nexoclip-postgres:
+        condition: service_healthy
+      ai-storyboard:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  # Reuse the existing dev database data (created by the old `open-generative-ai`
+  # compose project) so accounts/workflows carry over.
+  nexoclip-postgres-data:
+    external: true
+    name: open-generative-ai_nexoclip-postgres-data
+  ai-storyboard-work:
+  ai-storyboard-state:

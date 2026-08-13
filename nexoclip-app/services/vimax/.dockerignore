@@ -1,0 +1,10 @@
+# Never copy host-specific or generated state into the image.
+.venv
+web/node_modules
+web/dist
+.working_dir
+.vimax
+**/__pycache__
+*.pyc
+.git
+.DS_Store
