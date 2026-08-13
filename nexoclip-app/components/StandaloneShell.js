@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import AccountMenu from './AccountMenu';
+import AssetsContent from './AssetsContent';
 // Default tab is kept static so the first paint of /studio has no loading flash.
 import { ImageStudio } from 'studio';
 
@@ -738,7 +739,8 @@ export default function StandaloneShell({ initialTab, children }) {
                     </div>
 
                     <a
-                      href="/assets"
+                      href="/studio/assets"
+                      onClick={(event) => handleNavigationItemClick(event, 'assets')}
                       aria-label="Assets"
                       title={isCollapsed ? 'Assets' : undefined}
                       className={`group relative mb-3 flex items-center rounded-lg border-b border-white/[0.06] pb-3 text-white/55 transition-colors duration-150 hover:bg-white/[0.04] hover:text-white ${
@@ -779,7 +781,7 @@ export default function StandaloneShell({ initialTab, children }) {
 
         {/* Studio Content */}
         <div className="flex-1 min-h-0 h-full relative overflow-hidden bg-[#030303]">
-        {activeTab === 'assets' ? <div className="h-full w-full overflow-auto">{children}</div> : <div className={activeTab === 'image' ? "h-full w-full" : "hidden"}>
+        {activeTab === 'assets' ? <div className="h-full w-full overflow-auto"><AssetsContent /></div> : <div className={activeTab === 'image' ? "h-full w-full" : "hidden"}>
           <ImageStudio apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('image')} onGenerationEnd={makeGenerationEndCallback('image')} onGenerationComplete={makeSuccessCallback('image')} onGenerationError={makeErrorCallback('image')} />
         </div>}
         {activeTab === 'video' && (
