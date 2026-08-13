@@ -717,6 +717,13 @@ export default function StandaloneShell({ initialTab, children }) {
                     <div className={`space-y-0.5 ${isCollapsed ? 'mb-1' : 'mb-3 pb-3 border-b border-white/[0.06]'}`}>
                       <a
                         href="/ai-storyboard"
+                        onClick={(event) => {
+                          if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
+                            event.preventDefault();
+                            setIsMobileOpen(false);
+                            router.push('/ai-storyboard');
+                          }
+                        }}
                         aria-label="AI Storyboard"
                         title={isCollapsed ? 'AI Storyboard' : undefined}
                         className={`
