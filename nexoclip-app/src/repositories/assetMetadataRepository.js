@@ -9,3 +9,14 @@ export async function createGeneratedAsset(client, {
   );
   return result.rows[0];
 }
+
+export async function listAssets(client, workspaceId) {
+  const result = await client.query(
+    `SELECT id, workspace_id, storage_key, filename, content_type, size_bytes, created_at
+     FROM assets
+     WHERE workspace_id = $1
+     ORDER BY created_at DESC`,
+    [workspaceId],
+  );
+  return result.rows;
+}

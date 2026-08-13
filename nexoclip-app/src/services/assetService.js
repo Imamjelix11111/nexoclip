@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { getPool } from '../db/pool.js';
 import { LocalObjectStorage } from '../storage/localObjectStorage.js';
+import { listAssets } from '../repositories/assetMetadataRepository.js';
 
 const allowedContentTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'audio/mpeg', 'audio/wav']);
 const maxSizeBytes = 50 * 1024 * 1024;
@@ -34,6 +35,19 @@ export async function createAssetUpload(workspaceId, input, storage = createStor
     [assetId, workspaceId, key, metadata.filename, metadata.contentType, metadata.sizeBytes],
   );
   return { asset: result.rows[0], upload };
+}
+
+export async function listWorkspaceAssets(workspaceId) {
+  if (!workspaceId) throw new Error('workspace_id is required');
+  const result = await getPool().query(
+    `SELECT id, workspace_id, storage_key, filename, content_type, size_bytes, created_at
+     FROM assets WHERE workspace_id = $1 ORDER BY created_at DESC`,
+    [workspaceId],
+  );
+  return result.rows.map((asset) => ({
+    ...asset,
+    url: process.env.R2_PUBLIC_URL ? `${process.env.R2_PUBLIC_URL.replace(/\/+$/, '')}/${asset.storage_key.split('/').map(encodeURIComponent).join('/')}` : null,
+  }));
 }
 
 export async function createAssetDownload(workspaceId, assetId, storage = createStorage()) {
