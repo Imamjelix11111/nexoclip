@@ -1271,6 +1271,7 @@ export default function ImageStudio({
     setGenerateError(null);
 
     try {
+      const workspaceId = typeof window !== "undefined" ? window.sessionStorage.getItem("nexoclip_workspace_id") : null;
       const results = await Promise.all(
         Array.from({ length: batchSize }).map(async () => {
           if (imageMode) {
@@ -1286,6 +1287,7 @@ export default function ImageStudio({
               genParams[currentQualityField] = selectedQuality;
             }
             if (showEffectBtn && selectedEffect) genParams.name = selectedEffect;
+            genParams.workspace_id = workspaceId;
             return await generateI2I(apiKey, genParams);
           } else {
             const genParams = {
@@ -1296,6 +1298,7 @@ export default function ImageStudio({
             if (currentQualityField && selectedQuality) {
               genParams[currentQualityField] = selectedQuality;
             }
+            genParams.workspace_id = workspaceId;
             return generateImage(apiKey, genParams);
           }
         })

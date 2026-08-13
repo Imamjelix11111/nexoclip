@@ -70,7 +70,7 @@ export async function generateImage(_apiKey, params) {
     if (params.image_url) payload.input_references = [{ type: 'image_url', image_url: { url: params.image_url } }];
     if (params.images_list?.length) payload.input_references = params.images_list.map((url) => ({ type: 'image_url', image_url: { url } }));
     if (params.seed !== undefined && params.seed !== -1) payload.seed = params.seed;
-    const response = await fetch('/api/openrouter/images', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const response = await fetch('/api/openrouter/images', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(params.workspace_id ? { 'x-workspace-id': params.workspace_id } : {}) }, body: JSON.stringify(payload) });
     if (!response.ok) throw new Error(`OpenRouter image request failed: ${response.status}`);
     return response.json();
 }
@@ -85,7 +85,7 @@ export async function generateI2I(_apiKey, params) {
     if (params.aspect_ratio) payload.aspect_ratio = params.aspect_ratio;
     if (params.resolution) payload.resolution = params.resolution;
     if (params.quality) payload.quality = params.quality;
-    const response = await fetch('/api/openrouter/images', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const response = await fetch('/api/openrouter/images', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(params.workspace_id ? { 'x-workspace-id': params.workspace_id } : {}) }, body: JSON.stringify(payload) });
     if (!response.ok) throw new Error(`OpenRouter image request failed: ${response.status}`);
     return response.json();
 }
