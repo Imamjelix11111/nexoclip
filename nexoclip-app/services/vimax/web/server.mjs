@@ -5,7 +5,7 @@ import path from 'node:path';
 import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {readAgentConfig, saveAgentConfig} from './config-store.mjs';
-import {TENANT_HEADER, tenantIdFromRequest, tenantRoot} from './tenant.mjs';
+import {TENANT_HEADER, tenantIdFromRequest, tenantRoot, workspaceIdFromRequest} from './tenant.mjs';
 import {
   artifactContentType,
   deleteSession,
@@ -41,7 +41,7 @@ let vite = null;
 // and it sets the tenant header from the authenticated session. Fall back to a
 // shared "default" tenant for direct/dev access without a proxy.
 function tenantIdOf(request) {
-  return tenantIdFromRequest(request, {production: isProduction});
+  return workspaceIdFromRequest(request, {production: isProduction}) || tenantIdFromRequest(request, {production: isProduction});
 }
 
 function tenantRootOf(tenantId) {
@@ -75,8 +75,10 @@ function touchTenant(tenantId, tenant) {
 const server = createServer(async (request, response) => {
   const url = new URL(request.url || '/', `http://${request.headers.host || `${host}:${port}`}`);
   try {
+    const workspaceId = workspaceIdFromRequest(request, {production: isProduction});
     const tenantId = tenantIdOf(request);
     const tenant = getTenant(tenantId);
+    tenant.workspaceId = workspaceId || tenantId;
     if (url.pathname === '/api/events' && request.method === 'GET') {
       return openEventStream(request, response, tenant);
     }
@@ -215,6 +217,11 @@ async function startAgent(tenantId, {newSession, sessionId, projectName = ''}) {
   if (newSession && sessionId) throw new Error('Choose either a new or existing session');
   const tenant = getTenant(tenantId);
   const tenantRoot = await ensureTenantRoot(tenantId);
+  if (!tenant.workspaceId) {
+    const error = new Error('Workspace identity is required');
+    error.statusCode = 401;
+    throw error;
+  }
 
   stopAgent(tenantId, 'switch');
   if (countActiveAgents() >= MAX_ACTIVE_AGENTS) evictLruAgent(tenantId);
@@ -234,6 +241,7 @@ async function startAgent(tenantId, {newSession, sessionId, projectName = ''}) {
     env: {
       ...process.env,
       VIMAX_WORKSPACE_ROOT: tenantRoot,
+      VIMAX_CREDITS_WORKSPACE_ID: tenant.workspaceId,
       VIMAX_LLM_MODEL: modelSelections.models.llm,
       VIMAX_IMAGE_MODEL: modelSelections.models.image,
     },

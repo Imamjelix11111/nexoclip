@@ -9,6 +9,11 @@ export async function getUserWorkspaces(userId) {
   return listUserWorkspaces(getPool(), userId);
 }
 
+export async function getDefaultWorkspace(userId) {
+  const workspaces = await getUserWorkspaces(userId);
+  return workspaces[0] || null;
+}
+
 export async function requireWorkspaceMembership({ userId, workspaceId }) {
   if (!userId || !workspaceId) return null;
   return findWorkspaceMembership(getPool(), workspaceId, userId);

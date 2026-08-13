@@ -5,6 +5,7 @@
 // Same code path in dev and in Docker — only VIMAX_SERVICE_URL changes.
 import { SESSION_COOKIE } from '../../../../src/lib/auth/session.js';
 import { getCurrentSession } from '../../../../src/services/authService.js';
+import { getDefaultWorkspace } from '../../../../src/services/workspaceService.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -32,6 +33,12 @@ async function proxy(request, ctx) {
   if (!TENANT_PATTERN.test(tenantId)) {
     return Response.json({error: 'Invalid authenticated tenant'}, {status: 401});
   }
+  // MVP: use the user's first workspace. The credit ledger is always workspace-scoped;
+  // a future workspace picker only needs to replace this resolver.
+  const workspace = await getDefaultWorkspace(tenantId);
+  if (!workspace?.id) {
+    return Response.json({error: 'No workspace is available'}, {status: 403});
+  }
 
   const {path = []} = await ctx.params;
   const {search} = new URL(request.url);
@@ -40,7 +47,7 @@ async function proxy(request, ctx) {
   const hasBody = request.method !== 'GET' && request.method !== 'HEAD';
   const init = {
     method: request.method,
-    headers: {[TENANT_HEADER]: tenantId},
+    headers: {[TENANT_HEADER]: tenantId, 'x-nexoclip-workspace': workspace.id},
     // Stream the request body through (JSON messages and multipart uploads alike).
     ...(hasBody ? {body: request.body, duplex: 'half'} : {}),
     redirect: 'manual',
