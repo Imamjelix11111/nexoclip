@@ -4,6 +4,8 @@ web/node_modules
 web/dist
 .working_dir
 .vimax
+# Local provider credentials must never be baked into the service image.
+configs/agent.local.yaml
 **/__pycache__
 *.pyc
 .git

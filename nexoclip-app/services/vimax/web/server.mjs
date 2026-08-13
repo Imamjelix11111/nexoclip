@@ -84,12 +84,12 @@ const server = createServer(async (request, response) => {
     if (url.pathname === '/api/sessions' && request.method === 'GET') {
       return sendJson(response, 200, await readSessionState(tenantRoot));
     }
-    if (url.pathname === '/api/config' && request.method === 'GET') {
+    if (url.pathname === '/api/models' && request.method === 'GET') {
       return sendJson(response, 200, await readAgentConfig(tenantRoot));
     }
-    if (url.pathname === '/api/config' && request.method === 'PUT') {
+    if (url.pathname === '/api/models' && request.method === 'PUT') {
       const config = await saveAgentConfig(tenantRoot, await readJsonBody(request));
-      stopAgent(tenantId, 'config');
+      stopAgent(tenantId, 'models');
       return sendJson(response, 200, config);
     }
     if (url.pathname === '/api/sessions' && request.method === 'DELETE') {
@@ -220,6 +220,7 @@ async function startAgent(tenantId, {newSession, sessionId, projectName = ''}) {
   if (countActiveAgents() >= MAX_ACTIVE_AGENTS) evictLruAgent(tenantId);
 
   const {command, args} = agentCommand();
+  const modelSelections = await readAgentConfig(tenantRoot);
   const sessionArgs = newSession
     ? ['--new-session', ...(projectName ? ['--new-session-name', projectName] : [])]
     : sessionId
@@ -230,7 +231,12 @@ async function startAgent(tenantId, {newSession, sessionId, projectName = ''}) {
     cwd: repoRoot,
     // Data (.vimax / .working_dir) is namespaced per tenant via this env; cwd stays
     // repoRoot so Python imports, config, and assets still resolve.
-    env: {...process.env, VIMAX_WORKSPACE_ROOT: tenantRoot},
+    env: {
+      ...process.env,
+      VIMAX_WORKSPACE_ROOT: tenantRoot,
+      VIMAX_LLM_MODEL: modelSelections.models.llm,
+      VIMAX_IMAGE_MODEL: modelSelections.models.image,
+    },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
   tenant.agentProcess = child;
@@ -322,8 +328,8 @@ function stopAgent(tenantId, reason) {
   child.kill('SIGTERM');
   const message = reason === 'switch'
     ? 'Switching workspace'
-    : reason === 'config'
-      ? 'Configuration updated'
+    : reason === 'models'
+      ? 'Model selection updated'
       : reason === 'evicted'
         ? 'Paused to free capacity — reopen to resume'
         : reason === 'idle'

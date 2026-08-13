@@ -820,7 +820,9 @@ a:focus-visible {
 }
 
 .composer {
-  overflow: hidden;
+  /* The model picker opens above this panel; clipping here cut off its menu. */
+  overflow: visible;
+  padding: 16px;
   background: rgba(255, 255, 255, 0.98);
   border: 1px solid #d9dee4;
   border-radius: 32px;
@@ -836,10 +838,11 @@ a:focus-visible {
 .composer textarea {
   display: block;
   width: 100%;
-  min-height: 44px;
+  /* Keep the prompt surface tall by default, like Image Generation. */
+  min-height: 128px;
   max-height: 250px;
   resize: none;
-  padding: 16px 18px 4px;
+  padding: 4px 0 0;
   color: var(--ink);
   font-size: 14px;
   line-height: 1.625;
@@ -910,12 +913,11 @@ a:focus-visible {
 
 .composer-controls {
   display: flex;
-  min-height: 47px;
+  min-height: 38px;
   align-items: center;
   gap: 8px;
-  margin-top: 4px;
-  padding: 10px 10px 10px 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.03);
 }
 
 .composer-file-input {
@@ -924,8 +926,8 @@ a:focus-visible {
 
 .composer-add {
   display: grid;
-  width: 40px;
-  height: 40px;
+  width: 38px;
+  height: 38px;
   place-items: center;
   padding: 0;
   color: #555e68;
@@ -948,6 +950,112 @@ a:focus-visible {
 
 .composer-spacer {
   flex: 1;
+}
+
+.model-picker {
+  position: relative;
+}
+
+.model-picker-trigger {
+  display: inline-flex;
+  height: 38px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  color: rgba(255, 255, 255, 0.72);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(22, 22, 26, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.model-picker-trigger:hover,
+.model-picker-trigger.is-active {
+  color: #22d3ee;
+  background: rgba(34, 211, 238, 0.1);
+  border-color: rgba(34, 211, 238, 0.25);
+}
+
+.model-picker-mark {
+  color: #22d3ee;
+  font-size: 15px;
+}
+
+.model-picker-label {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-picker-chevron {
+  color: currentColor;
+  opacity: 0.45;
+}
+
+.model-picker-menu {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 0;
+  z-index: 50;
+  width: min(360px, calc(100vw - 32px));
+  max-height: min(52vh, 360px);
+  padding: 14px;
+  overflow-y: auto;
+  background: rgba(12, 12, 15, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(24px);
+}
+
+.model-picker-group + .model-picker-group {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.model-picker-group > span {
+  display: block;
+  padding: 0 4px 7px;
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.model-picker-group button {
+  display: block;
+  width: 100%;
+  padding: 9px 10px;
+  color: rgba(255, 255, 255, 0.7);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.model-picker-group button:hover,
+.model-picker-group button[aria-checked='true'] {
+  color: #22d3ee;
+  background: rgba(34, 211, 238, 0.1);
+}
+
+.model-picker-group button small {
+  display: block;
+  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.32);
+  font-size: 9px;
+  font-weight: 500;
 }
 
 .settings-view {
@@ -1955,14 +2063,17 @@ a:focus-visible {
 
 .send-button {
   display: grid;
-  width: 40px;
-  height: 40px;
+  width: auto;
+  min-width: 138px;
+  height: 46px;
   place-items: center;
-  padding: 0;
-  color: white;
-  background: #2b323a;
-  border: 0;
-  border-radius: 50%;
+  padding: 0 28px;
+  color: #060b0e;
+  font-size: 14px;
+  font-weight: 700;
+  background: #22d3ee;
+  border: 1px solid rgba(34, 211, 238, 0.1);
+  border-radius: 999px;
   cursor: pointer;
   transition: transform 120ms ease, background 120ms ease, box-shadow 120ms ease;
 }
@@ -2566,7 +2677,6 @@ html[data-theme='dark'] .send-button.stop {
   background: #252a30;
 }
 
-html[data-theme='dark'] .settings-save,
 html[data-theme='dark'] .dialog-actions button.primary {
   color: #111318;
   background: #eef1f4;
@@ -2585,7 +2695,6 @@ html[data-theme='dark'] .send-button:not(.stop):not(:disabled):hover {
   box-shadow: 0 10px 26px rgba(34, 211, 238, 0.32);
 }
 
-html[data-theme='dark'] .config-fields label > span,
 html[data-theme='dark'] .project-name-field > span {
   color: #aab0b8;
 }

@@ -17,9 +17,7 @@ import {
   PanelLeftOpen,
   PanelRight,
   Plus,
-  Save,
   Search,
-  Settings,
   ListChecks,
   Terminal,
   Trash2,
@@ -28,16 +26,16 @@ import {
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import {deleteSession, getAgentConfig, getArtifacts, getHistory, getSessions, saveAgentConfig, sendMessage, startAgent, stopAgent, subscribeToEvents, uploadWorkspaceFile} from './api';
+import {deleteSession, getArtifacts, getHistory, getModelSelections, getSessions, saveModelSelections, sendMessage, startAgent, stopAgent, subscribeToEvents, uploadWorkspaceFile} from './api';
 import {ArtifactsView, StoryboardPanel} from './ArtifactViews';
 import {applyAgentEvent, appendLocalUser, composeAgentPrompt, createChatState, humanize} from './events';
 import {matchingSlashCommands, shouldShowSlashCommands, type SlashCommandMatch} from './slashCommands';
 import {applyTheme} from './theme';
-import type {AgentConfig, AgentEvent, Artifact, ChatState, ConfigSection, Message, SessionSummary, WorkspaceUpload} from './types';
+import type {AgentEvent, Artifact, ChatState, Message, ModelSelections, SessionSummary, WorkspaceUpload} from './types';
 
 const CONTEXT_TARGET = 160_000;
 
-type WorkspaceView = 'workspace' | 'artifacts' | 'settings';
+type WorkspaceView = 'workspace' | 'artifacts';
 
 export default function App() {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
@@ -51,6 +49,8 @@ export default function App() {
   const [storyboardPanelOpen, setStoryboardPanelOpen] = useState(false);
   const [storyboardCount, setStoryboardCount] = useState(0);
   const [draft, setDraft] = useState('');
+  const [modelSelections, setModelSelections] = useState<ModelSelections>();
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [workspaceUploads, setWorkspaceUploads] = useState<WorkspaceUpload[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [loadError, setLoadError] = useState('');
@@ -118,7 +118,8 @@ export default function App() {
     let cancelled = false;
     void (async () => {
       try {
-        const state = await refreshSessions();
+        const [state, models] = await Promise.all([refreshSessions(), getModelSelections()]);
+        setModelSelections(models);
         if (cancelled || !state.activeSessionId) return;
         setSelectedSessionId(state.activeSessionId);
         const [history] = await Promise.all([
@@ -158,8 +159,9 @@ export default function App() {
   useEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
-    textarea.style.height = '0px';
-    textarea.style.height = `${Math.min(168, Math.max(28, textarea.scrollHeight))}px`;
+    textarea.style.height = 'auto';
+    const maxHeight = window.innerWidth < 768 ? 150 : 250;
+    textarea.style.height = `${Math.min(maxHeight, Math.max(40, textarea.scrollHeight))}px`;
   }, [draft]);
 
   useEffect(() => {
@@ -276,6 +278,21 @@ export default function App() {
     setChat((current) => ({...current, busy: false}));
   }
 
+  async function selectModel(group: 'llm' | 'image', model: string) {
+    if (!modelSelections || modelSelections.models[group] === model) {
+      setModelMenuOpen(false);
+      return;
+    }
+    try {
+      const next = await saveModelSelections({...modelSelections.models, [group]: model});
+      setModelSelections(next);
+      setModelMenuOpen(false);
+      setAgentReady(false);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   async function confirmDelete() {
     if (!pendingDelete || deleting) return;
     const sessionId = pendingDelete.sessionId;
@@ -323,10 +340,6 @@ export default function App() {
           setWorkspaceView('artifacts');
           setMobileSidebarOpen(false);
         }}
-        onSettings={() => {
-          setWorkspaceView('settings');
-          setMobileSidebarOpen(false);
-        }}
         onDelete={setPendingDelete}
       />
 
@@ -360,10 +373,7 @@ export default function App() {
                   <PanelLeftOpen size={18} />
                 </button>
               )}
-              <div className="workspace-title-copy">
-                <strong>{workspaceView === 'settings' ? 'Settings' : 'Artifacts'}</strong>
-                {workspaceView === 'settings' && <span>configs/agent.local.yaml</span>}
-              </div>
+              <div className="workspace-title-copy"><strong>Artifacts</strong></div>
             </div>
           </header>
         )}
@@ -379,10 +389,8 @@ export default function App() {
               </div>
             )}
           </div>
-        ) : workspaceView === 'artifacts' ? (
-          <ArtifactsView session={selectedSession} artifacts={artifacts} />
         ) : (
-          <SettingsView />
+          <ArtifactsView session={selectedSession} artifacts={artifacts} />
         )}
 
         {workspaceView === 'workspace' && <div className="composer-zone">
@@ -455,11 +463,44 @@ export default function App() {
               >
                 <Plus size={20} />
               </button>
+              <div className="model-picker">
+                <button
+                  type="button"
+                  className={`model-picker-trigger ${modelMenuOpen ? 'is-active' : ''}`}
+                  onClick={() => setModelMenuOpen((open) => !open)}
+                  aria-expanded={modelMenuOpen}
+                  aria-haspopup="menu"
+                >
+                  <span className="model-picker-mark">✦</span>
+                  <span className="model-picker-label">{modelSelections?.options.llm.find((option) => option.id === modelSelections.models.llm)?.label || 'Agent model'}</span>
+                  <svg className="model-picker-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                </button>
+                {modelMenuOpen && modelSelections && (
+                  <div className="model-picker-menu" role="menu">
+                    {(['llm', 'image'] as const).map((group) => (
+                      <div key={group} className="model-picker-group">
+                        <span>{group === 'llm' ? 'Agent model' : 'Image model'}</span>
+                        {modelSelections.options[group].map((option) => (
+                          <button
+                            type="button"
+                            role="menuitemradio"
+                            aria-checked={modelSelections.models[group] === option.id}
+                            key={option.id}
+                            onClick={() => void selectModel(group, option.id)}
+                          >
+                            <span>{option.label}</span><small>{option.id}</small>
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div className="composer-spacer" />
               {chat.busy ? (
-                <button className="send-button stop" onClick={() => void stop()} aria-label="Stop generation"><CircleStop size={18} /></button>
+                <button className="send-button stop" onClick={() => void stop()} aria-label="Stop generation"><CircleStop size={17} /><span>Stop</span></button>
               ) : (
-                <button className="send-button" onClick={() => void submit()} disabled={!draft.trim() || uploadingFiles} aria-label="Send message"><ArrowUp size={19} /></button>
+                <button className="send-button" onClick={() => void submit()} disabled={!draft.trim() || uploadingFiles} aria-label="Send message"><span>Send message</span></button>
               )}
             </div>
           </div>
@@ -499,7 +540,7 @@ export default function App() {
   );
 }
 
-function Sidebar({open, mobileOpen, sessions, selectedSessionId, activeView, onToggle, onMobileClose, onNew, onSelect, onWorkspace, onArtifacts, onSettings, onDelete}: {
+function Sidebar({open, mobileOpen, sessions, selectedSessionId, activeView, onToggle, onMobileClose, onNew, onSelect, onWorkspace, onArtifacts, onDelete}: {
   open: boolean;
   mobileOpen: boolean;
   sessions: SessionSummary[];
@@ -511,7 +552,6 @@ function Sidebar({open, mobileOpen, sessions, selectedSessionId, activeView, onT
   onSelect: (sessionId: string) => void;
   onWorkspace: () => void;
   onArtifacts: () => void;
-  onSettings: () => void;
   onDelete: (session: SessionSummary) => void;
 }) {
   return (
@@ -529,7 +569,6 @@ function Sidebar({open, mobileOpen, sessions, selectedSessionId, activeView, onT
           <button onClick={onNew}><FolderPlus size={17} /><span>New project</span></button>
           <button className={activeView === 'workspace' ? 'is-active' : ''} onClick={onWorkspace}><Folder size={17} /><span>Workspace</span></button>
           <button className={activeView === 'artifacts' ? 'is-active' : ''} onClick={onArtifacts}><Files size={17} /><span>Artifacts</span></button>
-          <button className={activeView === 'settings' ? 'is-active' : ''} onClick={onSettings}><Settings size={17} /><span>Settings</span></button>
         </nav>
         <div className="session-section">
           <div className="section-label"><span>Projects</span><span>{sessions.length}</span></div>
@@ -648,103 +687,6 @@ function SlashCommandMenu({matches, contextPercent, onSelect}: {matches: SlashCo
         </button>
       )) : <span className="slash-command-empty">No matching commands</span>}
     </div>
-  );
-}
-
-const CONFIG_SECTIONS: Array<{key: keyof AgentConfig['sections']; title: string; description: string}> = [
-  {key: 'llm', title: 'Agent LLM', description: 'Planning, tool selection, and conversation'},
-  {key: 'image', title: 'Image generation', description: 'Characters, keyframes, and shot frames'},
-  {key: 'video', title: 'Video generation', description: 'Shot clips and final video'},
-  {key: 'embedding', title: 'Embedding', description: 'Optional novel retrieval'},
-  {key: 'reranker', title: 'Reranker', description: 'Optional novel retrieval ranking'},
-];
-
-function SettingsView() {
-  const [config, setConfig] = useState<AgentConfig>();
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [status, setStatus] = useState('');
-
-  useEffect(() => {
-    let cancelled = false;
-    void getAgentConfig()
-      .then((payload) => !cancelled && setConfig(payload))
-      .catch((error) => !cancelled && setStatus(error instanceof Error ? error.message : String(error)))
-      .finally(() => !cancelled && setLoading(false));
-    return () => { cancelled = true; };
-  }, []);
-
-  function update(section: keyof AgentConfig['sections'], field: keyof ConfigSection, value: string) {
-    setStatus('');
-    setConfig((current) => current ? {
-      sections: {
-        ...current.sections,
-        [section]: {...current.sections[section], [field]: value},
-      },
-    } : current);
-  }
-
-  async function save() {
-    if (!config || saving) return;
-    setSaving(true);
-    setStatus('');
-    try {
-      setConfig(await saveAgentConfig(config));
-      setStatus('Saved');
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  if (loading) return <div className="settings-loading">Loading configuration…</div>;
-  if (!config) return <div className="settings-loading is-error">{status || 'Configuration unavailable'}</div>;
-  return (
-    <section className="settings-view">
-      <header>
-        <div><span>Local configuration</span><h1>Settings</h1></div>
-        <div className="settings-save-group">
-          {status && <span className={status === 'Saved' ? 'is-saved' : 'is-error'}>{status}</span>}
-          <button className="settings-save" onClick={() => void save()} disabled={saving}>
-            <Save size={15} />{saving ? 'Saving…' : 'Save'}
-          </button>
-        </div>
-      </header>
-      <div className="settings-sections">
-        {CONFIG_SECTIONS.map((definition) => (
-          <ConfigSectionEditor
-            key={definition.key}
-            definition={definition}
-            value={config.sections[definition.key]}
-            onChange={(field, value) => update(definition.key, field, value)}
-          />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function ConfigSectionEditor({definition, value, onChange}: {
-  definition: {title: string; description: string};
-  value: ConfigSection;
-  onChange: (field: keyof ConfigSection, value: string) => void;
-}) {
-  return (
-    <section className="config-section">
-      <header><h2>{definition.title}</h2><p>{definition.description}</p></header>
-      <div className="config-fields">
-        {value.model_provider !== undefined && (
-          <label><span>Model provider</span><input value={value.model_provider} onChange={(event) => onChange('model_provider', event.target.value)} /></label>
-        )}
-        <label><span>Model</span><input value={value.model} onChange={(event) => onChange('model', event.target.value)} /></label>
-        <label className="config-field-wide"><span>Base URL</span><input value={value.base_url} onChange={(event) => onChange('base_url', event.target.value)} inputMode="url" /></label>
-        <label className="config-field-wide">
-          <span>API key <i className={value.has_api_key ? 'is-configured' : ''}>{value.has_api_key ? 'Configured' : 'Not configured'}</i></span>
-          <input type="password" value={value.api_key} onChange={(event) => onChange('api_key', event.target.value)} placeholder={value.has_api_key ? 'Leave blank to keep current key' : 'Enter API key'} autoComplete="off" />
-        </label>
-      </div>
-    </section>
   );
 }
 

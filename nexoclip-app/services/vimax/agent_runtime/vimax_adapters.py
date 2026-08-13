@@ -561,7 +561,7 @@ def _pipeline_progress(runtime: ToolRuntimeContext | None, session_id: str, *, s
 def _build_chat_model() -> Any:
     api_key = llm_api_key()
     if not api_key:
-        raise RuntimeError("VIMAX_LLM_API_KEY or configs/agent.local.yaml llm.api_key is required for narrative planning")
+        raise RuntimeError("OPENROUTER_API_KEY, VIMAX_LLM_API_KEY, or configs/agent.local.yaml llm.api_key is required for narrative planning")
     return init_chat_model(
         model=llm_model(),
         model_provider=llm_model_provider(),
@@ -576,7 +576,7 @@ def _build_chat_model() -> Any:
 def _build_image_generator() -> ImageGeneratorNanobananaYunwuAPI | ImageGeneratorOpenRouterAPI | ImageGeneratorNanobananaGoogleAPI:
     api_key = image_api_key()
     if not api_key:
-        raise RuntimeError("VIMAX_IMAGE_API_KEY, VIMAX_LLM_API_KEY, or configs/agent.local.yaml image/llm api_key is required for image generation")
+        raise RuntimeError("OPENROUTER_API_KEY, VIMAX_IMAGE_API_KEY, VIMAX_LLM_API_KEY, or configs/agent.local.yaml image/llm api_key is required for image generation")
     model = image_model()
     base_url = image_base_url()
     provider = api_provider_from_base_url(base_url)
@@ -590,7 +590,7 @@ def _build_image_generator() -> ImageGeneratorNanobananaYunwuAPI | ImageGenerato
 def _build_video_generator() -> VideoGeneratorVeoYunwuAPI | VideoGeneratorOpenRouterAPI | VideoGeneratorSoraOpenAIAPI:
     api_key = video_api_key()
     if not api_key:
-        raise RuntimeError("VIMAX_VIDEO_API_KEY, VIMAX_LLM_API_KEY, or configs/agent.local.yaml video/llm api_key is required for video generation")
+        raise RuntimeError("OPENROUTER_API_KEY, VIMAX_VIDEO_API_KEY, VIMAX_LLM_API_KEY, or configs/agent.local.yaml video/llm api_key is required for video generation")
     model = video_model()
     base_url = video_base_url()
     provider = video_provider().strip().lower()
@@ -613,7 +613,7 @@ def _build_embedding_model() -> Any:
     base_url = embedding_base_url()
     provider = embedding_model_provider().strip().lower()
     if not api_key or not base_url:
-        raise RuntimeError("VIMAX_EMBEDDING_API_KEY or configs/agent.local.yaml embedding api_key/base_url is required for novel planning")
+        raise RuntimeError("OPENROUTER_API_KEY, VIMAX_EMBEDDING_API_KEY, or configs/agent.local.yaml embedding api_key/base_url is required for novel planning")
     if provider != "openai":
         raise RuntimeError(f"Unsupported embedding model_provider: {provider}")
     return OpenAIEmbeddings(model=embedding_model(), api_key=api_key, base_url=base_url)
@@ -623,14 +623,14 @@ def _build_reranker() -> RerankerBgeSiliconapi:
     api_key = reranker_api_key()
     base_url = reranker_base_url()
     if not api_key or not base_url:
-        raise RuntimeError("VIMAX_RERANKER_API_KEY or configs/agent.local.yaml reranker api_key/base_url is required for novel planning")
+        raise RuntimeError("OPENROUTER_API_KEY, VIMAX_RERANKER_API_KEY, or configs/agent.local.yaml reranker api_key/base_url is required for novel planning")
     return RerankerBgeSiliconapi(api_key=api_key, base_url=base_url, model=reranker_model())
 
 
 def _build_novel_pipeline(working_dir: Path) -> Novel2MoviePipeline:
     api_key = llm_api_key()
     if not api_key:
-        raise RuntimeError("VIMAX_LLM_API_KEY or configs/agent.local.yaml llm.api_key is required for novel planning")
+        raise RuntimeError("OPENROUTER_API_KEY, VIMAX_LLM_API_KEY, or configs/agent.local.yaml llm.api_key is required for novel planning")
     base_url = llm_base_url()
     model = llm_model()
     dummy = _UnavailableGenerator()
@@ -651,7 +651,7 @@ def _build_novel_pipeline(working_dir: Path) -> Novel2MoviePipeline:
 def _build_novel_render_pipeline(working_dir: Path, chat_model: Any, image_generator: Any, video_generator: Any) -> Novel2MoviePipeline:
     api_key = llm_api_key()
     if not api_key:
-        raise RuntimeError("VIMAX_LLM_API_KEY or configs/agent.local.yaml llm.api_key is required for novel rendering")
+        raise RuntimeError("OPENROUTER_API_KEY, VIMAX_LLM_API_KEY, or configs/agent.local.yaml llm.api_key is required for novel rendering")
     base_url = llm_base_url()
     model = llm_model()
     script_pipeline = Script2VideoPipeline(chat_model=chat_model, image_generator=image_generator, video_generator=video_generator, working_dir=str(working_dir / "videos"))

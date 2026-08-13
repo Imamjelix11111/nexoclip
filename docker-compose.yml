@@ -27,6 +27,8 @@ services:
     environment:
       VIMAX_WEB_HOST: 0.0.0.0
       VIMAX_WEB_PORT: 4173
+      # Shared server-side OpenRouter key for ViMax's LLM, image, video, embedding, and reranking adapters.
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
     volumes:
       - ai-storyboard-work:/app/.working_dir
       - ai-storyboard-state:/app/.vimax

@@ -2,36 +2,42 @@ import {mkdir, readFile, rename, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {parse, stringify} from 'yaml';
 
-const SECTION_FIELDS = {
-  llm: ['model_provider', 'model', 'base_url'],
-  image: ['model', 'base_url'],
-  video: ['model', 'base_url'],
-  embedding: ['model_provider', 'model', 'base_url'],
-  reranker: ['model', 'base_url'],
+export const MODEL_OPTIONS = {
+  llm: [
+    {id: 'openai/gpt-oss-20b:free', label: 'GPT OSS 20B'},
+    {id: 'openai/gpt-oss-20b', label: 'GPT OSS 20B (paid)'},
+    {id: 'openai/gpt-5-nano', label: 'GPT-5 Nano'},
+  ],
+  image: [
+    {id: 'google/gemini-3.1-flash-lite-image', label: 'Nano Banana 2 Lite'},
+    {id: 'google/gemini-2.5-flash-image', label: 'Nano Banana'},
+    {id: 'openai/gpt-5-image-mini', label: 'GPT-5 Image Mini'},
+  ],
 };
 
-export async function readAgentConfig(repoRoot) {
-  const {payload} = await loadConfig(repoRoot);
+const DEFAULT_MODELS = {
+  llm: 'openai/gpt-oss-20b:free',
+  image: 'google/gemini-3.1-flash-lite-image',
+};
+
+export async function readAgentConfig(workspaceRoot) {
+  const {payload} = await loadConfig(workspaceRoot);
   return publicConfig(payload);
 }
 
-export async function saveAgentConfig(repoRoot, input) {
-  if (!input || typeof input !== 'object' || !input.sections || typeof input.sections !== 'object') {
-    throw new Error('Configuration sections are required');
+export async function saveAgentConfig(workspaceRoot, input) {
+  if (!input || typeof input !== 'object' || !input.models || typeof input.models !== 'object') {
+    throw new Error('Model selections are required');
   }
-  const {configPath, payload} = await loadConfig(repoRoot);
-  for (const [section, fields] of Object.entries(SECTION_FIELDS)) {
-    const update = input.sections[section];
-    if (!update || typeof update !== 'object') continue;
-    const current = payload[section] && typeof payload[section] === 'object' ? payload[section] : {};
-    for (const field of fields) {
-      if (!(field in update)) continue;
-      current[field] = validatedValue(update[field], `${section}.${field}`, 2_048);
+  const {configPath, payload} = await loadConfig(workspaceRoot);
+  for (const [group, model] of Object.entries(input.models)) {
+    if (!(group in MODEL_OPTIONS)) throw new Error(`Unknown model group: ${group}`);
+    if (!MODEL_OPTIONS[group].some((option) => option.id === model)) {
+      throw new Error(`Unsupported ${group} model`);
     }
-    if (typeof update.api_key === 'string' && update.api_key.trim()) {
-      current.api_key = validatedValue(update.api_key, `${section}.api_key`, 8_192);
-    }
-    payload[section] = current;
+    const section = payload[group] && typeof payload[group] === 'object' ? payload[group] : {};
+    section.model = model;
+    payload[group] = section;
   }
   await mkdir(path.dirname(configPath), {recursive: true, mode: 0o700});
   const temporaryPath = `${configPath}.${process.pid}.tmp`;
@@ -40,8 +46,8 @@ export async function saveAgentConfig(repoRoot, input) {
   return publicConfig(payload);
 }
 
-async function loadConfig(repoRoot) {
-  const configPath = path.join(repoRoot, 'configs', 'agent.local.yaml');
+async function loadConfig(workspaceRoot) {
+  const configPath = path.join(workspaceRoot, 'configs', 'agent.local.yaml');
   let text = '';
   try {
     text = await readFile(configPath, 'utf8');
@@ -56,24 +62,10 @@ async function loadConfig(repoRoot) {
 }
 
 function publicConfig(payload) {
-  const sections = {};
-  for (const [section, fields] of Object.entries(SECTION_FIELDS)) {
-    const source = payload[section] && typeof payload[section] === 'object' ? payload[section] : {};
-    const result = {};
-    for (const field of fields) result[field] = typeof source[field] === 'string' ? source[field] : '';
-    result.api_key = '';
-    result.has_api_key = Boolean(typeof source.api_key === 'string' && source.api_key.trim());
-    sections[section] = result;
-  }
-  return {sections};
-}
-
-function validatedValue(value, label, maxLength) {
-  if (typeof value !== 'string') throw new Error(`${label} must be a string`);
-  const normalized = value.trim();
-  if (normalized.length > maxLength) throw new Error(`${label} is too long`);
-  if (label.endsWith('.base_url') && normalized && !/^https?:\/\//i.test(normalized)) {
-    throw new Error(`${label} must use http:// or https://`);
-  }
-  return normalized;
+  const models = Object.fromEntries(Object.entries(MODEL_OPTIONS).map(([group, options]) => {
+    const configured = payload[group]?.model;
+    const model = options.some((option) => option.id === configured) ? configured : DEFAULT_MODELS[group];
+    return [group, model];
+  }));
+  return {models, options: MODEL_OPTIONS};
 }

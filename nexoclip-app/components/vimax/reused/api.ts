@@ -1,4 +1,4 @@
-import type {AgentConfig, AgentEvent, Artifact, JsonValue, Message, SessionSummary, WorkspaceUpload} from './types';
+import type {AgentEvent, Artifact, JsonValue, Message, ModelSelections, SessionSummary, WorkspaceUpload} from './types';
 
 export async function getSessions() {
   return request<{activeSessionId: string; sessions: SessionSummary[]}>('/api/vimax/sessions');
@@ -8,14 +8,13 @@ export async function deleteSession(sessionId: string) {
   return request<{activeSessionId: string; sessions: SessionSummary[]}>(`/api/vimax/sessions?session=${encodeURIComponent(sessionId)}`, {method: 'DELETE'});
 }
 
-export async function getAgentConfig() {
-  return request<AgentConfig>('/api/vimax/config');
+export async function getModelSelections() {
+  return request<ModelSelections>('/api/vimax/models');
 }
 
-export async function saveAgentConfig(config: AgentConfig) {
-  return request<AgentConfig>('/api/vimax/config', {method: 'PUT', body: JSON.stringify(config)});
+export async function saveModelSelections(models: ModelSelections['models']) {
+  return request<ModelSelections>('/api/vimax/models', {method: 'PUT', body: JSON.stringify({models})});
 }
-
 export async function getHistory(sessionId: string) {
   return request<{messages: Message[]}>(`/api/vimax/history?session=${encodeURIComponent(sessionId)}`);
 }

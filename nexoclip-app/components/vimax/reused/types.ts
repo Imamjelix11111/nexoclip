@@ -10,16 +10,11 @@ export type SessionSummary = {
   compactionTurns: number;
 };
 
-export type ConfigSection = {
-  model_provider?: string;
-  model: string;
-  base_url: string;
-  api_key: string;
-  has_api_key: boolean;
-};
+export type ModelOption = {id: string; label: string};
 
-export type AgentConfig = {
-  sections: Record<'llm' | 'image' | 'video' | 'embedding' | 'reranker', ConfigSection>;
+export type ModelSelections = {
+  models: Record<'llm' | 'image', string>;
+  options: Record<'llm' | 'image', ModelOption[]>;
 };
 
 export type Artifact = {

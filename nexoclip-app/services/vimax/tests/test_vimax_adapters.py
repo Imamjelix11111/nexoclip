@@ -152,18 +152,18 @@ class ViMaxAdapterTests(unittest.IsolatedAsyncioTestCase):
     def test_build_chat_model_uses_bounded_init_chat_model_kwargs(self):
         fake = FakeInitChatModel()
         with patch.dict("os.environ", {
-            "VIMAX_LLM_API_KEY": "test-key",
+            "OPENROUTER_API_KEY": "test-key",
             "VIMAX_LLM_MODEL": "test-model",
             "VIMAX_LLM_BASE_URL": "https://example.invalid/v1",
             "VIMAX_LLM_REQUEST_TIMEOUT_SECONDS": "12",
             "VIMAX_NARRATIVE_MAX_TOKENS": "1234",
-        }), patch("agent_runtime.vimax_adapters.init_chat_model", fake):
+        }, clear=True), patch("agent_runtime.vimax_adapters.init_chat_model", fake):
             from agent_runtime.vimax_adapters import _build_chat_model
 
             _build_chat_model()
 
         self.assertEqual(fake.calls[0]["model"], "test-model")
-        self.assertEqual(fake.calls[0]["base_url"], "https://example.invalid/v1")
+        self.assertEqual(fake.calls[0]["base_url"], "https://openrouter.ai/api/v1")
         self.assertEqual(fake.calls[0]["timeout"], 12.0)
         self.assertEqual(fake.calls[0]["max_retries"], 0)
         self.assertEqual(fake.calls[0]["max_completion_tokens"], 1234)

@@ -5,7 +5,6 @@ import { useState } from 'react';
 const panels = [
   { id: 'workspace', label: 'Workspace' },
   { id: 'artifacts', label: 'Artifacts' },
-  { id: 'settings', label: 'Settings' },
 ];
 
 const projects = [
@@ -90,7 +89,7 @@ export default function ViMaxStudioShell() {
           </div>
         ) : (
           <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-white/45">
-            {activePanel === 'artifacts' ? 'Generated artifacts will appear here.' : 'AI Storyboard configuration will appear here.'}
+            Generated artifacts will appear here.
           </div>
         )}
       </main>

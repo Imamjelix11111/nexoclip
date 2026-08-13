@@ -7,16 +7,17 @@ from typing import Any
 
 import yaml
 
-DEFAULT_LLM_MODEL = "gpt-5.5"
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+DEFAULT_LLM_MODEL = "openai/gpt-oss-20b:free"
 DEFAULT_LLM_MODEL_PROVIDER = "openai"
-DEFAULT_LLM_BASE_URL = "https://yunwu.ai/v1"
-DEFAULT_IMAGE_MODEL = "gemini-3.1-flash-image-preview"
-DEFAULT_IMAGE_BASE_URL = "https://yunwu.ai"
-DEFAULT_VIDEO_MODEL = "veo3.1-fast"
-DEFAULT_VIDEO_BASE_URL = "https://openrouter.ai/api/v1"
-DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
+DEFAULT_LLM_BASE_URL = OPENROUTER_BASE_URL
+DEFAULT_IMAGE_MODEL = "google/gemini-3.1-flash-lite-image"
+DEFAULT_IMAGE_BASE_URL = OPENROUTER_BASE_URL
+DEFAULT_VIDEO_MODEL = "bytedance/seedance-2.0"
+DEFAULT_VIDEO_BASE_URL = OPENROUTER_BASE_URL
+DEFAULT_EMBEDDING_MODEL = "nvidia/nemotron-3-embed-1b:free"
 DEFAULT_EMBEDDING_MODEL_PROVIDER = "openai"
-DEFAULT_RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
+DEFAULT_RERANKER_MODEL = "qwen/qwen3-reranker-8b"
 
 
 @lru_cache(maxsize=4)
@@ -51,15 +52,15 @@ def llm_model(workspace_root: str | Path = ".") -> str:
 
 
 def llm_model_provider(workspace_root: str | Path = ".") -> str:
-    return config_value("llm", "model_provider", ["VIMAX_LLM_MODEL_PROVIDER"], DEFAULT_LLM_MODEL_PROVIDER, workspace_root)
+    return DEFAULT_LLM_MODEL_PROVIDER
 
 
 def llm_base_url(workspace_root: str | Path = ".") -> str:
-    return config_value("llm", "base_url", ["VIMAX_LLM_BASE_URL"], DEFAULT_LLM_BASE_URL, workspace_root)
+    return OPENROUTER_BASE_URL
 
 
 def llm_api_key(workspace_root: str | Path = ".") -> str:
-    return config_value("llm", "api_key", ["VIMAX_LLM_API_KEY", "VIMAX_API_KEY"], "", workspace_root)
+    return os.environ.get("OPENROUTER_API_KEY", "")
 
 
 def image_model(workspace_root: str | Path = ".") -> str:
@@ -67,52 +68,52 @@ def image_model(workspace_root: str | Path = ".") -> str:
 
 
 def image_base_url(workspace_root: str | Path = ".") -> str:
-    return config_value("image", "base_url", ["VIMAX_IMAGE_BASE_URL"], DEFAULT_IMAGE_BASE_URL, workspace_root)
+    return OPENROUTER_BASE_URL
 
 
 def image_api_key(workspace_root: str | Path = ".") -> str:
-    return config_value("image", "api_key", ["VIMAX_IMAGE_API_KEY", "VIMAX_LLM_API_KEY", "VIMAX_API_KEY"], llm_api_key(workspace_root), workspace_root)
+    return llm_api_key(workspace_root)
 
 
 
 def embedding_model(workspace_root: str | Path = ".") -> str:
-    return config_value("embedding", "model", ["VIMAX_EMBEDDING_MODEL"], DEFAULT_EMBEDDING_MODEL, workspace_root)
+    return DEFAULT_EMBEDDING_MODEL
 
 
 def embedding_model_provider(workspace_root: str | Path = ".") -> str:
-    return config_value("embedding", "model_provider", ["VIMAX_EMBEDDING_MODEL_PROVIDER"], DEFAULT_EMBEDDING_MODEL_PROVIDER, workspace_root)
+    return DEFAULT_EMBEDDING_MODEL_PROVIDER
 
 
 def embedding_base_url(workspace_root: str | Path = ".") -> str:
-    return config_value("embedding", "base_url", ["VIMAX_EMBEDDING_BASE_URL"], "", workspace_root)
+    return OPENROUTER_BASE_URL
 
 
 def embedding_api_key(workspace_root: str | Path = ".") -> str:
-    return config_value("embedding", "api_key", ["VIMAX_EMBEDDING_API_KEY"], "", workspace_root)
+    return llm_api_key(workspace_root)
 
 
 def reranker_model(workspace_root: str | Path = ".") -> str:
-    return config_value("reranker", "model", ["VIMAX_RERANKER_MODEL"], DEFAULT_RERANKER_MODEL, workspace_root)
+    return DEFAULT_RERANKER_MODEL
 
 
 def reranker_base_url(workspace_root: str | Path = ".") -> str:
-    return config_value("reranker", "base_url", ["VIMAX_RERANKER_BASE_URL"], "", workspace_root)
+    return OPENROUTER_BASE_URL
 
 
 def reranker_api_key(workspace_root: str | Path = ".") -> str:
-    return config_value("reranker", "api_key", ["VIMAX_RERANKER_API_KEY"], "", workspace_root)
+    return llm_api_key(workspace_root)
 
 
 def video_model(workspace_root: str | Path = ".") -> str:
-    return config_value("video", "model", ["VIMAX_VIDEO_MODEL"], DEFAULT_VIDEO_MODEL, workspace_root)
+    return DEFAULT_VIDEO_MODEL
 
 
 def video_base_url(workspace_root: str | Path = ".") -> str:
-    return config_value("video", "base_url", ["VIMAX_VIDEO_BASE_URL"], DEFAULT_VIDEO_BASE_URL, workspace_root)
+    return OPENROUTER_BASE_URL
 
 
 def video_api_key(workspace_root: str | Path = ".") -> str:
-    return config_value("video", "api_key", ["VIMAX_VIDEO_API_KEY", "VIMAX_LLM_API_KEY", "VIMAX_API_KEY"], llm_api_key(workspace_root), workspace_root)
+    return llm_api_key(workspace_root)
 
 
 def api_provider_from_base_url(base_url: str) -> str:
