@@ -25,8 +25,7 @@ _RESPONSE_METADATA_KEYS = frozenset({
 })
 _PROGRESS_METADATA_KEYS = _RESPONSE_METADATA_KEYS | frozenset({"max_tokens", "scene_index"})
 _DROP = object()
-_FILE_URL = re.compile(r"file://[^\s\"'<>]+", re.IGNORECASE)
-_ABSOLUTE_PATH = re.compile(r"(?<![\w.-])(?:/[\w.~@%+=:,;()\[\]{}-]+)+(?:/)?|(?<![\w.-])[A-Za-z]:[\\/][^\s\"'<>]*")
+_ABSOLUTE_PATH = re.compile(r"(?<![\w.-])(?:/|[A-Za-z]:[\\/]|\\\\)[\s\S]*")
 
 
 class RuntimeExecutor:
@@ -141,5 +140,4 @@ class RuntimeExecutor:
     @staticmethod
     def _safe_text(value: Any) -> str:
         text = value if isinstance(value, str) else ""
-        text = _FILE_URL.sub("[redacted-path]", text)
         return _ABSOLUTE_PATH.sub("[redacted-path]", text)

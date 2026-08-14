@@ -181,9 +181,9 @@ def test_executor_response_dto_redacts_embedded_paths_and_drops_unknown_objects(
 
         async def vimax_render_video(self, args, runtime):
             runtime.emit_progress(
-                "render failed at /app/.tenants/workspace-1/private.mp4",
+                "render failed at /app/.tenants/workspace-1/private clip.mp4",
                 metadata={
-                    "error": "read file:///host/private/key.pem",
+                    "error": "read /app/.tenants/workspace-1/private clip.mp4",
                     "generated": ["artifacts/clip.mp4"],
                     "unknown": AbsolutePathString(),
                 },
@@ -191,9 +191,9 @@ def test_executor_response_dto_redacts_embedded_paths_and_drops_unknown_objects(
             return ToolResult(
                 "vimax_render_video",
                 False,
-                "failure at /app/.tenants/workspace-1/private.mp4",
+                "failure at /app/.tenants/workspace-1/private clip.mp4",
                 {
-                    "error": "read file:///host/private/key.pem",
+                    "error": "read /app/.tenants/workspace-1/private clip.mp4",
                     "generated": ["artifacts/clip.mp4"],
                     "unknown": AbsolutePathString(),
                 },
@@ -209,9 +209,10 @@ def test_executor_response_dto_redacts_embedded_paths_and_drops_unknown_objects(
     )
     rendered = str(result)
 
-    assert "/app/.tenants/workspace-1/private.mp4" not in rendered
-    assert "file:///host/private/key.pem" not in rendered
-    assert "/host/private/key.pem" not in rendered
+    assert "/app/.tenants/workspace-1/private clip.mp4" not in rendered
+    assert "[redacted-path] clip.mp4" not in rendered
+    assert result["result"]["error"] == "read [redacted-path]"
+    assert result["progress"][0]["progress"]["message"] == "render failed at [redacted-path]"
     assert "unknown" not in result["result"]
     assert result["result"]["generated"] == ["artifacts/clip.mp4"]
     assert result["progress"][0]["progress"]["metadata"]["generated"] == ["artifacts/clip.mp4"]

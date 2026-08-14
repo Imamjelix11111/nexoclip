@@ -92,6 +92,43 @@ The commit stages only the seven Task 2 file groups named above.
 - `asyncio.Lock` serialization is process-local by design. Multiple runtime replicas require a distributed workspace/session lock before concurrent deployment.
 - The existing `uv.lock` resolution selects newer compatible FastAPI/Uvicorn versions within the requested constraints; `uv lock --check` verifies the lock is reproducible.
 
+## Re-review 1 — spaced absolute-path response redaction
+
+### Red
+
+Updated the existing response-DTO regression to put the absolute POSIX path `/app/.tenants/workspace-1/private clip.mp4` in both runtime result and progress text, then ran:
+
+```text
+cd nexoclip-app/services/vimax && uv run pytest tests/test_runtime_api.py -q
+FAILED tests/test_runtime_api.py::test_executor_response_dto_redacts_embedded_paths_and_drops_unknown_objects
+assert '[redacted-path] clip.mp4' not in rendered
+1 failed, 7 passed, 1 warning
+```
+
+The prior component-restricted expression redacted only `/app/.tenants/workspace-1/private`, leaking the ` clip.mp4` suffix.
+
+### Green
+
+`_safe_text` now redacts from an embedded POSIX, drive-letter Windows, or UNC absolute-path marker through the remainder of the response text. This is deliberately conservative: arbitrary adapter/provider text after an absolute-path marker is not part of the allow-listed response representation and is removed rather than risking a filesystem-path leak.
+
+```text
+cd nexoclip-app/services/vimax && uv run pytest tests/test_runtime_api.py -q
+8 passed, 1 warning in 1.58s
+
+cd nexoclip-app/services/vimax && uv run pytest tests/test_vimax_adapters.py tests/test_main_agent_cli.py tests/test_runtime_api.py -q
+39 passed, 1 warning in 1.47s
+```
+
+The warning remains the existing upstream Starlette `TestClient`/`httpx` deprecation warning.
+
+### Commit
+
+`<pending>` — `fix: redact spaced runtime paths`
+
+### Concern
+
+The conservative sanitation intentionally removes the remainder of a text field after any absolute-path marker. This prioritizes the required no-path-disclosure guarantee over retaining untrusted adapter diagnostic detail.
+
 ## Review-finding remediation — runtime boundary
 
 ### Root cause and design
