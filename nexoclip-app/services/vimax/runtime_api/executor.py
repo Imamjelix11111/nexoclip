@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import re
 from pathlib import Path
@@ -16,6 +15,18 @@ ExecutionKind = Literal[
     "vimax_novel_planning",
     "vimax_render_video",
 ]
+
+_RESPONSE_METADATA_KEYS = frozenset({
+    "error", "error_type", "final_video_path", "generated", "missing", "present",
+    "ready_for_render", "ready_for_scene_render", "render_completed", "render_mode",
+    "render_started", "reused", "revised", "retryable", "revision_target",
+    "scene_count", "scene_render_completed", "scene_video_dirs", "scene_videos_dir",
+    "session_id", "stale", "timeout_seconds", "wrapped_error", "working_dir",
+})
+_PROGRESS_METADATA_KEYS = _RESPONSE_METADATA_KEYS | frozenset({"max_tokens", "scene_index"})
+_DROP = object()
+_FILE_URL = re.compile(r"file://[^\s\"'<>]+", re.IGNORECASE)
+_ABSOLUTE_PATH = re.compile(r"(?<![\w.-])(?:/[\w.~@%+=:,;()\[\]{}-]+)+(?:/)?|(?<![\w.-])[A-Za-z]:[\\/][^\s\"'<>]*")
 
 
 class RuntimeExecutor:
@@ -45,7 +56,7 @@ class RuntimeExecutor:
                 requested_name=kind,
                 canonical_name=kind,
                 turn_id=job_id,
-                progress_callback=lambda event: progress.append(self._safe_value(event)),
+                progress_callback=lambda event: progress.append(self._progress_dto(event)),
             )
             method = getattr(adapter, kind)
             result = await method({**args, "session_id": session_id or args.get("session_id", "")}, runtime)
@@ -53,7 +64,7 @@ class RuntimeExecutor:
         return {
             "job_id": job_id,
             "ok": result.ok,
-            "result": self._safe_value(result.metadata),
+            "result": self._result_dto(result.metadata),
             "progress": progress,
         }
 
@@ -81,20 +92,45 @@ class RuntimeExecutor:
             raise ValueError("Invalid session_id")
         return value
 
-    def _safe_value(self, value: Any) -> Any:
+    def _result_dto(self, metadata: Any) -> dict[str, Any]:
+        return self._metadata_dto(metadata, _RESPONSE_METADATA_KEYS)
+
+    def _progress_dto(self, event: Any) -> dict[str, Any]:
+        progress = event.get("progress", {}) if isinstance(event, dict) else {}
+        tool = event.get("tool", {}) if isinstance(event, dict) else {}
+        return {
+            "type": "tool_progress",
+            "tool": {"name": str(tool.get("name", ""))},
+            "progress": {
+                "stage": self._safe_text(progress.get("stage", "running")),
+                "message": self._safe_text(progress.get("message", "")),
+                "metadata": self._metadata_dto(progress.get("metadata"), _PROGRESS_METADATA_KEYS),
+            },
+        }
+
+    def _metadata_dto(self, metadata: Any, allowed_keys: frozenset[str]) -> dict[str, Any]:
+        if not isinstance(metadata, dict):
+            return {}
+        response: dict[str, Any] = {}
+        for key in allowed_keys:
+            value = self._safe_metadata_value(metadata.get(key, _DROP))
+            if value is not _DROP:
+                response[key] = value
+        return response
+
+    def _safe_metadata_value(self, value: Any) -> Any:
+        if value is _DROP:
+            return _DROP
         if isinstance(value, Path):
             return self._safe_path(value)
         if isinstance(value, str):
-            return self._safe_path_text(value)
-        if isinstance(value, dict):
-            return {str(key): self._safe_value(item) for key, item in value.items()}
-        if isinstance(value, (list, tuple)):
-            return [self._safe_value(item) for item in value]
-        try:
-            json.dumps(value)
-        except (TypeError, ValueError):
-            return str(value)
-        return value
+            return self._safe_text(value)
+        if value is None or isinstance(value, bool | int | float):
+            return value
+        if isinstance(value, list | tuple):
+            values = [self._safe_metadata_value(item) for item in value]
+            return [item for item in values if item is not _DROP]
+        return _DROP
 
     def _safe_path(self, path: Path) -> str:
         try:
@@ -102,8 +138,8 @@ class RuntimeExecutor:
         except ValueError:
             return path.name
 
-    def _safe_path_text(self, value: str) -> str:
-        path = Path(value)
-        if path.is_absolute():
-            return self._safe_path(path)
-        return value
+    @staticmethod
+    def _safe_text(value: Any) -> str:
+        text = value if isinstance(value, str) else ""
+        text = _FILE_URL.sub("[redacted-path]", text)
+        return _ABSOLUTE_PATH.sub("[redacted-path]", text)

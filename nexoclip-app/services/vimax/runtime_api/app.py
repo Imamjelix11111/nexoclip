@@ -5,9 +5,56 @@ from typing import Any, Literal
 from secrets import compare_digest
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from .executor import RuntimeExecutor
+
+
+MAX_EXECUTE_BODY_BYTES = 1_000_000
+EXECUTE_PATH_PREFIX = "/internal/v1/jobs/"
+
+
+class RuntimeBoundaryMiddleware:
+    """Authenticate and bound private execute bodies before FastAPI reads them."""
+
+    def __init__(self, app: Any) -> None:
+        self.app = app
+
+    async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
+        if scope["type"] != "http" or scope["method"] != "POST" or not scope["path"].startswith(EXECUTE_PATH_PREFIX):
+            await self.app(scope, receive, send)
+            return
+
+        headers = dict(scope["headers"])
+        expected = os.environ.get("VIMAX_RUNTIME_TOKEN", "")
+        token = headers.get(b"x-nexoclip-runtime-token", b"").decode("latin-1")
+        if not expected or not token or not compare_digest(token, expected):
+            await JSONResponse({"detail": "Unauthorized"}, status_code=status.HTTP_401_UNAUTHORIZED)(scope, receive, send)
+            return
+
+        body = bytearray()
+        while True:
+            message = await receive()
+            if message["type"] == "http.disconnect":
+                return
+            body.extend(message.get("body", b""))
+            if len(body) > MAX_EXECUTE_BODY_BYTES:
+                await JSONResponse({"detail": "Request body too large"}, status_code=status.HTTP_413_CONTENT_TOO_LARGE)(scope, receive, send)
+                return
+            if not message.get("more_body", False):
+                break
+
+        sent = False
+
+        async def replay_receive() -> dict[str, Any]:
+            nonlocal sent
+            if sent:
+                return {"type": "http.disconnect"}
+            sent = True
+            return {"type": "http.request", "body": bytes(body), "more_body": False}
+
+        await self.app(scope, replay_receive, send)
 
 
 class ExecuteRequest(BaseModel):
@@ -29,6 +76,7 @@ def require_runtime_token(
 
 def create_app(*, executor: RuntimeExecutor | Any | None = None) -> FastAPI:
     app = FastAPI()
+    app.add_middleware(RuntimeBoundaryMiddleware)
     runtime_executor = executor or RuntimeExecutor()
 
     @app.get("/healthz")
