@@ -43,6 +43,7 @@ export function createVimaxStoryboardJobHandler({
   getWorkspace = getDefaultWorkspace,
   reserve = createVimaxGenerationJobWithReservation,
   publish = publishReservedGeneration,
+  logError = console.error,
   pool = null,
 } = {}) {
   return async function POST(request) {
@@ -67,8 +68,15 @@ export function createVimaxStoryboardJobHandler({
       // leaves the queued row recoverable by the worker startup/interval recovery path.
       try {
         await publish({ pool: database });
-      } catch {
+      } catch (error) {
         // The durable row is the source of truth; recovery will safely publish it.
+        // Keep observability safe: do not log Redis URLs, credentials, or tokens.
+        logError({
+          event: 'vimax_job_publication_deferred',
+          jobId: job.id,
+          errorName: error?.name || 'Error',
+          errorCode: error?.code || null,
+        });
       }
       return Response.json({ id: job.id, status: job.status }, { status: 202 });
     } catch (error) {

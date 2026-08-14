@@ -20,11 +20,27 @@ const TENANT_PATTERN = /^[A-Za-z0-9._-]{1,128}$/;
 
 // Headers worth passing back to the browser (SSE, binary, JSON all covered).
 const PASS_THROUGH = ['content-type', 'cache-control', 'content-length', 'content-disposition', 'x-accel-buffering'];
+const LEGACY_READ_PATHS = new Set(['sessions', 'history', 'artifacts', 'artifact', 'models']);
+const LEGACY_WRITE_MESSAGE = 'Legacy ViMax writes are no longer available. Use durable storyboard jobs.';
 
-async function proxy(request, ctx) {
+export function createLegacyVimaxProxyHandler({
+  getSession = getCurrentSession,
+  getWorkspace = getDefaultWorkspace,
+  fetchFn = fetch,
+} = {}) {
+  return async function proxy(request, ctx) {
+  if (request.method !== 'GET') {
+    return Response.json({error: LEGACY_WRITE_MESSAGE}, {status: 410});
+  }
+
+  const {path = []} = await ctx.params;
+  const route = path.join('/');
+  if (!LEGACY_READ_PATHS.has(route)) {
+    return Response.json({error: 'Legacy ViMax route not found'}, {status: 404});
+  }
   // AI Storyboard is behind login — resolve the tenant from the session cookie.
   const token = request.cookies.get(SESSION_COOKIE)?.value;
-  const session = await getCurrentSession(token);
+  const session = await getSession(token);
   if (!session) {
     return Response.json({error: 'Not authenticated'}, {status: 401});
   }
@@ -35,14 +51,13 @@ async function proxy(request, ctx) {
   }
   // MVP: use the user's first workspace. The credit ledger is always workspace-scoped;
   // a future workspace picker only needs to replace this resolver.
-  const workspace = await getDefaultWorkspace(tenantId);
+  const workspace = await getWorkspace(tenantId);
   if (!workspace?.id) {
     return Response.json({error: 'No workspace is available'}, {status: 403});
   }
 
-  const {path = []} = await ctx.params;
   const {search} = new URL(request.url);
-  const target = `${SERVICE_URL}/api/${path.join('/')}${search}`;
+  const target = `${SERVICE_URL}/api/${route}${search}`;
 
   const hasBody = request.method !== 'GET' && request.method !== 'HEAD';
   const init = {
@@ -57,7 +72,7 @@ async function proxy(request, ctx) {
 
   let upstream;
   try {
-    upstream = await fetch(target, init);
+    upstream = await fetchFn(target, init);
   } catch (error) {
     return Response.json({error: `AI Storyboard service unreachable: ${error.message}`}, {status: 502});
   }
@@ -69,8 +84,10 @@ async function proxy(request, ctx) {
   }
   // The service already streams SSE/binary; hand its body straight to the client.
   return new Response(upstream.body, {status: upstream.status, headers});
+  };
 }
 
+const proxy = createLegacyVimaxProxyHandler();
 export const GET = proxy;
 export const POST = proxy;
 export const PUT = proxy;

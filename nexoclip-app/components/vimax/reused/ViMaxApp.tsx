@@ -3,7 +3,6 @@ import {
   ArrowUp,
   Brain,
   Braces,
-  CircleStop,
   Clock3,
   FilePenLine,
   FileText,
@@ -26,14 +25,12 @@ import {
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import {deleteSession, getArtifacts, getHistory, getModelSelections, getSessions, saveModelSelections, sendMessage, startAgent, stopAgent, subscribeToEvents, uploadWorkspaceFile} from './api';
+import {deleteSession, getArtifacts, getHistory, getModelSelections, getSessions, getVimaxJob, saveModelSelections, submitVimaxJob} from './api';
 import {ArtifactsView, StoryboardPanel} from './ArtifactViews';
-import {applyAgentEvent, appendLocalUser, composeAgentPrompt, createChatState, humanize} from './events';
-import {matchingSlashCommands, shouldShowSlashCommands, type SlashCommandMatch} from './slashCommands';
+import {createChatState, humanize} from './events';
+import {matchingSlashCommands, type SlashCommandMatch} from './slashCommands';
 import {applyTheme} from './theme';
-import type {AgentEvent, Artifact, ChatState, Message, ModelSelections, SessionSummary, WorkspaceUpload} from './types';
-
-const CONTEXT_TARGET = 160_000;
+import type {Artifact, ChatState, Message, ModelSelections, SessionSummary, WorkspaceUpload} from './types';
 
 type WorkspaceView = 'workspace' | 'artifacts';
 
@@ -43,7 +40,7 @@ export default function App() {
   const [chat, setChat] = useState<ChatState>(() => createChatState());
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('workspace');
-  const [agentReady, setAgentReady] = useState(false);
+  const [durableJob, setDurableJob] = useState<{id: string; status: string}>();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [storyboardPanelOpen, setStoryboardPanelOpen] = useState(false);
@@ -66,13 +63,6 @@ export default function App() {
 
   const selectedSession = sessions.find((session) => session.sessionId === selectedSessionId);
   const slashMatches = useMemo(() => matchingSlashCommands(draft), [draft]);
-  const showSlashCommands = shouldShowSlashCommands(draft, chat.busy);
-  const runningRender = useMemo(
-    () => [...chat.messages].reverse().find((message) => message.role === 'activity'
-      && message.status === 'running'
-      && (message.tool || '').toLowerCase().includes('render_video')),
-    [chat.messages],
-  );
 
   useEffect(() => {
     applyTheme('dark');
@@ -92,27 +82,6 @@ export default function App() {
     const payload = await getArtifacts(sessionId);
     setArtifacts(payload.artifacts);
   }, []);
-
-  useEffect(() => subscribeToEvents((event) => {
-    if (event.type === 'sessions_changed') {
-      setSessions(event.sessions || []);
-      if (event.activeSessionId) setSelectedSessionId(event.activeSessionId);
-      return;
-    }
-    if (event.type === 'bridge_status') {
-      if (event.status === 'ready' || event.status === 'starting') setAgentReady(true);
-      if (event.status === 'stopped' || event.status === 'error') setAgentReady(false);
-    }
-    if (event.type === 'session') {
-      const sessionId = event.session?.active_session_id || event.session?.session?.session_id || '';
-      if (sessionId) {
-        setSelectedSessionId(sessionId);
-        void refreshSessions();
-        void refreshArtifacts(sessionId);
-      }
-    }
-    setChat((current) => applyAgentEvent(current, event));
-  }, () => undefined), [refreshArtifacts, refreshSessions]);
 
   useEffect(() => {
     let cancelled = false;
@@ -137,14 +106,21 @@ export default function App() {
   }, [refreshArtifacts, refreshSessions]);
 
   useEffect(() => {
-    if (!runningRender || !selectedSessionId) return;
-    void refreshArtifacts(selectedSessionId);
-    const interval = window.setInterval(() => void refreshArtifacts(selectedSessionId), 2_000);
-    return () => {
-      window.clearInterval(interval);
-      void refreshArtifacts(selectedSessionId);
+    const jobId = selectedSessionId ? window.localStorage.getItem(`vimax-job:${selectedSessionId}`) : null;
+    if (!jobId) { setDurableJob(undefined); return; }
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const {generation} = await getVimaxJob(jobId);
+        if (!cancelled) setDurableJob({id: generation.id, status: generation.status});
+      } catch (error) {
+        if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));
+      }
     };
-  }, [refreshArtifacts, runningRender, selectedSessionId]);
+    void refresh();
+    const interval = window.setInterval(() => void refresh(), 2_000);
+    return () => { cancelled = true; window.clearInterval(interval); };
+  }, [selectedSessionId]);
 
   useEffect(() => {
     const element = scrollRef.current;
@@ -191,50 +167,20 @@ export default function App() {
     setNewProjectOpen(true);
   }
 
-  async function newProject() {
-    const projectName = newProjectName.trim();
-    if (!projectName || creatingProject) return;
-    setCreatingProject(true);
-    setNewProjectError('');
+  async function submitRender() {
+    if (!selectedSessionId || durableJob?.status === 'queued' || durableJob?.status === 'running') return;
     setLoadError('');
-    setMobileSidebarOpen(false);
     try {
-      await startAgent({newSession: true, projectName});
-      setAgentReady(true);
-      await new Promise((resolve) => window.setTimeout(resolve, 450));
-      const state = await refreshSessions();
-      setSelectedSessionId(state.activeSessionId);
-      setChat(createChatState());
-      setArtifacts([]);
-      setWorkspaceView('workspace');
-      setNewProjectOpen(false);
-      setNewProjectName('');
-      textareaRef.current?.focus();
+      const job = await submitVimaxJob({kind: 'vimax_render_video', sessionId: selectedSessionId, input: {}, idempotencyKey: crypto.randomUUID()});
+      window.localStorage.setItem(`vimax-job:${selectedSessionId}`, job.id);
+      setDurableJob(job);
     } catch (error) {
-      setNewProjectError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setCreatingProject(false);
+      setLoadError(error instanceof Error ? error.message : String(error));
     }
   }
 
-  async function submit() {
-    const text = draft.trim();
-    if (!text || chat.busy || uploadingFiles) return;
-    setLoadError('');
-    setDraft('');
-    setChat((current) => appendLocalUser(current, text));
-    try {
-      if (!agentReady) {
-        await startAgent(selectedSessionId ? {sessionId: selectedSessionId} : {newSession: true});
-        setAgentReady(true);
-      }
-      const outbound = composeAgentPrompt(text, workspaceUploads.map((file) => file.path));
-      await sendMessage(outbound);
-      setWorkspaceUploads([]);
-    } catch (error) {
-      const event: AgentEvent = {type: 'error', message: error instanceof Error ? error.message : String(error)};
-      setChat((current) => applyAgentEvent(current, event));
-    }
+  function openNewProjectDialog() {
+    setLoadError('Legacy project creation is unavailable during the durable-job migration.');
   }
 
   async function uploadFiles(files: FileList | null) {
@@ -266,12 +212,6 @@ export default function App() {
     }
   }
 
-  async function stop() {
-    await stopAgent();
-    setAgentReady(false);
-    setChat((current) => ({...current, busy: false}));
-  }
-
   async function selectModel(group: 'llm' | 'image', model: string) {
     if (!modelSelections || modelSelections.models[group] === model) {
       setModelMenuOpen(false);
@@ -281,7 +221,6 @@ export default function App() {
       const next = await saveModelSelections({...modelSelections.models, [group]: model});
       setModelSelections(next);
       setModelMenuOpen(false);
-      setAgentReady(false);
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : String(error));
     }
@@ -301,7 +240,6 @@ export default function App() {
         setSelectedSessionId('');
         setChat(createChatState());
         setArtifacts([]);
-        setAgentReady(false);
         if (state.activeSessionId) await openSession(state.activeSessionId);
       }
     } catch (error) {
@@ -311,7 +249,6 @@ export default function App() {
     }
   }
 
-  const contextPercent = Math.min(100, Math.round((chat.promptTokens / CONTEXT_TARGET) * 100));
   const hasConversation = chat.messages.length > 0;
 
   return (
@@ -394,11 +331,15 @@ export default function App() {
               <button onClick={() => setLoadError('')} aria-label="Dismiss error"><X size={15} /></button>
             </div>
           )}
-          {showSlashCommands && <SlashCommandMenu matches={slashMatches} contextPercent={contextPercent} onSelect={(command) => {
-            setDraft(command);
-            textareaRef.current?.focus();
-          }} />}
-          <div className={`composer ${chat.busy ? 'is-busy' : ''}`}>
+          <div className="durable-render-control">
+            <strong>Durable storyboard rendering</strong>
+            <span>{selectedSessionId ? `Job status: ${durableJob?.status || 'not started'}` : 'Select a project to render.'}</span>
+            <button type="button" className="send-button" onClick={() => void submitRender()} disabled={!selectedSessionId || durableJob?.status === 'queued' || durableJob?.status === 'running'}>
+              {durableJob?.status === 'queued' || durableJob?.status === 'running' ? 'Rendering…' : 'Render video'}
+            </button>
+          </div>
+          <p className="legacy-bridge-notice">Legacy chat, agent controls, uploads, and model controls are unavailable during the durable-job migration.</p>
+          <div className="composer is-disabled">
             <textarea
               ref={textareaRef}
               value={draft}
@@ -411,12 +352,11 @@ export default function App() {
                 }
                 if (event.key === 'Enter' && !event.shiftKey) {
                   event.preventDefault();
-                  void submit();
                 }
               }}
-              placeholder="Describe what you want to make"
-              aria-label="Message AI Storyboard"
-              disabled={chat.busy}
+              placeholder="Legacy chat is unavailable during migration"
+              aria-label="Legacy AI Storyboard chat unavailable"
+              disabled
               rows={1}
             />
             {(workspaceUploads.length > 0 || uploadingFiles) && (
@@ -450,7 +390,7 @@ export default function App() {
                 type="button"
                 className="composer-add"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={!selectedSessionId || uploadingFiles || chat.busy}
+                disabled
                 aria-label="Upload files to workspace"
                 aria-busy={uploadingFiles}
                 title={selectedSessionId ? 'Upload files to workspace' : 'Create or select a project first'}
@@ -462,6 +402,7 @@ export default function App() {
                   type="button"
                   className={`model-picker-trigger ${modelMenuOpen ? 'is-active' : ''}`}
                   onClick={() => setModelMenuOpen((open) => !open)}
+                  disabled
                   aria-expanded={modelMenuOpen}
                   aria-haspopup="menu"
                 >
@@ -491,11 +432,7 @@ export default function App() {
                 )}
               </div>
               <div className="composer-spacer" />
-              {chat.busy ? (
-                <button className="send-button stop" onClick={() => void stop()} aria-label="Stop generation"><CircleStop size={17} /><span>Stop</span></button>
-              ) : (
-                <button className="send-button" onClick={() => void submit()} disabled={!draft.trim() || uploadingFiles} aria-label="Send message"><span>Send message</span></button>
-              )}
+              <button className="send-button" disabled aria-label="Legacy chat unavailable"><span>Legacy chat unavailable</span></button>
             </div>
           </div>
         </div>}
@@ -504,7 +441,7 @@ export default function App() {
       <StoryboardPanel
         open={storyboardPanelOpen && workspaceView === 'workspace'}
         artifacts={artifacts}
-        activeRenderStage={runningRender?.stage}
+        activeRenderStage={durableJob?.status === 'running' ? 'rendering' : undefined}
         onClose={() => setStoryboardPanelOpen(false)}
         onCountChange={setStoryboardCount}
       />
@@ -528,7 +465,7 @@ export default function App() {
           setNewProjectOpen(false);
           setNewProjectError('');
         }}
-        onConfirm={() => void newProject()}
+        onConfirm={() => setNewProjectOpen(false)}
       />
     </div>
   );

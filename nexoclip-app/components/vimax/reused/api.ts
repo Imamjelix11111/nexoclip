@@ -60,6 +60,10 @@ export async function submitVimaxJob(input: VimaxJobRequest) {
   return request<{id: string; status: string}>('/api/vimax/jobs', {method: 'POST', body: JSON.stringify(input)});
 }
 
+export async function getVimaxJob(generationId: string) {
+  return request<{generation: {id: string; status: string}}>(`/api/vimax/jobs/${encodeURIComponent(generationId)}`);
+}
+
 export async function startAgent(options: {sessionId?: string; newSession?: boolean; projectName?: string}) {
   return request<{ok: boolean}>('/api/vimax/agent/start', {method: 'POST', body: JSON.stringify(options)});
 }

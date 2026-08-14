@@ -58,12 +58,14 @@ test('rejects an unauthenticated submission before workspace or reservation acce
   assert.equal(accessed, false);
 });
 
-test('returns the committed job when immediate publication fails so recovery can publish it', async () => {
+test('logs a token-safe structured error and returns the committed job when publication fails', async () => {
+  const errors = [];
   const POST = createVimaxStoryboardJobHandler({
     getSession: async () => ({ user_id: 'user-1' }),
     getWorkspace: async () => ({ id: 'workspace-1' }),
     reserve: async () => ({ id: 'job-1', status: 'queued' }),
-    publish: async () => { throw new Error('Redis unavailable'); },
+    publish: async () => { throw Object.assign(new Error('Redis unavailable at redis://secret'), { code: 'ECONNREFUSED' }); },
+    logError: (event) => errors.push(event),
     pool: {},
   });
 
@@ -71,6 +73,7 @@ test('returns the committed job when immediate publication fails so recovery can
 
   assert.equal(response.status, 202);
   assert.deepEqual(await response.json(), { id: 'job-1', status: 'queued' });
+  assert.deepEqual(errors, [{ event: 'vimax_job_publication_deferred', jobId: 'job-1', errorName: 'Error', errorCode: 'ECONNREFUSED' }]);
 });
 
 test('does not publish when durable reservation rejects the request', async () => {

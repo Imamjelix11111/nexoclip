@@ -1,7 +1,5 @@
 # Monorepo orchestrator. Run from the repo root: `docker compose up --build`.
-#   nexoclip-app         -> ./nexoclip-app        (Next.js app)
-#   ai-storyboard        -> ./nexoclip-app/services/vimax (Python agent behind web/server.mjs)
-#   nexoclip-postgres    -> database
+# Runtime services are private; only PostgreSQL is exposed for local development.
 services:
   nexoclip-postgres:
     image: postgres:16-alpine
@@ -24,7 +22,7 @@ services:
   nexoclip-redis:
     image: redis:7-alpine
     container_name: nexoclip-redis
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-nexoclip_dev_redis}"]
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"]
     volumes:
       - nexoclip-redis-data:/data
     healthcheck:
@@ -33,7 +31,7 @@ services:
       timeout: 5s
       retries: 10
     environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-nexoclip_dev_redis}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     restart: unless-stopped
 
   ai-storyboard:
@@ -41,10 +39,8 @@ services:
     container_name: ai-storyboard
     environment:
       VIMAX_RUNTIME_TOKEN: ${VIMAX_RUNTIME_TOKEN:?Set VIMAX_RUNTIME_TOKEN in your environment}
-      # Shared server-side OpenRouter key for ViMax's LLM, image, video, embedding, and reranking adapters.
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
     volumes:
-      # Agent state is tenant-scoped at /app/.tenants/<tenant-id>.
       - ai-storyboard-tenants:/app/.tenants
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:4173/healthz')\""]
@@ -53,18 +49,31 @@ services:
       retries: 10
     restart: unless-stopped
 
+  nexoclip-migrate:
+    build: ./nexoclip-app
+    command: ["npm", "run", "db:migrate"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
+    depends_on:
+      nexoclip-postgres:
+        condition: service_healthy
+    restart: "no"
+
   nexoclip-storyboard-worker:
     build: ./nexoclip-app
     command: ["npm", "run", "worker:storyboard"]
     environment:
       NODE_ENV: production
       DATABASE_URL: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
-      REDIS_URL: redis://:${REDIS_PASSWORD:-nexoclip_dev_redis}@nexoclip-redis:6379
+      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@nexoclip-redis:6379
       VIMAX_RUNTIME_URL: http://ai-storyboard:4173
       VIMAX_RUNTIME_TOKEN: ${VIMAX_RUNTIME_TOKEN:?Set VIMAX_RUNTIME_TOKEN in your environment}
     depends_on:
       nexoclip-postgres:
         condition: service_healthy
+      nexoclip-migrate:
+        condition: service_completed_successfully
       nexoclip-redis:
         condition: service_healthy
       ai-storyboard:
@@ -74,25 +83,20 @@ services:
   nexoclip-app:
     build: ./nexoclip-app
     container_name: nexoclip-app
-    ports:
-      - "3005:3000"
     environment:
       NODE_ENV: production
       DATABASE_URL: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
-      # Where legacy read/chat proxy routes reach the standalone engine service.
       VIMAX_SERVICE_URL: http://ai-storyboard:4173
-      # Durable ViMax admission publishes to Redis; neither is browser-visible.
-      REDIS_URL: redis://:${REDIS_PASSWORD:-nexoclip_dev_redis}@nexoclip-redis:6379
-      # Server-only MuAPI key (set via shell env or a root .env file). Never NEXT_PUBLIC_.
+      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@nexoclip-redis:6379
       MUAPI_API_KEY: ${MUAPI_API_KEY:-}
-      # Google OAuth (server-only). Pin the origin so the redirect_uri matches what
-      # is registered in the Google Cloud console.
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_OAUTH_ORIGIN: ${GOOGLE_OAUTH_ORIGIN:-}
     depends_on:
       nexoclip-postgres:
         condition: service_healthy
+      nexoclip-migrate:
+        condition: service_completed_successfully
       ai-storyboard:
         condition: service_healthy
       nexoclip-redis:
@@ -100,8 +104,6 @@ services:
     restart: unless-stopped
 
 volumes:
-  # Reuse the existing dev database data (created by the old `open-generative-ai`
-  # compose project) so accounts/workflows carry over.
   nexoclip-postgres-data:
     external: true
     name: open-generative-ai_nexoclip-postgres-data
