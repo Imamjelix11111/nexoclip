@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateImageGenerationInput, normalizeSaaSImageGenerationResult } from '../../src/services/generationService.js';
+import { validateImageGenerationInput, validateVimaxGenerationInput, normalizeSaaSImageGenerationResult } from '../../src/services/generationService.js';
 
 test('validates a provider-neutral image generation request', () => {
   assert.deepEqual(validateImageGenerationInput({
@@ -12,6 +12,21 @@ test('validates a provider-neutral image generation request', () => {
     model: 'flux-dev',
     parameters: { aspectRatio: '1:1' },
   });
+});
+
+test('validates a structured ViMax render request without image-only fields', () => {
+  assert.deepEqual(validateVimaxGenerationInput({
+    kind: 'vimax_render_video', sessionId: 'session-1', input: { render_mode: 'foreground' }, idempotencyKey: 'r1',
+  }), {
+    kind: 'vimax_render_video', prompt: 'Render ViMax storyboard video', model: 'vimax',
+    operation: 'vimax_render_video',
+    parameters: { sessionId: 'session-1', input: { render_mode: 'foreground' } },
+  });
+});
+
+test('rejects unknown ViMax kinds and invalid session identifiers', () => {
+  assert.throws(() => validateVimaxGenerationInput({ kind: 'image', sessionId: 's1' }), /ViMax generation kind is invalid/);
+  assert.throws(() => validateVimaxGenerationInput({ kind: 'vimax_render_video', sessionId: '../etc' }), /ViMax session id is invalid/);
 });
 
 test('rejects an image generation request without a prompt', () => {

@@ -1,11 +1,18 @@
 import { getPool } from '../db/pool.js';
-import { createImageGeneration, findGeneration, findGenerationByIdempotencyKey } from '../repositories/generationRepository.js';
+import { createImageGeneration, createVimaxGeneration, findGeneration, findGenerationByIdempotencyKey } from '../repositories/generationRepository.js';
 import { createCreditAccount, insertCreditEntry, lockCreditAccount, updateCreditBalance } from '../repositories/creditRepository.js';
 import { findPricingRule } from '../repositories/pricingRepository.js';
 import { estimateCost } from './pricingService.js';
 import { findWorkspaceGenerationLimits, countRecentGenerations, countActiveGenerations, sumBudgetGenerations } from '../repositories/generationLimitsRepository.js';
 
 const aspectRatios = new Set(['1:1', '16:9', '9:16', '4:3', '3:4']);
+const VIMAX_KINDS = new Set(['vimax_narrative_planning', 'vimax_novel_planning', 'vimax_render_video']);
+const VIMAX_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9-]{0,95}$/;
+const VIMAX_PROMPTS = {
+  vimax_narrative_planning: 'Plan ViMax narrative',
+  vimax_novel_planning: 'Plan ViMax novel',
+  vimax_render_video: 'Render ViMax storyboard video',
+};
 
 export function normalizeSaaSImageGenerationResult(generation) {
   const output = generation?.outputs?.[0]?.download?.url
@@ -27,6 +34,20 @@ export function validateImageGenerationInput(input) {
   if (!model || model.length > 120) throw new Error('Generation model is required');
   if (!aspectRatios.has(aspectRatio)) throw new Error('Aspect ratio is invalid');
   return { prompt, model, parameters: { aspectRatio } };
+}
+
+export function validateVimaxGenerationInput(input) {
+  const kind = String(input?.kind || '').trim();
+  if (!VIMAX_KINDS.has(kind)) throw new Error('ViMax generation kind is invalid');
+  const sessionId = String(input?.sessionId || '').trim();
+  if (!VIMAX_SESSION_ID.test(sessionId)) throw new Error('ViMax session id is invalid');
+  if (!input?.input || Object.getPrototypeOf(input.input) !== Object.prototype) {
+    throw new Error('ViMax generation input is invalid');
+  }
+  return {
+    kind, prompt: VIMAX_PROMPTS[kind], model: 'vimax', operation: kind,
+    parameters: { sessionId, input: JSON.parse(JSON.stringify(input.input)) },
+  };
 }
 
 export async function createImageGenerationJob(workspaceId, input) {
@@ -86,6 +107,42 @@ export async function createImageGenerationJobWithReservation(pool, workspaceId,
     const job = await createImageGeneration(client, {
       workspaceId, projectId: input.projectId || null, ...validated, idempotencyKey: input.idempotencyKey,
       estimatedCost: estimate.amount, pricingVersionId: estimate.pricingVersionId, reservationLedgerId: ledger.id,
+    });
+    await client.query('COMMIT');
+    return job;
+  } catch (error) { await client.query('ROLLBACK'); throw error; }
+  finally { client.release(); }
+}
+
+export async function createVimaxGenerationJobWithReservation(pool, workspaceId, input) {
+  if (!workspaceId || !input?.idempotencyKey) throw new Error('Generation idempotency key is required');
+  const validated = validateVimaxGenerationInput(input);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const existing = await findGenerationByIdempotencyKey(client, workspaceId, input.idempotencyKey);
+    if (existing) { await client.query('COMMIT'); return existing; }
+
+    const selected = await findPricingRule(client, { operation: validated.operation, pricingVersion: input.pricingVersion || null });
+    if (!selected) throw new Error('Pricing rule not found');
+    const estimate = estimateCost({ ...selected, quantity: 1 });
+    await enforceGenerationLimits(client, workspaceId, Number(estimate.amount));
+    await createCreditAccount(client, workspaceId);
+    const account = await lockCreditAccount(client, workspaceId);
+    const balance = Number(account.balance);
+    const cost = Number(estimate.amount);
+    if (balance < cost) throw new Error('Insufficient credits');
+    const nextBalance = balance - cost;
+    await updateCreditBalance(client, workspaceId, nextBalance);
+    const ledger = await insertCreditEntry(client, {
+      workspaceId, amount: -cost, balanceAfter: nextBalance, reason: 'generation_reservation',
+      idempotencyKey: `generation:${input.idempotencyKey}`,
+      metadata: { generationIdempotencyKey: input.idempotencyKey, pricingVersionId: estimate.pricingVersionId },
+    });
+    const job = await createVimaxGeneration(client, {
+      workspaceId, projectId: input.projectId || null, ...validated, idempotencyKey: input.idempotencyKey,
+      estimatedCost: estimate.amount, pricingVersionId: estimate.pricingVersionId, reservationLedgerId: ledger.id,
+      vimaxSessionId: validated.parameters.sessionId,
     });
     await client.query('COMMIT');
     return job;

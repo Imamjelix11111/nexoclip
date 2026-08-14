@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createImageGenerationJobWithReservation } from '../../src/services/generationService.js';
+import { createImageGenerationJobWithReservation, createVimaxGenerationJobWithReservation } from '../../src/services/generationService.js';
 
 function poolFor({ existing = null, balance = '10', pricing = { pricingVersion: { id: 'pv1', version: 3 }, rule: { operation: 'image_generation', unit: 'job', unitPrice: '2.500000' } } } = {}) {
   const calls = [];
@@ -42,6 +42,27 @@ test('returns an idempotent existing job without reserving credits again', async
   assert.equal(job.id, 'g-existing');
   assert.equal(pool.calls.filter((call) => /INSERT INTO credit_ledger/.test(call.text)).length, 0);
   assert.equal(pool.calls.at(-1).text, 'COMMIT');
+});
+
+test('creates a reserved ViMax job with explicit kind and structured parameters', async () => {
+  const pool = poolFor({ pricing: { pricingVersion: { id: 'pv1', version: 1 }, rule: { operation: 'vimax_render_video', unit: 'job', unitPrice: '0.000000' } } });
+  const job = await createVimaxGenerationJobWithReservation(pool, 'w1', {
+    kind: 'vimax_render_video', sessionId: 's1', input: {}, idempotencyKey: 'request-1',
+  });
+  const insert = pool.calls.find((call) => /INSERT INTO generation_jobs/.test(call.text));
+  assert.match(insert.text, /kind/);
+  assert.equal(insert.values[2], 'vimax_render_video');
+  assert.equal(pool.calls.find((call) => /INSERT INTO credit_ledger/.test(call.text)).values[3], 'generation_reservation');
+  assert.equal(job.status, 'queued');
+});
+
+test('returns the prior ViMax job for the same workspace idempotency key without a second ledger insert', async () => {
+  const pool = poolFor({ existing: { id: 'existing', status: 'queued' } });
+  const job = await createVimaxGenerationJobWithReservation(pool, 'w1', {
+    kind: 'vimax_render_video', sessionId: 's1', input: {}, idempotencyKey: 'request-1',
+  });
+  assert.equal(job.id, 'existing');
+  assert.equal(pool.calls.filter((call) => /INSERT INTO credit_ledger/.test(call.text)).length, 0);
 });
 
 test('rejects reservation when the workspace balance is insufficient', async () => {
