@@ -17,6 +17,7 @@ async function claimQueued(client, limit) {
        SELECT id FROM generation_jobs
        WHERE status = 'queued'
          AND queue_published_at IS NULL
+         AND (next_attempt_at IS NULL OR next_attempt_at <= now())
          AND (queue_claimed_at IS NULL OR queue_claimed_at < now() - ${CLAIM_LEASE})
        ORDER BY created_at, id
        FOR UPDATE SKIP LOCKED

@@ -4,6 +4,7 @@ import {
   transitionGenerationJob,
   failGenerationJob,
   retryGenerationJob,
+  recordGenerationProgress,
 } from '../../src/repositories/generationStateRepository.js';
 
 function poolFor(row = { id: 'g1', workspace_id: 'w1', status: 'running', attempt_count: 1, max_attempts: 3 }) {
@@ -25,6 +26,23 @@ test('records retry metadata and returns the job to queued', async () => {
   assert.match(pool.calls[0].text, /attempt_count = \$3/);
   assert.match(pool.calls[0].text, /next_attempt_at = \$4/);
   assert.deepEqual(pool.calls[0].values.slice(0, 4), ['w1', 'g1', 2, '2026-04-10T00:01:00Z']);
+});
+
+test('stores structured progress under workspace and job scope', async () => {
+  const pool = poolFor();
+  await recordGenerationProgress(pool, {
+    workspaceId: 'w1', generationId: 'g1',
+    progress: { stage: 'rendering', message: 'Frame 1' },
+  });
+  assert.match(pool.calls[0].text, /workspace_id = \$1/);
+  assert.match(pool.calls[0].text, /progress = \$3::jsonb/);
+});
+
+test('returns a retry to queued state and clears publication fields', async () => {
+  const pool = poolFor();
+  await retryGenerationJob(pool, { workspaceId: 'w1', generationId: 'g1', attempt: 2, nextAttemptAt: '2026-04-10T00:01:00Z', error: {} });
+  assert.match(pool.calls[0].text, /queue_published_at = NULL/);
+  assert.match(pool.calls[0].text, /queue_claimed_at = NULL/);
 });
 
 test('marks an exhausted job failed without exposing provider details', async () => {

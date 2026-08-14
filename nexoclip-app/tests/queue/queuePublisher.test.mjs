@@ -35,6 +35,16 @@ test('publishes a claimed generation after it is committed and uses a stable ide
   assert.match(pool.calls.find((call) => /queue_published_at = now/.test(call.text)).text, /WHERE id = \$1/);
 });
 
+test('claims a due retry even if it was published before', async () => {
+  const pool = poolFor([]);
+  const publisher = createQueuePublisher({ pool, queue: { async enqueue() {} } });
+
+  await publisher.publishAvailable();
+
+  assert.match(pool.calls.find((call) => /UPDATE generation_jobs/.test(call.text)).text,
+    /\(next_attempt_at IS NULL OR next_attempt_at <= now\(\)\)/);
+});
+
 test('recovery publishes queued jobs and releases a failed claim', async () => {
   const pool = poolFor([{ id: 'g2', workspace_id: 'w2', status: 'queued' }]);
   const queue = { async enqueue() { throw new Error('queue unavailable'); } };

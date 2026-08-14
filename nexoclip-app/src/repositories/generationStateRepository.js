@@ -16,11 +16,23 @@ export async function retryGenerationJob(pool, { workspaceId, generationId, atte
   const result = await pool.query(
     `UPDATE generation_jobs
      SET status = 'queued', attempt_count = $3, next_attempt_at = $4,
-         error = $5::jsonb, timeout_at = NULL, updated_at = now()
+         error = $5::jsonb, timeout_at = NULL, queue_published_at = NULL,
+         queue_claimed_at = NULL, updated_at = now()
      WHERE workspace_id = $1 AND id = $2 AND status IN ('running', 'processing')
        AND attempt_count < max_attempts
      RETURNING id, workspace_id, status, attempt_count, max_attempts, next_attempt_at`,
     [workspaceId, generationId, attempt, nextAttemptAt, JSON.stringify(error || {})],
+  );
+  return result.rows[0] || null;
+}
+
+export async function recordGenerationProgress(pool, { workspaceId, generationId, progress }) {
+  const result = await pool.query(
+    `UPDATE generation_jobs
+     SET progress = $3::jsonb, updated_at = now()
+     WHERE workspace_id = $1 AND id = $2 AND status IN ('running', 'processing')
+     RETURNING id, workspace_id, status, progress`,
+    [workspaceId, generationId, JSON.stringify(progress || {})],
   );
   return result.rows[0] || null;
 }
