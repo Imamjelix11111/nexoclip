@@ -123,7 +123,7 @@ The warning remains the existing upstream Starlette `TestClient`/`httpx` depreca
 
 ### Commit
 
-`<pending>` — `fix: redact spaced runtime paths`
+`2f0c0c2ba6103f70fdc6d3a7637d1f2978d628b9` — `fix: redact spaced runtime paths`
 
 ### Concern
 
