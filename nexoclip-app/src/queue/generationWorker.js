@@ -1,5 +1,5 @@
 import { transitionGeneration, isRetryableFailure, retryDelayMs } from './generationStateMachine.js';
-import { captureGenerationCredits, releaseGenerationReservation, settleUnreservedGeneration } from '../services/generationCreditSettlementService.js';
+import { captureGenerationCredits, recoverUnreservedGenerations, releaseGenerationReservation, settleUnreservedGeneration } from '../services/generationCreditSettlementService.js';
 import { transitionGenerationJob, retryGenerationJob, failGenerationJob } from '../repositories/generationStateRepository.js';
 
 const DEFAULT_CONCURRENCY = 4;
@@ -64,6 +64,7 @@ export function createGenerationProcessor({
     const workspaceId = job.workspace_id || message.workspaceId;
     const attempt = Number(job.attempt_count || 1);
     const limit = Number(job.max_attempts || maxAttempts);
+    let terminal = false;
     try {
       let timeout;
       const timedHandler = Promise.resolve().then(() => handler(job, message));
@@ -93,10 +94,15 @@ export function createGenerationProcessor({
         await transitionGenerationJob(pool, { workspaceId, generationId: job.id, from: 'running', to: 'processing' });
       } else {
         await transitionGenerationJob(pool, { workspaceId, generationId: job.id, from: 'running', to: 'succeeded' });
+        terminal = true;
         if (settleCredits && job.reservation_ledger_id === null) await settleUnreserved(pool, { workspaceId, generationId: job.id, status: 'succeeded' });
       }
       return true;
     } catch (error) {
+      if (terminal) {
+        onError(error, job);
+        return false;
+      }
       const failure = { code: error.code || 'GENERATION_FAILED', retryable: isRetryableFailure(error) };
       if (failure.retryable && attempt < limit) {
         const delay = retryDelayMs(attempt, { baseDelayMs, maxDelayMs });
@@ -105,6 +111,7 @@ export function createGenerationProcessor({
         });
       } else {
         await failGenerationJob(pool, { workspaceId, generationId: job.id, error: failure });
+        terminal = true;
         if (settleCredits && job.reservation_ledger_id) await releaseCredits(pool, { workspaceId, generationId: job.id });
         if (settleCredits && job.reservation_ledger_id === null) await settleUnreserved(pool, { workspaceId, generationId: job.id, status: 'failed' });
       }
@@ -129,6 +136,7 @@ export function createGenerationWorker({
   provider = 'muapi',
   settleCredits = true,
   settleUnreserved = settleUnreservedGeneration,
+  recoverUnreserved = recoverUnreservedGenerations,
 }) {
   if (!queue?.dequeue) throw new TypeError('queue.dequeue is required');
   if (!Number.isInteger(concurrency) || concurrency < 1) throw new RangeError('concurrency must be positive');
@@ -140,6 +148,7 @@ export function createGenerationWorker({
     stop() { stopped = true; },
 
     async run({ maxMessages = Infinity } = {}) {
+      if (settleCredits) await recoverUnreserved(pool);
       let received = 0;
       while (!stopped && received < maxMessages) {
         while (!stopped && active.size < concurrency && received < maxMessages) {

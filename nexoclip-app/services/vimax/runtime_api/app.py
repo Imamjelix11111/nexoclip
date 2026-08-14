@@ -8,7 +8,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from .executor import RuntimeExecutor
+from .executor import InvalidRuntimeRequest, RuntimeExecutor
 
 
 MAX_EXECUTE_BODY_BYTES = 1_000_000
@@ -97,7 +97,7 @@ def create_app(*, executor: RuntimeExecutor | Any | None = None) -> FastAPI:
                 session_id=request.session_id,
                 args=request.input,
             )
-        except ValueError:
+        except InvalidRuntimeRequest:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid execution request") from None
 
     return app

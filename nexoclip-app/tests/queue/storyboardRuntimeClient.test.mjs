@@ -49,6 +49,17 @@ test('marks invalid runtime requests as non-retryable', async () => {
   );
 });
 
+test('marks runtime server errors as retryable provider failures', async () => {
+  const client = createStoryboardRuntimeClient({
+    baseUrl: 'http://ai-storyboard:4173', token: 'secret', fetch: async () => new Response('', { status: 500 }),
+  });
+
+  await assert.rejects(
+    client.execute({ id: 'g1', workspace_id: 'w1', kind: 'vimax_render_video', parameters: { sessionId: 's1' } }),
+    (failure) => failure.code === 'PROVIDER_UNAVAILABLE' && failure.retryable === true,
+  );
+});
+
 test('returns a safe error for a failed runtime response', async () => {
   const client = createStoryboardRuntimeClient({
     baseUrl: 'http://ai-storyboard:4173', token: 'secret', fetch: async () => new Response('runtime details', { status: 500 }),

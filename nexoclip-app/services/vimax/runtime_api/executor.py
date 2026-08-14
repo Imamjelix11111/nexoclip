@@ -25,6 +25,12 @@ _RESPONSE_METADATA_KEYS = frozenset({
 })
 _PROGRESS_METADATA_KEYS = _RESPONSE_METADATA_KEYS | frozenset({"max_tokens", "scene_index"})
 _DROP = object()
+
+
+class InvalidRuntimeRequest(ValueError):
+    """Syntactic workspace/session boundary error safe to report as HTTP 400."""
+
+
 _ABSOLUTE_PATH = re.compile(r"(?<![\w.-])(?:/|[A-Za-z]:[\\/]|\\\\)[\s\S]*")
 
 
@@ -51,7 +57,7 @@ class RuntimeExecutor:
             tenant_root = self._tenant_root(workspace_id)
             session_index = SessionIndex(tenant_root)
             if not session_id or session_index.get(session_id) is None:
-                raise ValueError("Unknown workspace session")
+                raise InvalidRuntimeRequest("Unknown workspace session")
             adapter = ViMaxAdapters(tenant_root, session_index)
             runtime = ToolRuntimeContext(
                 requested_name=kind,
@@ -74,14 +80,14 @@ class RuntimeExecutor:
         root.mkdir(parents=True, exist_ok=True)
         resolved = root.resolve()
         if resolved.parent != self.tenants_root:
-            raise ValueError("Invalid workspace_id")
+            raise InvalidRuntimeRequest("Invalid workspace_id")
         return resolved
 
     @staticmethod
     def _normalize_workspace_id(workspace_id: str) -> str:
         value = str(workspace_id).strip()
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,95}", value):
-            raise ValueError("Invalid workspace_id")
+            raise InvalidRuntimeRequest("Invalid workspace_id")
         return value
 
     @staticmethod
@@ -90,7 +96,7 @@ class RuntimeExecutor:
         if not value:
             return ""
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,95}", value):
-            raise ValueError("Invalid session_id")
+            raise InvalidRuntimeRequest("Invalid session_id")
         return value
 
     def _result_dto(self, metadata: Any) -> dict[str, Any]:

@@ -5,6 +5,7 @@ import { createGenerationWorker } from '../../src/queue/generationWorker.js';
 function poolFor(job) {
   async function query(text, values) {
     if (text === 'BEGIN' || text === 'COMMIT' || text === 'ROLLBACK') return { rows: [] };
+    if (/settlement_status = 'pending'/.test(text)) return { rows: [] };
     if (/SET status = 'running'/.test(text)) { job.status = 'running'; job.attempt_count += 1; return { rows: [job] }; }
     if (text.includes('SET status = $4')) job.status = values[3];
     return { rows: [job] };

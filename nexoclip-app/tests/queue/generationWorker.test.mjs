@@ -6,6 +6,10 @@ function workerPool(jobs) {
   const calls = [];
   return {
     calls,
+    async query(text, values) {
+      const client = await this.connect();
+      try { return await client.query(text, values); } finally { client.release(); }
+    },
     async connect() {
       return {
         async query(text, values) {

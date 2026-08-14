@@ -135,3 +135,38 @@ PASS — 10 passed, 1 pre-existing Starlette/httpx deprecation warning.
 ```
 
 The PostgreSQL integration test was skipped because `NEXOCLIP_TEST_DATABASE_URL` was not configured. No live integration run is claimed.
+
+## Re-review 2 follow-up — terminal no-ledger recovery and runtime errors
+
+- Added `recoverUnreservedGenerations`, which scans only terminal (`succeeded`/`failed`), pending, no-reservation jobs and delegates to the existing locked, idempotent settlement transition. It makes no credit-account or ledger writes.
+- Generation workers run this recovery before dequeuing provider work. A failed immediate settlement leaves the already-terminal job pending; it is recovered on worker startup without claiming the job or invoking its provider handler. Terminal settlement exceptions no longer enter the provider-failure transition path.
+- Added `InvalidRuntimeRequest`, used only for syntax/session-boundary validation. FastAPI maps only this exception to 400. Adapter/runtime `ValueError`s now remain 500 responses, which the Node runtime client classifies as retryable `PROVIDER_UNAVAILABLE` failures.
+
+### Re-review 2 RED
+
+```text
+cd nexoclip-app && rtk node --test tests/credits/generationSettlement.test.mjs tests/queue/generationWorkerState.test.mjs
+FAIL — missing `recoverUnreservedGenerations`; worker startup did not invoke recovery.
+
+cd nexoclip-app/services/vimax && rtk uv run pytest tests/test_runtime_api.py -q
+FAIL — adapter-raised ValueError returned HTTP 400 rather than HTTP 500.
+```
+
+### Re-review 2 final verification
+
+```text
+cd nexoclip-app && rtk node --test tests/credits/generationSettlement.test.mjs tests/queue/generationWorker.test.mjs tests/queue/generationWorkerState.test.mjs tests/queue/generationWorkerOutput.test.mjs tests/queue/storyboardRuntimeClient.test.mjs tests/queue/storyboardWorker.test.mjs
+PASS — 30 passed, 0 failed.
+
+cd nexoclip-app/services/vimax && rtk uv run pytest tests/test_runtime_api.py -q
+PASS — 11 passed, 1 existing Starlette/httpx deprecation warning.
+
+rtk git diff --check
+PASS.
+```
+
+### Re-review 2 concerns
+
+- Node emits the pre-existing `MODULE_TYPELESS_PACKAGE_JSON` warning during ESM tests.
+- Python emits the existing Starlette/httpx `TestClient` deprecation warning.
+- The dedicated PostgreSQL integration test remains unrun without `NEXOCLIP_TEST_DATABASE_URL`.

@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from agent_runtime.models import ToolResult
 from runtime_api.app import create_app
-from runtime_api.executor import RuntimeExecutor
+from runtime_api.executor import InvalidRuntimeRequest, RuntimeExecutor
 
 
 class FakeExecutor:
@@ -44,7 +44,7 @@ def test_execute_maps_unknown_workspace_session_to_non_retryable_bad_request(mon
 
     class MissingSessionExecutor:
         async def execute(self, **kwargs):
-            raise ValueError("Unknown workspace session")
+            raise InvalidRuntimeRequest("Unknown workspace session")
 
     client = TestClient(create_app(executor=MissingSessionExecutor()))
     response = client.post(
@@ -55,6 +55,23 @@ def test_execute_maps_unknown_workspace_session_to_non_retryable_bad_request(mon
 
     assert response.status_code == 400
     assert response.json() == {"detail": "Invalid execution request"}
+
+
+def test_execute_preserves_adapter_value_errors_as_retryable_server_failures(monkeypatch, tmp_path):
+    monkeypatch.setenv("VIMAX_RUNTIME_TOKEN", "test-token")
+
+    class AdapterFailureExecutor:
+        async def execute(self, **kwargs):
+            raise ValueError("adapter failed")
+
+    client = TestClient(create_app(executor=AdapterFailureExecutor()), raise_server_exceptions=False)
+    response = client.post(
+        "/internal/v1/jobs/job-1/execute",
+        headers={"X-NexoClip-Runtime-Token": "test-token"},
+        json=payload(),
+    )
+
+    assert response.status_code == 500
 
 
 def test_execute_dispatches_render_with_worker_workspace(monkeypatch, tmp_path):

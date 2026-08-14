@@ -20,6 +20,16 @@ export async function settleUnreservedGeneration(client, workspaceId, generation
   return result.rows[0] || null;
 }
 
+export async function findPendingUnreservedTerminalGenerations(pool) {
+  const result = await pool.query(
+    `SELECT id, workspace_id, status
+     FROM generation_jobs
+     WHERE settlement_status = 'pending' AND reservation_ledger_id IS NULL
+       AND status IN ('succeeded', 'failed')`,
+  );
+  return result.rows;
+}
+
 export async function updateGenerationSettlement(client, workspaceId, generationId, from, to) {
   const result = await client.query(
     `UPDATE generation_jobs SET settlement_status = $4, updated_at = now()

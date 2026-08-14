@@ -5,7 +5,7 @@ import {
   lockCreditAccount,
   updateCreditBalance,
 } from '../repositories/creditRepository.js';
-import { lockGenerationForSettlement, settleUnreservedGeneration as transitionUnreservedGeneration, updateGenerationSettlement } from '../repositories/generationSettlementRepository.js';
+import { findPendingUnreservedTerminalGenerations, lockGenerationForSettlement, settleUnreservedGeneration as transitionUnreservedGeneration, updateGenerationSettlement } from '../repositories/generationSettlementRepository.js';
 
 function validateAmount(amount) {
   if (!Number.isFinite(Number(amount)) || Number(amount) < 0) throw new TypeError('Settlement amount is invalid');
@@ -91,6 +91,13 @@ export async function settleUnreservedGeneration(pool, { workspaceId, generation
     await client.query('ROLLBACK');
     throw error;
   } finally { client.release(); }
+}
+
+export async function recoverUnreservedGenerations(pool) {
+  const generations = await findPendingUnreservedTerminalGenerations(pool);
+  return Promise.all(generations.map(({ workspace_id: workspaceId, id: generationId, status }) =>
+    settleUnreservedGeneration(pool, { workspaceId, generationId, status }),
+  ));
 }
 
 export function releaseGenerationReservation(pool, args) {

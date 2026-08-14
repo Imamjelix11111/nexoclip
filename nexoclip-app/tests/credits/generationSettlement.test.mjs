@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { captureGenerationCredits, releaseGenerationReservation, refundGenerationReservation, settleUnreservedGeneration } from '../../src/services/generationCreditSettlementService.js';
+import { captureGenerationCredits, recoverUnreservedGenerations, releaseGenerationReservation, refundGenerationReservation, settleUnreservedGeneration } from '../../src/services/generationCreditSettlementService.js';
 
-function poolFor({ generationStatus = 'succeeded', settlementStatus = 'pending', estimatedCost = '10', balance = '0', existingEntries = [], reservationLedgerId = 'reserve-1' } = {}) {
+function poolFor({ generationStatus = 'succeeded', settlementStatus = 'pending', estimatedCost = '10', balance = '0', existingEntries = [], reservationLedgerId = 'reserve-1', recoveryCandidates = [] } = {}) {
   const calls = [];
   const generation = { id: 'g1', workspace_id: 'w1', status: generationStatus, settlement_status: settlementStatus, estimated_cost: estimatedCost, reservation_ledger_id: reservationLedgerId };
   const client = {
@@ -10,6 +10,7 @@ function poolFor({ generationStatus = 'succeeded', settlementStatus = 'pending',
       calls.push({ text, values });
       if (text === 'BEGIN' || text === 'COMMIT' || text === 'ROLLBACK') return { rows: [] };
       if (/FROM generation_jobs/.test(text) && /FOR UPDATE/.test(text)) return { rows: [generation] };
+      if (/FROM generation_jobs/.test(text) && /settlement_status = 'pending'/.test(text)) return { rows: recoveryCandidates };
       if (/INSERT INTO credit_accounts/.test(text)) return { rows: [{ workspace_id: 'w1', balance }] };
       if (/FROM credit_accounts/.test(text) && /FOR UPDATE/.test(text)) return { rows: [{ workspace_id: 'w1', balance }] };
       if (/FROM credit_ledger/.test(text)) return { rows: existingEntries.filter((entry) => entry.idempotency_key === values[1]) };
@@ -20,7 +21,7 @@ function poolFor({ generationStatus = 'succeeded', settlementStatus = 'pending',
     },
     release() {},
   };
-  return { calls, async connect() { return client; } };
+  return { calls, query: client.query, async connect() { return client; } };
 }
 
 test('settles an unreserved generation without credit account or ledger writes', async () => {
@@ -30,6 +31,33 @@ test('settles an unreserved generation without credit account or ledger writes',
   assert.equal(result.settlement_status, 'captured');
   assert.equal(pool.calls.filter(({ text }) => /credit_accounts|credit_ledger/.test(text)).length, 0);
   assert.equal(pool.calls.at(-1).text, 'COMMIT');
+});
+
+test('recovers terminal unreserved generations without credit account or ledger writes', async () => {
+  const pool = poolFor({
+    estimatedCost: '0',
+    reservationLedgerId: null,
+    recoveryCandidates: [{ id: 'g1', workspace_id: 'w1', status: 'succeeded' }],
+  });
+
+  const recovered = await recoverUnreservedGenerations(pool);
+
+  assert.deepEqual(recovered.map(({ id, settlement_status }) => ({ id, settlement_status })), [{ id: 'g1', settlement_status: 'captured' }]);
+  assert.equal(pool.calls.filter(({ text }) => /credit_accounts|credit_ledger/.test(text)).length, 0);
+});
+
+test('recovers failed terminal unreserved generations without ledger writes', async () => {
+  const pool = poolFor({
+    generationStatus: 'failed',
+    estimatedCost: '0',
+    reservationLedgerId: null,
+    recoveryCandidates: [{ id: 'g1', workspace_id: 'w1', status: 'failed' }],
+  });
+
+  const [recovered] = await recoverUnreservedGenerations(pool);
+
+  assert.equal(recovered.settlement_status, 'released');
+  assert.equal(pool.calls.filter(({ text }) => /credit_accounts|credit_ledger/.test(text)).length, 0);
 });
 
 test('releases failed unreserved generations idempotently', async () => {
