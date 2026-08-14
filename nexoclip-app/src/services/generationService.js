@@ -37,6 +37,10 @@ export function validateImageGenerationInput(input) {
 }
 
 export function validateVimaxGenerationInput(input) {
+  const allowed = new Set(['kind', 'sessionId', 'input', 'idempotencyKey', 'projectId', 'pricingVersion']);
+  if (!input || Object.keys(input).some((key) => !allowed.has(key))) {
+    throw new Error('ViMax generation request is invalid');
+  }
   const kind = String(input?.kind || '').trim();
   if (!VIMAX_KINDS.has(kind)) throw new Error('ViMax generation kind is invalid');
   const sessionId = String(input?.sessionId || '').trim();
@@ -126,28 +130,37 @@ export async function createVimaxGenerationJobWithReservation(pool, workspaceId,
     const selected = await findPricingRule(client, { operation: validated.operation, pricingVersion: input.pricingVersion || null });
     if (!selected) throw new Error('Pricing rule not found');
     const estimate = estimateCost({ ...selected, quantity: 1 });
-    await enforceGenerationLimits(client, workspaceId, Number(estimate.amount));
-    await createCreditAccount(client, workspaceId);
-    const account = await lockCreditAccount(client, workspaceId);
-    const balance = Number(account.balance);
     const cost = Number(estimate.amount);
-    if (balance < cost) throw new Error('Insufficient credits');
-    const nextBalance = balance - cost;
-    await updateCreditBalance(client, workspaceId, nextBalance);
-    const ledger = await insertCreditEntry(client, {
-      workspaceId, amount: -cost, balanceAfter: nextBalance, reason: 'generation_reservation',
-      idempotencyKey: `generation:${input.idempotencyKey}`,
-      metadata: { generationIdempotencyKey: input.idempotencyKey, pricingVersionId: estimate.pricingVersionId },
-    });
+    await enforceGenerationLimits(client, workspaceId, cost);
+    let ledger = null;
+    if (cost !== 0) {
+      await createCreditAccount(client, workspaceId);
+      const account = await lockCreditAccount(client, workspaceId);
+      const balance = Number(account.balance);
+      if (balance < cost) throw new Error('Insufficient credits');
+      const nextBalance = balance - cost;
+      await updateCreditBalance(client, workspaceId, nextBalance);
+      ledger = await insertCreditEntry(client, {
+        workspaceId, amount: -cost, balanceAfter: nextBalance, reason: 'generation_reservation',
+        idempotencyKey: `generation:${input.idempotencyKey}`,
+        metadata: { generationIdempotencyKey: input.idempotencyKey, pricingVersionId: estimate.pricingVersionId },
+      });
+    }
     const job = await createVimaxGeneration(client, {
       workspaceId, projectId: input.projectId || null, ...validated, idempotencyKey: input.idempotencyKey,
-      estimatedCost: estimate.amount, pricingVersionId: estimate.pricingVersionId, reservationLedgerId: ledger.id,
+      estimatedCost: estimate.amount, pricingVersionId: estimate.pricingVersionId, reservationLedgerId: ledger?.id || null,
       vimaxSessionId: validated.parameters.sessionId,
     });
     await client.query('COMMIT');
     return job;
-  } catch (error) { await client.query('ROLLBACK'); throw error; }
-  finally { client.release(); }
+  } catch (error) {
+    await client.query('ROLLBACK');
+    if (error?.code === '23505') {
+      const existing = await findGenerationByIdempotencyKey(client, workspaceId, input.idempotencyKey);
+      if (existing) return existing;
+    }
+    throw error;
+  } finally { client.release(); }
 }
 
 export async function getGenerationJob(workspaceId, generationId, storage = null) {

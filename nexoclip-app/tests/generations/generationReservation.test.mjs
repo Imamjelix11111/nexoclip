@@ -52,7 +52,8 @@ test('creates a reserved ViMax job with explicit kind and structured parameters'
   const insert = pool.calls.find((call) => /INSERT INTO generation_jobs/.test(call.text));
   assert.match(insert.text, /kind/);
   assert.equal(insert.values[2], 'vimax_render_video');
-  assert.equal(pool.calls.find((call) => /INSERT INTO credit_ledger/.test(call.text)).values[3], 'generation_reservation');
+  assert.equal(pool.calls.filter((call) => /INSERT INTO credit_ledger/.test(call.text)).length, 0);
+  assert.equal(insert.values[9], null);
   assert.equal(job.status, 'queued');
 });
 
@@ -63,6 +64,33 @@ test('returns the prior ViMax job for the same workspace idempotency key without
   });
   assert.equal(job.id, 'existing');
   assert.equal(pool.calls.filter((call) => /INSERT INTO credit_ledger/.test(call.text)).length, 0);
+});
+
+test('re-reads a ViMax job after a concurrent idempotency unique conflict', async () => {
+  const calls = [];
+  let lookups = 0;
+  const client = {
+    async query(text, values) {
+      calls.push({ text, values });
+      if (text === 'BEGIN' || text === 'COMMIT' || text === 'ROLLBACK') return { rows: [] };
+      if (/FROM generation_jobs/.test(text) && /idempotency_key/.test(text)) {
+        lookups += 1;
+        return { rows: lookups === 1 ? [] : [{ id: 'existing', status: 'queued' }] };
+      }
+      if (/FROM pricing_rules/.test(text)) return { rows: [{ pricing_version_id: 'pv1', pricing_version: 1, operation: 'vimax_render_video', unit: 'job', unit_price: '0.000000' }] };
+      if (/INSERT INTO credit_accounts/.test(text) || /FROM credit_accounts/.test(text) || /UPDATE credit_accounts/.test(text)) return { rows: [{ workspace_id: 'w1', balance: '10' }] };
+      if (/INSERT INTO credit_ledger/.test(text)) return { rows: [{ id: 'ledger-1' }] };
+      if (/INSERT INTO generation_jobs/.test(text)) throw Object.assign(new Error('duplicate'), { code: '23505' });
+      return { rows: [] };
+    },
+    release() {},
+  };
+  const job = await createVimaxGenerationJobWithReservation({ async connect() { return client; } }, 'w1', {
+    kind: 'vimax_render_video', sessionId: 's1', input: {}, idempotencyKey: 'request-1',
+  });
+  assert.equal(job.id, 'existing');
+  assert.equal(calls.filter((call) => call.text === 'ROLLBACK').length, 1);
+  assert.equal(calls.filter((call) => /FROM generation_jobs/.test(call.text)).length, 2);
 });
 
 test('rejects reservation when the workspace balance is insufficient', async () => {

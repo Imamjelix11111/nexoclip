@@ -29,6 +29,13 @@ test('rejects unknown ViMax kinds and invalid session identifiers', () => {
   assert.throws(() => validateVimaxGenerationInput({ kind: 'vimax_render_video', sessionId: '../etc' }), /ViMax session id is invalid/);
 });
 
+test('rejects ViMax fields outside the closed admission DTO', () => {
+  const request = { kind: 'vimax_render_video', sessionId: 'session-1', input: {}, idempotencyKey: 'r1' };
+  for (const field of ['workspaceId', 'tenantRoot', 'credentials', 'parameters']) {
+    assert.throws(() => validateVimaxGenerationInput({ ...request, [field]: 'untrusted' }), /ViMax generation request is invalid/);
+  }
+});
+
 test('rejects an image generation request without a prompt', () => {
   assert.throws(() => validateImageGenerationInput({ model: 'flux-dev' }), /Generation prompt is required/);
 });
