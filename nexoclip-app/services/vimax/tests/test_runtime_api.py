@@ -39,6 +39,24 @@ def test_execute_rejects_missing_service_token(monkeypatch, tmp_path):
     assert response.status_code == 401
 
 
+def test_execute_maps_unknown_workspace_session_to_non_retryable_bad_request(monkeypatch, tmp_path):
+    monkeypatch.setenv("VIMAX_RUNTIME_TOKEN", "test-token")
+
+    class MissingSessionExecutor:
+        async def execute(self, **kwargs):
+            raise ValueError("Unknown workspace session")
+
+    client = TestClient(create_app(executor=MissingSessionExecutor()))
+    response = client.post(
+        "/internal/v1/jobs/job-1/execute",
+        headers={"X-NexoClip-Runtime-Token": "test-token"},
+        json=payload(),
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Invalid execution request"}
+
+
 def test_execute_dispatches_render_with_worker_workspace(monkeypatch, tmp_path):
     monkeypatch.setenv("VIMAX_RUNTIME_TOKEN", "test-token")
     executor = FakeExecutor(tmp_path)
@@ -117,6 +135,23 @@ def test_execute_rejects_authenticated_oversized_body(monkeypatch, tmp_path):
     assert response.status_code == 413
 
 
+def test_executor_rejects_session_missing_from_workspace_index(monkeypatch, tmp_path):
+    root = tmp_path / "tenants"
+
+    class FakeAdapters:
+        def __init__(self, workspace_root, session_index):
+            pytest.fail("adapter must not run for an unknown workspace session")
+
+    monkeypatch.setattr("runtime_api.executor.ViMaxAdapters", FakeAdapters)
+
+    with pytest.raises(ValueError, match="Unknown workspace session"):
+        asyncio.run(
+            RuntimeExecutor(root).execute(
+                job_id="job-1", workspace_id="workspace-1", kind="vimax_render_video", session_id="missing", args={}
+            )
+        )
+
+
 def test_executor_sanitizes_absolute_paths_and_serializes_workspace_session(monkeypatch, tmp_path):
     root = tmp_path / "tenants"
     events: list[str] = []
@@ -124,6 +159,9 @@ def test_executor_sanitizes_absolute_paths_and_serializes_workspace_session(monk
     class FakeSessionIndex:
         def __init__(self, workspace_root):
             events.append(f"index:{workspace_root}")
+
+        def get(self, session_id):
+            return {"session_id": session_id}
 
     class FakeAdapters:
         active = 0
@@ -174,6 +212,9 @@ def test_executor_response_dto_redacts_embedded_paths_and_drops_unknown_objects(
     class FakeSessionIndex:
         def __init__(self, workspace_root):
             pass
+
+        def get(self, session_id):
+            return {"session_id": session_id}
 
     class FakeAdapters:
         def __init__(self, workspace_root, session_index):

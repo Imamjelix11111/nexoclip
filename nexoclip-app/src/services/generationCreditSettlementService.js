@@ -5,7 +5,7 @@ import {
   lockCreditAccount,
   updateCreditBalance,
 } from '../repositories/creditRepository.js';
-import { lockGenerationForSettlement, updateGenerationSettlement } from '../repositories/generationSettlementRepository.js';
+import { lockGenerationForSettlement, settleUnreservedGeneration as transitionUnreservedGeneration, updateGenerationSettlement } from '../repositories/generationSettlementRepository.js';
 
 function validateAmount(amount) {
   if (!Number.isFinite(Number(amount)) || Number(amount) < 0) throw new TypeError('Settlement amount is invalid');
@@ -71,6 +71,26 @@ export async function captureGenerationCredits(pool, { workspaceId, generationId
     return updated || generation;
   } catch (error) { await client.query('ROLLBACK'); throw error; }
   finally { client.release(); }
+}
+
+export async function settleUnreservedGeneration(pool, { workspaceId, generationId, status }) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const generation = await lockGenerationForSettlement(client, workspaceId, generationId);
+    if (!generation) throw new Error('Generation not found');
+    if (generation.reservation_ledger_id !== null) throw new Error('Generation has a reservation ledger');
+    if (generation.settlement_status !== 'pending') {
+      await client.query('COMMIT');
+      return generation;
+    }
+    const updated = await transitionUnreservedGeneration(client, workspaceId, generationId, status);
+    await client.query('COMMIT');
+    return updated || generation;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally { client.release(); }
 }
 
 export function releaseGenerationReservation(pool, args) {

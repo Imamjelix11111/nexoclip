@@ -103,3 +103,35 @@ PASS — 17 passed, 0 failed; conditional PostgreSQL integration test skipped be
 ```
 
 - Added `tests/db/vimaxGenerationAdmissionIntegration.test.mjs`: when `DATABASE_URL` is configured, it resets the schema, applies migrations, creates a workspace, admits a zero-cost ViMax job, and asserts `queued`, `reservation_ledger_id = NULL`, and no ledger entries.
+
+## Re-review 1 follow-up — workspace session boundary and zero-cost settlement
+
+- The admission DTO deliberately remains syntax-only for `sessionId`; it accepts only an identifier, never a filesystem path or tenant root.
+- The runtime is now the ownership boundary: `RuntimeExecutor` derives the tenant workspace root from the worker-supplied `workspace_id`, constructs `SessionIndex` below that root, and rejects direct execution unless `SessionIndex.get(session_id)` finds a record in that workspace-local index. It raises `ValueError("Unknown workspace session")` before adapter construction/execution.
+- The FastAPI runtime maps this invalid execution request to HTTP 400 without exposing filesystem/session details. The existing Node runtime client classifies HTTP 400 as `RUNTIME_REQUEST_FAILED`, which is non-retryable. This changes previously committed Task 2 runtime code solely to enforce the missing workspace-local session authorization boundary.
+- Added `settleUnreservedGeneration` service/repository transition. It locks the workspace-scoped job and changes only pending `reservation_ledger_id IS NULL` terminal jobs: `succeeded → captured`, `failed → released`. It is idempotent and performs no credit-account or credit-ledger writes.
+- The generic generation worker now invokes that no-ledger transition after a successful zero-cost job or a terminal zero-cost failure. Reserved jobs retain the existing capture/release path.
+- The integration test now requires explicit `NEXOCLIP_TEST_DATABASE_URL` (with a skip reason documenting the dedicated test database requirement), assigns it to the migration pool only for the test, runs migrations without `DROP SCHEMA`, and asserts the zero-cost `queued`/`pending`/null-reservation/no-ledger shape.
+
+### Re-review TDD evidence
+
+#### RED
+
+```text
+cd nexoclip-app && rtk node --test tests/credits/generationSettlement.test.mjs tests/queue/generationWorkerState.test.mjs
+FAIL — settleUnreservedGeneration export missing; worker did not invoke no-ledger settlement on success or terminal failure.
+```
+
+#### GREEN / verification
+
+```text
+cd nexoclip-app && rtk node --test tests/db/vimaxGenerationAdmissionMigration.test.mjs tests/db/vimaxGenerationAdmissionIntegration.test.mjs tests/generations/generationRepository.test.mjs tests/generations/generationReservation.test.mjs tests/generations/generationService.test.mjs tests/credits/generationSettlement.test.mjs tests/queue/generationWorker.test.mjs tests/queue/generationWorkerState.test.mjs tests/queue/generationWorkerOutput.test.mjs tests/queue/storyboardRuntimeClient.test.mjs tests/queue/storyboardWorker.test.mjs
+PASS — 41 passed, 0 failed, 1 skipped.
+```
+
+```text
+cd nexoclip-app/services/vimax && rtk uv run pytest tests/test_runtime_api.py -q
+PASS — 10 passed, 1 pre-existing Starlette/httpx deprecation warning.
+```
+
+The PostgreSQL integration test was skipped because `NEXOCLIP_TEST_DATABASE_URL` was not configured. No live integration run is claimed.

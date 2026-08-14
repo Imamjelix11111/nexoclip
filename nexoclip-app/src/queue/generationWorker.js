@@ -1,5 +1,5 @@
 import { transitionGeneration, isRetryableFailure, retryDelayMs } from './generationStateMachine.js';
-import { captureGenerationCredits, releaseGenerationReservation } from '../services/generationCreditSettlementService.js';
+import { captureGenerationCredits, releaseGenerationReservation, settleUnreservedGeneration } from '../services/generationCreditSettlementService.js';
 import { transitionGenerationJob, retryGenerationJob, failGenerationJob } from '../repositories/generationStateRepository.js';
 
 const DEFAULT_CONCURRENCY = 4;
@@ -53,6 +53,7 @@ export function createGenerationProcessor({
   settleCredits = true,
   captureCredits = captureGenerationCredits,
   releaseCredits = releaseGenerationReservation,
+  settleUnreserved = settleUnreservedGeneration,
 }) {
   if (!pool || typeof handler !== 'function') throw new TypeError('pool and handler are required');
 
@@ -92,6 +93,7 @@ export function createGenerationProcessor({
         await transitionGenerationJob(pool, { workspaceId, generationId: job.id, from: 'running', to: 'processing' });
       } else {
         await transitionGenerationJob(pool, { workspaceId, generationId: job.id, from: 'running', to: 'succeeded' });
+        if (settleCredits && job.reservation_ledger_id === null) await settleUnreserved(pool, { workspaceId, generationId: job.id, status: 'succeeded' });
       }
       return true;
     } catch (error) {
@@ -104,6 +106,7 @@ export function createGenerationProcessor({
       } else {
         await failGenerationJob(pool, { workspaceId, generationId: job.id, error: failure });
         if (settleCredits && job.reservation_ledger_id) await releaseCredits(pool, { workspaceId, generationId: job.id });
+        if (settleCredits && job.reservation_ledger_id === null) await settleUnreserved(pool, { workspaceId, generationId: job.id, status: 'failed' });
       }
       onError(error, job);
       return false;
@@ -125,10 +128,11 @@ export function createGenerationWorker({
   persistResult = null,
   provider = 'muapi',
   settleCredits = true,
+  settleUnreserved = settleUnreservedGeneration,
 }) {
   if (!queue?.dequeue) throw new TypeError('queue.dequeue is required');
   if (!Number.isInteger(concurrency) || concurrency < 1) throw new RangeError('concurrency must be positive');
-  const process = createGenerationProcessor({ pool, handler, onError, timeoutMs, baseDelayMs, maxDelayMs, maxAttempts, persistResult, provider, settleCredits });
+  const process = createGenerationProcessor({ pool, handler, onError, timeoutMs, baseDelayMs, maxDelayMs, maxAttempts, persistResult, provider, settleCredits, settleUnreserved });
   let stopped = false;
   let active = new Set();
 

@@ -89,13 +89,16 @@ def create_app(*, executor: RuntimeExecutor | Any | None = None) -> FastAPI:
         request: ExecuteRequest,
         _: None = Depends(require_runtime_token),
     ) -> dict[str, Any]:
-        return await runtime_executor.execute(
-            job_id=job_id,
-            workspace_id=request.workspace_id,
-            kind=request.kind,
-            session_id=request.session_id,
-            args=request.input,
-        )
+        try:
+            return await runtime_executor.execute(
+                job_id=job_id,
+                workspace_id=request.workspace_id,
+                kind=request.kind,
+                session_id=request.session_id,
+                args=request.input,
+            )
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid execution request") from None
 
     return app
 

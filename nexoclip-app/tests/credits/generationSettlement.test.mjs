@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { captureGenerationCredits, releaseGenerationReservation, refundGenerationReservation } from '../../src/services/generationCreditSettlementService.js';
+import { captureGenerationCredits, releaseGenerationReservation, refundGenerationReservation, settleUnreservedGeneration } from '../../src/services/generationCreditSettlementService.js';
 
-function poolFor({ generationStatus = 'succeeded', settlementStatus = 'pending', estimatedCost = '10', balance = '0', existingEntries = [] } = {}) {
+function poolFor({ generationStatus = 'succeeded', settlementStatus = 'pending', estimatedCost = '10', balance = '0', existingEntries = [], reservationLedgerId = 'reserve-1' } = {}) {
   const calls = [];
-  const generation = { id: 'g1', workspace_id: 'w1', status: generationStatus, settlement_status: settlementStatus, estimated_cost: estimatedCost, reservation_ledger_id: 'reserve-1' };
+  const generation = { id: 'g1', workspace_id: 'w1', status: generationStatus, settlement_status: settlementStatus, estimated_cost: estimatedCost, reservation_ledger_id: reservationLedgerId };
   const client = {
     async query(text, values) {
       calls.push({ text, values });
@@ -22,6 +22,26 @@ function poolFor({ generationStatus = 'succeeded', settlementStatus = 'pending',
   };
   return { calls, async connect() { return client; } };
 }
+
+test('settles an unreserved generation without credit account or ledger writes', async () => {
+  const pool = poolFor({ estimatedCost: '0', reservationLedgerId: null });
+  const result = await settleUnreservedGeneration(pool, { workspaceId: 'w1', generationId: 'g1', status: 'succeeded' });
+
+  assert.equal(result.settlement_status, 'captured');
+  assert.equal(pool.calls.filter(({ text }) => /credit_accounts|credit_ledger/.test(text)).length, 0);
+  assert.equal(pool.calls.at(-1).text, 'COMMIT');
+});
+
+test('releases failed unreserved generations idempotently', async () => {
+  const pool = poolFor({ generationStatus: 'failed', estimatedCost: '0', reservationLedgerId: null });
+  const result = await settleUnreservedGeneration(pool, { workspaceId: 'w1', generationId: 'g1', status: 'failed' });
+  const repeated = await settleUnreservedGeneration(pool, { workspaceId: 'w1', generationId: 'g1', status: 'failed' });
+
+  assert.equal(result.settlement_status, 'released');
+  assert.equal(repeated.settlement_status, 'released');
+  assert.equal(pool.calls.filter(({ text }) => /UPDATE generation_jobs/.test(text)).length, 1);
+  assert.equal(pool.calls.filter(({ text }) => /credit_accounts|credit_ledger/.test(text)).length, 0);
+});
 
 test('captures actual cost once and releases the unused reservation atomically', async () => {
   const pool = poolFor({ estimatedCost: '10', balance: '0' });

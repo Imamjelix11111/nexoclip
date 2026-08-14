@@ -38,6 +38,17 @@ test('drops unknown runtime input fields', async () => {
   assert.deepEqual(body.input, { idea: 'moon cat' });
 });
 
+test('marks invalid runtime requests as non-retryable', async () => {
+  const client = createStoryboardRuntimeClient({
+    baseUrl: 'http://ai-storyboard:4173', token: 'secret', fetch: async () => new Response('', { status: 400 }),
+  });
+
+  await assert.rejects(
+    client.execute({ id: 'g1', workspace_id: 'w1', kind: 'vimax_render_video', parameters: { sessionId: 'missing' } }),
+    (failure) => failure.code === 'RUNTIME_REQUEST_FAILED' && failure.retryable === false,
+  );
+});
+
 test('returns a safe error for a failed runtime response', async () => {
   const client = createStoryboardRuntimeClient({
     baseUrl: 'http://ai-storyboard:4173', token: 'secret', fetch: async () => new Response('runtime details', { status: 500 }),

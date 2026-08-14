@@ -50,6 +50,8 @@ class RuntimeExecutor:
         async with lock:
             tenant_root = self._tenant_root(workspace_id)
             session_index = SessionIndex(tenant_root)
+            if not session_id or session_index.get(session_id) is None:
+                raise ValueError("Unknown workspace session")
             adapter = ViMaxAdapters(tenant_root, session_index)
             runtime = ToolRuntimeContext(
                 requested_name=kind,
