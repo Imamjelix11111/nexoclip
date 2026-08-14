@@ -30,7 +30,7 @@ import {ArtifactsView, StoryboardPanel} from './ArtifactViews';
 import {createChatState, humanize} from './events';
 import {matchingSlashCommands, type SlashCommandMatch} from './slashCommands';
 import {applyTheme} from './theme';
-import type {Artifact, ChatState, Message, ModelSelections, SessionSummary, WorkspaceUpload} from './types';
+import type {Artifact, ChatState, Message, ModelSelections, SessionSummary} from './types';
 
 type WorkspaceView = 'workspace' | 'artifacts';
 
@@ -48,8 +48,6 @@ export default function App() {
   const [draft, setDraft] = useState('');
   const [modelSelections, setModelSelections] = useState<ModelSelections>();
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
-  const [workspaceUploads, setWorkspaceUploads] = useState<WorkspaceUpload[]>([]);
-  const [uploadingFiles, setUploadingFiles] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
@@ -59,7 +57,6 @@ export default function App() {
   const [deleting, setDeleting] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedSession = sessions.find((session) => session.sessionId === selectedSessionId);
   const slashMatches = useMemo(() => matchingSlashCommands(draft), [draft]);
@@ -136,11 +133,6 @@ export default function App() {
     textarea.style.height = `${Math.min(maxHeight, Math.max(40, textarea.scrollHeight))}px`;
   }, [draft]);
 
-  useEffect(() => {
-    setWorkspaceUploads([]);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  }, [selectedSessionId]);
-
   async function openSession(sessionId: string) {
     if (!sessionId || sessionId === selectedSessionId) {
       setMobileSidebarOpen(false);
@@ -181,35 +173,6 @@ export default function App() {
 
   function openNewProjectDialog() {
     setLoadError('Legacy project creation is unavailable during the durable-job migration.');
-  }
-
-  async function uploadFiles(files: FileList | null) {
-    const sessionId = selectedSessionId;
-    if (!files?.length) return;
-    if (!sessionId) {
-      setLoadError('Create or select a project before uploading files');
-      return;
-    }
-    setUploadingFiles(true);
-    setLoadError('');
-    let uploadedAny = false;
-    try {
-      for (const file of Array.from(files)) {
-        const result = await uploadWorkspaceFile(sessionId, file);
-        uploadedAny = true;
-        setWorkspaceUploads((current) => [
-          ...current.filter((item) => item.path !== result.file.path),
-          result.file,
-        ]);
-      }
-    } catch (error) {
-      setLoadError(error instanceof Error ? error.message : String(error));
-    } finally {
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      if (uploadedAny) await refreshArtifacts(sessionId);
-      setUploadingFiles(false);
-      textareaRef.current?.focus();
-    }
   }
 
   async function selectModel(group: 'llm' | 'image', model: string) {
@@ -359,41 +322,13 @@ export default function App() {
               disabled
               rows={1}
             />
-            {(workspaceUploads.length > 0 || uploadingFiles) && (
-              <div className="composer-attachments" aria-live="polite">
-                {workspaceUploads.map((file) => (
-                  <span className="composer-attachment" key={file.path} title={file.path}>
-                    <FileText size={13} />
-                    <span>{file.name}</span>
-                    <button
-                      type="button"
-                      onClick={() => setWorkspaceUploads((current) => current.filter((item) => item.path !== file.path))}
-                      aria-label={`Remove ${file.name} from this message`}
-                    >
-                      <X size={12} />
-                    </button>
-                  </span>
-                ))}
-                {uploadingFiles && <span className="composer-uploading">Uploading…</span>}
-              </div>
-            )}
             <div className="composer-controls">
-              <input
-                ref={fileInputRef}
-                className="composer-file-input"
-                type="file"
-                multiple
-                onChange={(event) => void uploadFiles(event.currentTarget.files)}
-                tabIndex={-1}
-              />
               <button
                 type="button"
                 className="composer-add"
-                onClick={() => fileInputRef.current?.click()}
                 disabled
-                aria-label="Upload files to workspace"
-                aria-busy={uploadingFiles}
-                title={selectedSessionId ? 'Upload files to workspace' : 'Create or select a project first'}
+                aria-label="Uploads unavailable during durable migration"
+                title="Uploads are unavailable during the durable-job migration"
               >
                 <Plus size={20} />
               </button>

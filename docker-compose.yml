@@ -1,5 +1,5 @@
 # Monorepo orchestrator. Run from the repo root: `docker compose up --build`.
-# Runtime services are private; only PostgreSQL is exposed for local development.
+# Redis and the storyboard runtime are private; Next and PostgreSQL are exposed for local development.
 services:
   nexoclip-postgres:
     image: postgres:16-alpine
@@ -83,6 +83,8 @@ services:
   nexoclip-app:
     build: ./nexoclip-app
     container_name: nexoclip-app
+    ports:
+      - "3005:3000"
     environment:
       NODE_ENV: production
       DATABASE_URL: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip

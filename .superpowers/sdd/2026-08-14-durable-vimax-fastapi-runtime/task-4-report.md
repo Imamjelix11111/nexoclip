@@ -27,7 +27,21 @@
 - `git diff --check`
   - no whitespace errors.
 
+## Re-review 2 fixes (2026-08-14)
+
+- Removed the unreachable legacy upload implementation from `ViMaxApp.tsx`: upload function, file input, attachment/upload state, ref, and `WorkspaceUpload` type import are gone. The disabled upload control now explicitly says uploads are unavailable during the durable-job migration; the durable render action remains the only enabled submission path.
+- Restored the documented public Next ingress: `nexoclip-app` now publishes `3005:3000`. Redis and `ai-storyboard` remain without host ports.
+- Added `tests/production/dockerComposeIngress.test.mjs`, which renders `docker compose config` with test secrets and verifies the Next mapping plus private Redis/runtime services.
+
+### Re-review 2 verification
+
+- `cd nexoclip-app && node --test tests/production/dockerComposeIngress.test.mjs` — passed (red before restoring the ingress; green after).
+- `cd nexoclip-app && node --test tests/api/vimaxLegacyBoundaryRoute.test.mjs tests/api/vimaxJobStatusRoute.test.mjs tests/api/vimaxStoryboardJobRoute.test.mjs tests/production/dockerComposeIngress.test.mjs` — 9 passed, 0 failed.
+- `REDIS_PASSWORD=test VIMAX_RUNTIME_TOKEN=test docker compose -f docker-compose.yml config --quiet` — passed.
+- `cd nexoclip-app && npm run build` — passed type checking and production build. The existing optional BullMQ `@valkey/valkey-glide` resolution warning remains.
+- `git diff --check` — passed.
+
 ## Concerns
 
-- Focused tests cover route contracts and deferred publication logging. The UI is type/build checked; this repository has no existing React component test harness for browser localStorage/polling interaction tests.
+- Focused tests cover route contracts, deferred publication logging, and the Compose ingress/private-runtime contract. The UI is type/build checked; this repository has no existing React component test harness for browser localStorage/polling interaction tests.
 - The pre-existing optional BullMQ Valkey Glide module warning is unrelated to this task and does not cause the build to fail.
