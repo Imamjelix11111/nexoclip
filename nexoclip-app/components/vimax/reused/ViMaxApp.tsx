@@ -125,12 +125,8 @@ export default function App() {
         const [history] = await Promise.all([
           getHistory(state.activeSessionId),
           refreshArtifacts(state.activeSessionId),
-          startAgent({sessionId: state.activeSessionId}),
         ]);
-        if (!cancelled) {
-          setChat(createChatState(history.messages));
-          setAgentReady(true);
-        }
+        if (!cancelled) setChat(createChatState(history.messages));
       } catch (error) {
         if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));
       }
@@ -182,10 +178,8 @@ export default function App() {
       const [history] = await Promise.all([
         getHistory(sessionId),
         refreshArtifacts(sessionId),
-        startAgent({sessionId}),
       ]);
       setChat(createChatState(history.messages));
-      setAgentReady(true);
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : String(error));
     }

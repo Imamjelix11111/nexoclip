@@ -21,17 +21,54 @@ services:
       retries: 10
     restart: unless-stopped
 
+  nexoclip-redis:
+    image: redis:7-alpine
+    container_name: nexoclip-redis
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-nexoclip_dev_redis}"]
+    volumes:
+      - nexoclip-redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-nexoclip_dev_redis}
+    restart: unless-stopped
+
   ai-storyboard:
     build: ./nexoclip-app/services/vimax
     container_name: ai-storyboard
     environment:
-      VIMAX_WEB_HOST: 0.0.0.0
-      VIMAX_WEB_PORT: 4173
+      VIMAX_RUNTIME_TOKEN: ${VIMAX_RUNTIME_TOKEN:?Set VIMAX_RUNTIME_TOKEN in your environment}
       # Shared server-side OpenRouter key for ViMax's LLM, image, video, embedding, and reranking adapters.
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
     volumes:
-      - ai-storyboard-work:/app/.working_dir
-      - ai-storyboard-state:/app/.vimax
+      # Agent state is tenant-scoped at /app/.tenants/<tenant-id>.
+      - ai-storyboard-tenants:/app/.tenants
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:4173/healthz')\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  nexoclip-storyboard-worker:
+    build: ./nexoclip-app
+    command: ["npm", "run", "worker:storyboard"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
+      REDIS_URL: redis://:${REDIS_PASSWORD:-nexoclip_dev_redis}@nexoclip-redis:6379
+      VIMAX_RUNTIME_URL: http://ai-storyboard:4173
+      VIMAX_RUNTIME_TOKEN: ${VIMAX_RUNTIME_TOKEN:?Set VIMAX_RUNTIME_TOKEN in your environment}
+    depends_on:
+      nexoclip-postgres:
+        condition: service_healthy
+      nexoclip-redis:
+        condition: service_healthy
+      ai-storyboard:
+        condition: service_healthy
     restart: unless-stopped
 
   nexoclip-app:
@@ -42,8 +79,10 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
-      # Where the Next proxy forwards /api/vimax/* — the standalone engine service.
+      # Where legacy read/chat proxy routes reach the standalone engine service.
       VIMAX_SERVICE_URL: http://ai-storyboard:4173
+      # Durable ViMax admission publishes to Redis; neither is browser-visible.
+      REDIS_URL: redis://:${REDIS_PASSWORD:-nexoclip_dev_redis}@nexoclip-redis:6379
       # Server-only MuAPI key (set via shell env or a root .env file). Never NEXT_PUBLIC_.
       MUAPI_API_KEY: ${MUAPI_API_KEY:-}
       # Google OAuth (server-only). Pin the origin so the redirect_uri matches what
@@ -55,7 +94,9 @@ services:
       nexoclip-postgres:
         condition: service_healthy
       ai-storyboard:
-        condition: service_started
+        condition: service_healthy
+      nexoclip-redis:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
@@ -64,5 +105,5 @@ volumes:
   nexoclip-postgres-data:
     external: true
     name: open-generative-ai_nexoclip-postgres-data
-  ai-storyboard-work:
-  ai-storyboard-state:
+  ai-storyboard-tenants:
+  nexoclip-redis-data:

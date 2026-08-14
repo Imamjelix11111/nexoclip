@@ -39,6 +39,7 @@
     "db:migrate": "node src/db/migrate.js",
     "config:check": "node scripts/production-config.mjs",
     "worker:recover": "node scripts/worker-recover.mjs",
+    "worker:storyboard": "node src/queue/storyboardWorker.mjs",
     "pi:task": "bash scripts/pi-task.sh"
   },
   "build": {

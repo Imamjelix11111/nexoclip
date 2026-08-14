@@ -49,6 +49,17 @@ export async function getJsonArtifact(artifact: Artifact): Promise<JsonValue> {
   return payload as JsonValue;
 }
 
+export type VimaxJobRequest = {
+  kind: 'vimax_narrative_planning' | 'vimax_novel_planning' | 'vimax_render_video';
+  sessionId: string;
+  input: Record<string, unknown>;
+  idempotencyKey: string;
+};
+
+export async function submitVimaxJob(input: VimaxJobRequest) {
+  return request<{id: string; status: string}>('/api/vimax/jobs', {method: 'POST', body: JSON.stringify(input)});
+}
+
 export async function startAgent(options: {sessionId?: string; newSession?: boolean; projectName?: string}) {
   return request<{ok: boolean}>('/api/vimax/agent/start', {method: 'POST', body: JSON.stringify(options)});
 }
