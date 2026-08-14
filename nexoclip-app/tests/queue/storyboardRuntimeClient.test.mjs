@@ -48,3 +48,19 @@ test('returns a safe error for a failed runtime response', async () => {
     /Storyboard runtime request failed with status 500/,
   );
 });
+
+for (const [name, error, code] of [
+  ['timeout', Object.assign(new Error('request aborted'), { name: 'AbortError' }), 'PROVIDER_TIMEOUT'],
+  ['network failure', new Error('socket reset'), 'PROVIDER_UNAVAILABLE'],
+]) {
+  test(`marks a runtime ${name} as safe and retryable`, async () => {
+    const client = createStoryboardRuntimeClient({
+      baseUrl: 'http://ai-storyboard:4173', token: 'secret', fetch: async () => { throw error; },
+    });
+
+    await assert.rejects(
+      client.execute({ id: 'g1', workspace_id: 'w1', kind: 'vimax_render_video', parameters: {} }),
+      (failure) => failure.code === code && failure.retryable === true && !failure.message.includes('secret') && !failure.message.includes('socket reset'),
+    );
+  });
+}

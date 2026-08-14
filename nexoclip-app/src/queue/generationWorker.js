@@ -23,7 +23,7 @@ async function claimGeneration(pool, generationId) {
               (SELECT max_concurrent FROM workspace_generation_limits l WHERE l.workspace_id = generation_jobs.workspace_id))
        RETURNING id, workspace_id, project_id, kind, status, prompt, model, parameters,
                  estimated_cost, pricing_version_id, reservation_ledger_id, created_at,
-                 updated_at, started_at`,
+                 updated_at, started_at, attempt_count, max_attempts`,
       [generationId],
     );
     await client.query('COMMIT');
@@ -40,12 +40,9 @@ function sleep(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-export function createGenerationWorker({
+export function createGenerationProcessor({
   pool,
-  queue,
   handler,
-  concurrency = DEFAULT_CONCURRENCY,
-  pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
   onError = () => {},
   timeoutMs = DEFAULT_TIMEOUT_MS,
   baseDelayMs = 1000,
@@ -54,16 +51,12 @@ export function createGenerationWorker({
   persistResult = null,
   provider = 'muapi',
   settleCredits = true,
+  captureCredits = captureGenerationCredits,
+  releaseCredits = releaseGenerationReservation,
 }) {
-  if (!pool || !queue?.dequeue || typeof handler !== 'function') {
-    throw new TypeError('pool, queue.dequeue, and handler are required');
-  }
-  if (!Number.isInteger(concurrency) || concurrency < 1) throw new RangeError('concurrency must be positive');
+  if (!pool || typeof handler !== 'function') throw new TypeError('pool and handler are required');
 
-  let stopped = false;
-  let active = new Set();
-
-  async function process(message) {
+  return async function process(message) {
     if (!message || message.type !== 'generation' || !message.generationId) return false;
     const job = await claimGeneration(pool, message.generationId);
     if (!job) return false;
@@ -93,7 +86,7 @@ export function createGenerationWorker({
       }
       transitionGeneration('running', nextStatus);
       if (nextStatus === 'succeeded' && settleCredits && job.reservation_ledger_id) {
-        await captureGenerationCredits(pool, { workspaceId, generationId: job.id, actualCost: result.usage?.cost ?? job.estimated_cost ?? 0 });
+        await captureCredits(pool, { workspaceId, generationId: job.id, actualCost: result.usage?.cost ?? job.estimated_cost ?? 0 });
       }
       if (nextStatus === 'processing') {
         await transitionGenerationJob(pool, { workspaceId, generationId: job.id, from: 'running', to: 'processing' });
@@ -110,12 +103,34 @@ export function createGenerationWorker({
         });
       } else {
         await failGenerationJob(pool, { workspaceId, generationId: job.id, error: failure });
-        if (settleCredits && job.reservation_ledger_id) await releaseGenerationReservation(pool, { workspaceId, generationId: job.id });
+        if (settleCredits && job.reservation_ledger_id) await releaseCredits(pool, { workspaceId, generationId: job.id });
       }
       onError(error, job);
       return false;
     }
-  }
+  };
+}
+
+export function createGenerationWorker({
+  pool,
+  queue,
+  handler,
+  concurrency = DEFAULT_CONCURRENCY,
+  pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
+  onError = () => {},
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  baseDelayMs = 1000,
+  maxDelayMs = 60000,
+  maxAttempts = DEFAULT_MAX_ATTEMPTS,
+  persistResult = null,
+  provider = 'muapi',
+  settleCredits = true,
+}) {
+  if (!queue?.dequeue) throw new TypeError('queue.dequeue is required');
+  if (!Number.isInteger(concurrency) || concurrency < 1) throw new RangeError('concurrency must be positive');
+  const process = createGenerationProcessor({ pool, handler, onError, timeoutMs, baseDelayMs, maxDelayMs, maxAttempts, persistResult, provider, settleCredits });
+  let stopped = false;
+  let active = new Set();
 
   return {
     stop() { stopped = true; },

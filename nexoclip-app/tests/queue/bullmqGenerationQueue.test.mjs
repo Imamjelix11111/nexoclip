@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createBullMqGenerationQueue } from '../../src/queue/bullmqGenerationQueue.js';
+import { Job } from 'bullmq';
+import { bullMqJobId, createBullMqGenerationQueue } from '../../src/queue/bullmqGenerationQueue.js';
 
 class FakeQueue {
   static added = [];
@@ -19,20 +20,37 @@ class FakeQueue {
 
 class FakeWorker {}
 
-test('adds a generation message with deterministic BullMQ job id', async () => {
+test('maps publisher idempotency keys to deterministic BullMQ-safe job ids and enqueues them', async () => {
   FakeQueue.added = [];
   const queue = createBullMqGenerationQueue({ Queue: FakeQueue, Worker: FakeWorker, connection: {} });
+  const idempotencyKey = 'generation:g1';
+  const jobId = bullMqJobId(idempotencyKey);
 
   await queue.enqueue(
     { type: 'generation', generationId: 'g1', workspaceId: 'w1' },
-    { idempotencyKey: 'generation:g1' },
+    { idempotencyKey },
   );
 
+  assert.equal(jobId, bullMqJobId(idempotencyKey));
+  assert.equal(jobId.includes(':'), false);
+  assert.doesNotThrow(() => Job.prototype.validateOptions.call({ opts: { jobId } }));
   assert.deepEqual(FakeQueue.added[0], {
     name: 'generation',
     data: { type: 'generation', generationId: 'g1', workspaceId: 'w1' },
-    options: { jobId: 'generation:g1', removeOnComplete: true, removeOnFail: false },
+    options: { jobId, removeOnComplete: true, removeOnFail: false },
   });
+});
+
+test('does not swallow Redis errors that resemble duplicate job errors', async () => {
+  class FailingQueue extends FakeQueue {
+    async add() { throw new Error('Redis job exists connection lost'); }
+  }
+  const queue = createBullMqGenerationQueue({ Queue: FailingQueue, Worker: FakeWorker, connection: {} });
+
+  await assert.rejects(
+    queue.enqueue({ type: 'generation', generationId: 'g1' }, { idempotencyKey: 'generation:g1' }),
+    /Redis job exists connection lost/,
+  );
 });
 
 test('does not expose a polling dequeue method', () => {

@@ -26,20 +26,29 @@ export function createStoryboardRuntimeClient({ baseUrl, token, fetch = globalTh
     async execute(job) {
       if (!job?.id || !job.workspace_id || !KINDS.has(job.kind)) throw new TypeError('job id, workspace_id, and supported kind are required');
       const parameters = job.parameters && typeof job.parameters === 'object' ? job.parameters : {};
-      const response = await fetch(`${base}/internal/v1/jobs/${encodeURIComponent(job.id)}/execute`, {
-        method: 'POST',
-        signal: AbortSignal.timeout(timeoutMs),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-NexoClip-Runtime-Token': token,
-        },
-        body: JSON.stringify({
-          workspace_id: job.workspace_id,
-          kind: job.kind,
-          session_id: typeof parameters.sessionId === 'string' ? parameters.sessionId : '',
-          input: safeInput(job.kind, parameters.input),
-        }),
-      });
+      let response;
+      try {
+        response = await fetch(`${base}/internal/v1/jobs/${encodeURIComponent(job.id)}/execute`, {
+          method: 'POST',
+          signal: AbortSignal.timeout(timeoutMs),
+          headers: {
+            'Content-Type': 'application/json',
+            'X-NexoClip-Runtime-Token': token,
+          },
+          body: JSON.stringify({
+            workspace_id: job.workspace_id,
+            kind: job.kind,
+            session_id: typeof parameters.sessionId === 'string' ? parameters.sessionId : '',
+            input: safeInput(job.kind, parameters.input),
+          }),
+        });
+      } catch (error) {
+        const timeout = error?.name === 'AbortError' || error?.name === 'TimeoutError';
+        const safeError = new Error(timeout ? 'Storyboard runtime request timed out' : 'Storyboard runtime is unavailable');
+        safeError.code = timeout ? 'PROVIDER_TIMEOUT' : 'PROVIDER_UNAVAILABLE';
+        safeError.retryable = true;
+        throw safeError;
+      }
       if (!response.ok) throw runtimeError(response.status);
       return response.json();
     },
