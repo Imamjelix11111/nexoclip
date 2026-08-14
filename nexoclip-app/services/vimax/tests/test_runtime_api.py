@@ -89,6 +89,30 @@ def test_execute_dispatches_render_with_worker_workspace(monkeypatch, tmp_path):
     assert executor.calls == [("job-1", "workspace-1", "vimax_render_video")]
 
 
+def test_execute_posts_each_progress_event_to_worker_callback(monkeypatch, tmp_path):
+    monkeypatch.setenv("VIMAX_RUNTIME_TOKEN", "test-token")
+    received = []
+
+    class ProgressExecutor:
+        async def execute(self, **kwargs):
+            kwargs["progress_callback"]({"type": "tool_progress", "progress": {"stage": "rendering"}})
+            return {"job_id": "job-1", "ok": True, "result": {}, "progress": []}
+
+    class Response:
+        def __enter__(self): return self
+        def __exit__(self, *args): return False
+
+    monkeypatch.setattr("runtime_api.app.urlopen", lambda request, timeout: (received.append(request), Response())[1])
+    client = TestClient(create_app(executor=ProgressExecutor()))
+    response = client.post(
+        "/internal/v1/jobs/job-1/execute",
+        headers={"X-NexoClip-Runtime-Token": "test-token"},
+        json={**payload(), "progress_callback": {"url": "http://worker/internal/progress/job-1", "token": "x" * 16}},
+    )
+    assert response.status_code == 200
+    assert received[0].headers["X-nexoclip-progress-token"] == "x" * 16
+
+
 def test_execute_rejects_unstructured_request_fields(monkeypatch, tmp_path):
     monkeypatch.setenv("VIMAX_RUNTIME_TOKEN", "test-token")
     client = TestClient(create_app(executor=FakeExecutor(tmp_path)))

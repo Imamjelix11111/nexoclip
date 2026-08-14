@@ -1,19 +1,21 @@
 import { transitionGeneration, isRetryableFailure, retryDelayMs } from './generationStateMachine.js';
 import { captureGenerationCredits, recoverUnreservedGenerations, releaseGenerationReservation, settleUnreservedGeneration } from '../services/generationCreditSettlementService.js';
-import { transitionGenerationJob, retryGenerationJob, failGenerationJob } from '../repositories/generationStateRepository.js';
+import { transitionGenerationJob, retryGenerationJob, failGenerationJob, completeGenerationJob } from '../repositories/generationStateRepository.js';
 
 const DEFAULT_CONCURRENCY = 4;
 const DEFAULT_POLL_INTERVAL_MS = 1000;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_MAX_ATTEMPTS = 3;
+const DEFAULT_LEASE_MS = 10 * 60 * 1000;
 
-async function claimGeneration(pool, generationId) {
+async function claimGeneration(pool, generationId, leaseMs = DEFAULT_LEASE_MS) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const result = await client.query(
       `UPDATE generation_jobs
        SET status = 'running', attempt_count = attempt_count + 1,
+           timeout_at = now() + ($2::bigint * interval '1 millisecond'),
            started_at = COALESCE(started_at, now()), updated_at = now()
        WHERE id = $1 AND status = 'queued'
          AND (NOT EXISTS (SELECT 1 FROM workspace_generation_limits l WHERE l.workspace_id = generation_jobs.workspace_id)
@@ -24,7 +26,7 @@ async function claimGeneration(pool, generationId) {
        RETURNING id, workspace_id, project_id, kind, status, prompt, model, parameters,
                  estimated_cost, pricing_version_id, reservation_ledger_id, created_at,
                  updated_at, started_at, attempt_count, max_attempts`,
-      [generationId],
+      [generationId, leaseMs],
     );
     await client.query('COMMIT');
     return result.rows[0] || null;
@@ -59,8 +61,13 @@ export function createGenerationProcessor({
 
   return async function process(message) {
     if (!message || message.type !== 'generation' || !message.generationId) return false;
-    const job = await claimGeneration(pool, message.generationId);
-    if (!job) return false;
+    const job = await claimGeneration(pool, message.generationId, timeoutMs || DEFAULT_LEASE_MS);
+    if (!job) {
+      const error = new Error('Generation delivery requires recovery before acknowledgement');
+      error.code = 'GENERATION_REQUIRES_RECOVERY';
+      error.retryable = true;
+      throw error;
+    }
     const workspaceId = job.workspace_id || message.workspaceId;
     const attempt = Number(job.attempt_count || 1);
     const limit = Number(job.max_attempts || maxAttempts);
@@ -75,16 +82,17 @@ export function createGenerationProcessor({
       const result = await Promise.race([timedHandler, timedOut]);
       clearTimeout(timeout);
       const nextStatus = result?.status || 'succeeded';
-      if (nextStatus === 'succeeded' && persistResult && result.providerRequestId) {
-        await persistResult({
-          workspaceId,
-          generationId: job.id,
-          provider: result.provider || job.provider || provider,
-          providerRequestId: result.providerRequestId,
-          estimatedCost: job.estimated_cost ?? null,
-          outputs: result.outputs || [],
-          usage: result.usage || {},
-        });
+      if (nextStatus === 'succeeded') {
+        const completion = {
+          workspaceId, generationId: job.id, provider: result.provider || job.provider || provider,
+          providerRequestId: result.providerRequestId || `runtime:${job.id}`, result: result.result || {},
+        };
+        if (persistResult) {
+          const {result: _result, ...persistence} = completion;
+          await persistResult({...persistence, estimatedCost: job.estimated_cost ?? null, outputs: result.outputs || [], usage: result.usage || {}});
+        }
+        await completeGenerationJob(pool, completion);
+        await transitionGenerationJob(pool, {workspaceId, generationId: job.id, from: 'running', to: 'succeeded'});
       }
       transitionGeneration('running', nextStatus);
       if (nextStatus === 'succeeded' && settleCredits && job.reservation_ledger_id) {
@@ -93,7 +101,6 @@ export function createGenerationProcessor({
       if (nextStatus === 'processing') {
         await transitionGenerationJob(pool, { workspaceId, generationId: job.id, from: 'running', to: 'processing' });
       } else {
-        await transitionGenerationJob(pool, { workspaceId, generationId: job.id, from: 'running', to: 'succeeded' });
         terminal = true;
         if (settleCredits && job.reservation_ledger_id === null) await settleUnreserved(pool, { workspaceId, generationId: job.id, status: 'succeeded' });
       }

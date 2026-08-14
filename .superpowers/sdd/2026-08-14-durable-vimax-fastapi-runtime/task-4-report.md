@@ -41,6 +41,23 @@
 - `cd nexoclip-app && npm run build` — passed type checking and production build. The existing optional BullMQ `@valkey/valkey-glide` resolution warning remains.
 - `git diff --check` — passed.
 
+## Final recovery/progress correctness wave (2026-08-14)
+
+- DB claims now set `timeout_at` in the same `UPDATE ... status = 'running'` statement. Worker startup and its periodic loop lock expired `running`/`processing` rows using `FOR UPDATE SKIP LOCKED`, requeue under attempt limits after clearing queue publication markers, or terminal-fail and settle/release exhausted rows.
+- A BullMQ redelivery for an existing DB-running claim throws retryably rather than acknowledging the message; it can only execute after lease recovery returns the row to `queued`.
+- FastAPI accepts an authenticated worker callback descriptor and posts each sanitized runtime progress event during execution. The worker-owned callback verifies its token and persists immediately. The runtime client also persists final-response progress as a fallback. Job status returns the durable `progress` and `result` columns.
+- Runtime completion metadata is sanitized in FastAPI and stored in `generation_jobs.result` with provider/provider request identity before the status transition to `succeeded`.
+- The browser is now a durable-job-only bootstrap: a manual session-ID field plus render submission/status refresh stored in localStorage. Legacy sessions, models, history, artifacts, uploads, chat, agent writes, and project controls are absent; no proxy route forwards to unavailable FastAPI legacy reads.
+- Removed the duplicate legacy project-dialog behavior and dead browser bridge helpers/callers.
+
+### Final verification
+
+- `cd nexoclip-app && node --test tests/db/generationVimaxRuntimeMigration.test.mjs tests/queue/*.test.mjs tests/api/vimaxLegacyBoundaryRoute.test.mjs tests/api/vimaxJobStatusRoute.test.mjs tests/api/vimaxStoryboardJobRoute.test.mjs tests/production/dockerComposeIngress.test.mjs` — passed (all Node tests).
+- `cd nexoclip-app/services/vimax && uv run pytest tests/test_runtime_api.py tests/test_vimax_adapters.py -q` — 33 passed.
+- `cd nexoclip-app && npm run build` — passed; existing optional BullMQ `@valkey/valkey-glide` resolution warning remains.
+- `REDIS_PASSWORD=test VIMAX_RUNTIME_TOKEN=test docker compose -f docker-compose.yml config --quiet` — passed.
+- `git diff --check` — passed.
+
 ## Concerns
 
 - Focused tests cover route contracts, deferred publication logging, and the Compose ingress/private-runtime contract. The UI is type/build checked; this repository has no existing React component test harness for browser localStorage/polling interaction tests.

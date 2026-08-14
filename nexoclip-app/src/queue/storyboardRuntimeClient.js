@@ -17,13 +17,13 @@ function runtimeError(status) {
   return error;
 }
 
-export function createStoryboardRuntimeClient({ baseUrl, token, fetch = globalThis.fetch, timeoutMs = 10 * 60 * 1000 }) {
+export function createStoryboardRuntimeClient({ baseUrl, token, fetch = globalThis.fetch, timeoutMs = 10 * 60 * 1000, progressCallbackUrl = '', progressToken = '' }) {
   if (!baseUrl || !token || typeof fetch !== 'function') throw new TypeError('baseUrl, token, and fetch are required');
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1) throw new RangeError('timeoutMs must be positive');
 
   const base = baseUrl.replace(/\/$/, '');
   return {
-    async execute(job) {
+    async execute(job, {onProgress} = {}) {
       if (!job?.id || !job.workspace_id || !KINDS.has(job.kind)) throw new TypeError('job id, workspace_id, and supported kind are required');
       const parameters = job.parameters && typeof job.parameters === 'object' ? job.parameters : {};
       let response;
@@ -40,6 +40,7 @@ export function createStoryboardRuntimeClient({ baseUrl, token, fetch = globalTh
             kind: job.kind,
             session_id: typeof parameters.sessionId === 'string' ? parameters.sessionId : '',
             input: safeInput(job.kind, parameters.input),
+            ...(progressCallbackUrl && progressToken ? {progress_callback: {url: `${progressCallbackUrl.replace(/\/$/, '')}/${encodeURIComponent(job.id)}`, token: progressToken}} : {}),
           }),
         });
       } catch (error) {
@@ -50,7 +51,9 @@ export function createStoryboardRuntimeClient({ baseUrl, token, fetch = globalTh
         throw safeError;
       }
       if (!response.ok) throw runtimeError(response.status);
-      return response.json();
+      const payload = await response.json();
+      for (const event of payload.progress || []) await onProgress?.(event);
+      return payload;
     },
   };
 }

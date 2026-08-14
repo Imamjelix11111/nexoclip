@@ -21,6 +21,19 @@ test('posts only structured worker-owned execution data with the service token',
   });
 });
 
+test('supplies a worker-authenticated progress callback to the runtime', async () => {
+  let body;
+  const client = createStoryboardRuntimeClient({
+    baseUrl: 'http://ai-storyboard:4173', token: 'secret', fetch: async (_url, init) => {
+      body = JSON.parse(init.body);
+      return new Response(JSON.stringify({ok: true}));
+    },
+    progressCallbackUrl: 'http://worker/internal/progress', progressToken: 'callback-token',
+  });
+  await client.execute({id: 'g1', workspace_id: 'w1', kind: 'vimax_render_video', parameters: {sessionId: 's1'}});
+  assert.deepEqual(body.progress_callback, {url: 'http://worker/internal/progress/g1', token: 'callback-token'});
+});
+
 test('drops unknown runtime input fields', async () => {
   let body;
   const client = createStoryboardRuntimeClient({

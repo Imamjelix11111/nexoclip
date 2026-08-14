@@ -21,14 +21,13 @@ function handler(fetchCalls) {
   });
 }
 
-test('forwards only allowlisted legacy GET routes', async () => {
+test('blocks legacy GET browsing routes without forwarding to the FastAPI runtime', async () => {
   const calls = [];
   const GET = handler(calls);
   const response = await GET(request('GET', 'sessions'), { params: Promise.resolve({ path: ['sessions'] }) });
 
-  assert.equal(response.status, 200);
-  assert.equal(calls.length, 1);
-  assert.match(calls[0][0], /\/api\/sessions$/);
+  assert.equal(response.status, 410);
+  assert.equal(calls.length, 0);
 });
 
 test('returns 410 for every legacy write before contacting upstream', async () => {

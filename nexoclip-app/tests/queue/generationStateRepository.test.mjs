@@ -5,6 +5,8 @@ import {
   failGenerationJob,
   retryGenerationJob,
   recordGenerationProgress,
+  recoverExpiredGenerationJobs,
+  completeGenerationJob,
 } from '../../src/repositories/generationStateRepository.js';
 
 function poolFor(row = { id: 'g1', workspace_id: 'w1', status: 'running', attempt_count: 1, max_attempts: 3 }) {
@@ -43,6 +45,40 @@ test('returns a retry to queued state and clears publication fields', async () =
   await retryGenerationJob(pool, { workspaceId: 'w1', generationId: 'g1', attempt: 2, nextAttemptAt: '2026-04-10T00:01:00Z', error: {} });
   assert.match(pool.calls[0].text, /queue_published_at = NULL/);
   assert.match(pool.calls[0].text, /queue_claimed_at = NULL/);
+});
+
+test('requeues expired running claims with cleared publication markers and terminally fails exhausted claims', async () => {
+  const calls = [];
+  const client = {
+    async query(text, values) {
+      calls.push({text, values});
+      if (text === 'BEGIN' || text === 'COMMIT') return {rows: []};
+      if (/FOR UPDATE SKIP LOCKED/.test(text)) return {rows: [
+        {id: 'retry', workspace_id: 'w1', attempt_count: 1, max_attempts: 3, reservation_ledger_id: null},
+        {id: 'exhausted', workspace_id: 'w2', attempt_count: 3, max_attempts: 3, reservation_ledger_id: 'ledger'},
+      ]};
+      return {rows: []};
+    }, release() {},
+  };
+  const recovered = await recoverExpiredGenerationJobs({connect: async () => client}, {now: '2026-08-14T00:00:00.000Z'});
+  assert.deepEqual(recovered, [
+    {id: 'retry', workspaceId: 'w1', status: 'queued', reservationLedgerId: null},
+    {id: 'exhausted', workspaceId: 'w2', status: 'failed', reservationLedgerId: 'ledger'},
+  ]);
+  assert.match(calls.find((call) => /FOR UPDATE SKIP LOCKED/.test(call.text)).text, /timeout_at <= \$1/);
+  assert.match(calls.find((call) => /SET status = 'queued'/.test(call.text)).text, /queue_published_at = NULL/);
+  assert.match(calls.find((call) => /SET status = 'failed'/.test(call.text)).text, /attempt_count >= max_attempts/);
+});
+
+test('persists sanitized completion metadata before transitioning succeeded', async () => {
+  const pool = poolFor();
+  await completeGenerationJob(pool, {
+    workspaceId: 'w1', generationId: 'g1', provider: 'vimax', providerRequestId: 'runtime-g1',
+    result: {generated: ['workspace/clip.mp4']},
+  });
+  assert.match(pool.calls[0].text, /result = \$3::jsonb/);
+  assert.match(pool.calls[0].text, /provider_request_id = \$5/);
+  assert.match(pool.calls[0].text, /WHERE workspace_id = \$1/);
 });
 
 test('marks an exhausted job failed without exposing provider details', async () => {

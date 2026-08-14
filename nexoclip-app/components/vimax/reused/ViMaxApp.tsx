@@ -1,675 +1,72 @@
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {
-  ArrowUp,
-  Brain,
-  Braces,
-  Clock3,
-  FilePenLine,
-  FileText,
-  Film,
-  Folder,
-  FolderPlus,
-  Files,
-  Image as ImageIcon,
-  Menu,
-  PanelLeftClose,
-  PanelLeftOpen,
-  PanelRight,
-  Plus,
-  Search,
-  ListChecks,
-  Terminal,
-  Trash2,
-  Wrench,
-  X,
-} from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import {deleteSession, getArtifacts, getHistory, getModelSelections, getSessions, getVimaxJob, saveModelSelections, submitVimaxJob} from './api';
-import {ArtifactsView, StoryboardPanel} from './ArtifactViews';
-import {createChatState, humanize} from './events';
-import {matchingSlashCommands, type SlashCommandMatch} from './slashCommands';
-import {applyTheme} from './theme';
-import type {Artifact, ChatState, Message, ModelSelections, SessionSummary} from './types';
+'use client';
 
-type WorkspaceView = 'workspace' | 'artifacts';
+import {useEffect, useState} from 'react';
+import {getVimaxJob, submitVimaxJob} from './api';
 
-export default function App() {
-  const [sessions, setSessions] = useState<SessionSummary[]>([]);
-  const [selectedSessionId, setSelectedSessionId] = useState('');
-  const [chat, setChat] = useState<ChatState>(() => createChatState());
-  const [artifacts, setArtifacts] = useState<Artifact[]>([]);
-  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('workspace');
-  const [durableJob, setDurableJob] = useState<{id: string; status: string}>();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const [storyboardPanelOpen, setStoryboardPanelOpen] = useState(false);
-  const [storyboardCount, setStoryboardCount] = useState(0);
-  const [draft, setDraft] = useState('');
-  const [modelSelections, setModelSelections] = useState<ModelSelections>();
-  const [modelMenuOpen, setModelMenuOpen] = useState(false);
-  const [loadError, setLoadError] = useState('');
-  const [newProjectOpen, setNewProjectOpen] = useState(false);
-  const [newProjectName, setNewProjectName] = useState('');
-  const [newProjectError, setNewProjectError] = useState('');
-  const [creatingProject, setCreatingProject] = useState(false);
-  const [pendingDelete, setPendingDelete] = useState<SessionSummary>();
-  const [deleting, setDeleting] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+type DurableJob = {id: string; status: string; progress?: {stage?: string; message?: string}; result?: Record<string, unknown>};
+const STORAGE_KEY = 'vimax-durable-job';
 
-  const selectedSession = sessions.find((session) => session.sessionId === selectedSessionId);
-  const slashMatches = useMemo(() => matchingSlashCommands(draft), [draft]);
+export default function ViMaxApp() {
+  const [sessionId, setSessionId] = useState('');
+  const [job, setJob] = useState<DurableJob>();
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    applyTheme('dark');
-  }, []);
-
-  const refreshSessions = useCallback(async () => {
-    const state = await getSessions();
-    setSessions(state.sessions);
-    return state;
-  }, []);
-
-  const refreshArtifacts = useCallback(async (sessionId: string) => {
-    if (!sessionId) {
-      setArtifacts([]);
-      return;
-    }
-    const payload = await getArtifacts(sessionId);
-    setArtifacts(payload.artifacts);
+    const saved = window.localStorage.getItem(STORAGE_KEY);
+    if (!saved) return;
+    try {
+      const value = JSON.parse(saved);
+      if (typeof value.sessionId === 'string') setSessionId(value.sessionId);
+      if (typeof value.jobId === 'string') setJob({id: value.jobId, status: 'loading'});
+    } catch { window.localStorage.removeItem(STORAGE_KEY); }
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const [state, models] = await Promise.all([refreshSessions(), getModelSelections()]);
-        setModelSelections(models);
-        if (cancelled || !state.activeSessionId) return;
-        setSelectedSessionId(state.activeSessionId);
-        const [history] = await Promise.all([
-          getHistory(state.activeSessionId),
-          refreshArtifacts(state.activeSessionId),
-        ]);
-        if (!cancelled) setChat(createChatState(history.messages));
-      } catch (error) {
-        if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [refreshArtifacts, refreshSessions]);
-
-  useEffect(() => {
-    const jobId = selectedSessionId ? window.localStorage.getItem(`vimax-job:${selectedSessionId}`) : null;
-    if (!jobId) { setDurableJob(undefined); return; }
+    if (!job?.id || ['succeeded', 'failed', 'canceled'].includes(job.status)) return;
     let cancelled = false;
     const refresh = async () => {
       try {
-        const {generation} = await getVimaxJob(jobId);
-        if (!cancelled) setDurableJob({id: generation.id, status: generation.status});
-      } catch (error) {
-        if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));
+        const response = await getVimaxJob(job.id);
+        if (!cancelled) setJob(response.generation);
+      } catch (reason) {
+        if (!cancelled) setError(reason instanceof Error ? reason.message : 'Unable to refresh job');
       }
     };
     void refresh();
-    const interval = window.setInterval(() => void refresh(), 2_000);
-    return () => { cancelled = true; window.clearInterval(interval); };
-  }, [selectedSessionId]);
+    const timer = window.setInterval(() => void refresh(), 2_000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [job?.id, job?.status]);
 
-  useEffect(() => {
-    const element = scrollRef.current;
-    if (!element) return;
-    element.scrollTo({top: element.scrollHeight, behavior: chat.busy ? 'smooth' : 'auto'});
-  }, [chat.messages, chat.busy]);
-
-  useEffect(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    textarea.style.height = 'auto';
-    const maxHeight = window.innerWidth < 768 ? 150 : 250;
-    textarea.style.height = `${Math.min(maxHeight, Math.max(40, textarea.scrollHeight))}px`;
-  }, [draft]);
-
-  async function openSession(sessionId: string) {
-    if (!sessionId || sessionId === selectedSessionId) {
-      setMobileSidebarOpen(false);
+  async function render() {
+    const normalizedSession = sessionId.trim();
+    if (!/^[A-Za-z0-9][A-Za-z0-9-]{0,95}$/.test(normalizedSession)) {
+      setError('Enter a valid storyboard session ID.');
       return;
     }
-    setLoadError('');
-    setSelectedSessionId(sessionId);
-    setMobileSidebarOpen(false);
-    setChat(createChatState());
+    setError('');
     try {
-      const [history] = await Promise.all([
-        getHistory(sessionId),
-        refreshArtifacts(sessionId),
-      ]);
-      setChat(createChatState(history.messages));
-    } catch (error) {
-      setLoadError(error instanceof Error ? error.message : String(error));
-    }
+      const created = await submitVimaxJob({
+        kind: 'vimax_render_video', sessionId: normalizedSession, input: {}, idempotencyKey: crypto.randomUUID(),
+      });
+      const next = {id: created.id, status: created.status};
+      setJob(next);
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({sessionId: normalizedSession, jobId: created.id}));
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to submit render'); }
   }
 
-  function openNewProjectDialog() {
-    setNewProjectName('');
-    setNewProjectError('');
-    setNewProjectOpen(true);
-  }
-
-  async function submitRender() {
-    if (!selectedSessionId || durableJob?.status === 'queued' || durableJob?.status === 'running') return;
-    setLoadError('');
-    try {
-      const job = await submitVimaxJob({kind: 'vimax_render_video', sessionId: selectedSessionId, input: {}, idempotencyKey: crypto.randomUUID()});
-      window.localStorage.setItem(`vimax-job:${selectedSessionId}`, job.id);
-      setDurableJob(job);
-    } catch (error) {
-      setLoadError(error instanceof Error ? error.message : String(error));
-    }
-  }
-
-  function openNewProjectDialog() {
-    setLoadError('Legacy project creation is unavailable during the durable-job migration.');
-  }
-
-  async function selectModel(group: 'llm' | 'image', model: string) {
-    if (!modelSelections || modelSelections.models[group] === model) {
-      setModelMenuOpen(false);
-      return;
-    }
-    try {
-      const next = await saveModelSelections({...modelSelections.models, [group]: model});
-      setModelSelections(next);
-      setModelMenuOpen(false);
-    } catch (error) {
-      setLoadError(error instanceof Error ? error.message : String(error));
-    }
-  }
-
-  async function confirmDelete() {
-    if (!pendingDelete || deleting) return;
-    const sessionId = pendingDelete.sessionId;
-    const deletingSelected = sessionId === selectedSessionId;
-    setDeleting(true);
-    setLoadError('');
-    try {
-      const state = await deleteSession(sessionId);
-      setSessions(state.sessions);
-      setPendingDelete(undefined);
-      if (deletingSelected) {
-        setSelectedSessionId('');
-        setChat(createChatState());
-        setArtifacts([]);
-        if (state.activeSessionId) await openSession(state.activeSessionId);
-      }
-    } catch (error) {
-      setLoadError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setDeleting(false);
-    }
-  }
-
-  const hasConversation = chat.messages.length > 0;
-
-  return (
-    <div className="app-shell">
-      <Sidebar
-        open={sidebarOpen}
-        mobileOpen={mobileSidebarOpen}
-        sessions={sessions}
-        selectedSessionId={selectedSessionId}
-        activeView={workspaceView}
-        onToggle={() => setSidebarOpen((value) => !value)}
-        onMobileClose={() => setMobileSidebarOpen(false)}
-        onNew={openNewProjectDialog}
-        onSelect={(sessionId) => void openSession(sessionId)}
-        onWorkspace={() => {
-          setWorkspaceView('workspace');
-          setMobileSidebarOpen(false);
-        }}
-        onArtifacts={() => {
-          setWorkspaceView('artifacts');
-          setMobileSidebarOpen(false);
-        }}
-        onDelete={setPendingDelete}
-      />
-
-      <main className="workspace-main">
-        {workspaceView === 'workspace' ? (
-          <div className="workspace-utility-bar">
-            <button className="icon-button mobile-only" onClick={() => setMobileSidebarOpen(true)} aria-label="Open navigation">
-              <Menu size={19} />
-            </button>
-            {!sidebarOpen && (
-              <button className="icon-button desktop-only" onClick={() => setSidebarOpen(true)} aria-label="Open navigation">
-                <PanelLeftOpen size={18} />
-              </button>
-            )}
-            <span className="workspace-utility-spacer" />
-            <div className="workspace-utility-actions">
-              <button className="icon-button artifact-toggle" onClick={() => setStoryboardPanelOpen((value) => !value)} aria-label="Toggle storyboard preview">
-                <PanelRight size={18} />
-                {storyboardCount > 0 && <span className="count-badge">{storyboardCount}</span>}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <header className="workspace-header">
-            <div className="workspace-title-row">
-              <button className="icon-button mobile-only" onClick={() => setMobileSidebarOpen(true)} aria-label="Open navigation">
-                <Menu size={19} />
-              </button>
-              {!sidebarOpen && (
-                <button className="icon-button desktop-only" onClick={() => setSidebarOpen(true)} aria-label="Open navigation">
-                  <PanelLeftOpen size={18} />
-                </button>
-              )}
-              <div className="workspace-title-copy"><strong>Artifacts</strong></div>
-            </div>
-          </header>
-        )}
-
-        {workspaceView === 'workspace' ? (
-          <div className="conversation" ref={scrollRef}>
-            {!hasConversation ? (
-              <EmptyState />
-            ) : (
-              <div className="message-stream">
-                {chat.messages.map((message) => <MessageRow key={message.id} message={message} />)}
-                {chat.busy && <ThinkingRow messages={chat.messages} />}
-              </div>
-            )}
-          </div>
-        ) : (
-          <ArtifactsView session={selectedSession} artifacts={artifacts} />
-        )}
-
-        {workspaceView === 'workspace' && <div className="composer-zone">
-          {loadError && (
-            <div className="inline-error" role="alert">
-              <span>{loadError}</span>
-              <button onClick={() => setLoadError('')} aria-label="Dismiss error"><X size={15} /></button>
-            </div>
-          )}
-          <div className="durable-render-control">
-            <strong>Durable storyboard rendering</strong>
-            <span>{selectedSessionId ? `Job status: ${durableJob?.status || 'not started'}` : 'Select a project to render.'}</span>
-            <button type="button" className="send-button" onClick={() => void submitRender()} disabled={!selectedSessionId || durableJob?.status === 'queued' || durableJob?.status === 'running'}>
-              {durableJob?.status === 'queued' || durableJob?.status === 'running' ? 'Rendering…' : 'Render video'}
-            </button>
-          </div>
-          <p className="legacy-bridge-notice">Legacy chat, agent controls, uploads, and model controls are unavailable during the durable-job migration.</p>
-          <div className="composer is-disabled">
-            <textarea
-              ref={textareaRef}
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Tab' && slashMatches[0]) {
-                  event.preventDefault();
-                  setDraft(slashMatches[0].name);
-                  return;
-                }
-                if (event.key === 'Enter' && !event.shiftKey) {
-                  event.preventDefault();
-                }
-              }}
-              placeholder="Legacy chat is unavailable during migration"
-              aria-label="Legacy AI Storyboard chat unavailable"
-              disabled
-              rows={1}
-            />
-            <div className="composer-controls">
-              <button
-                type="button"
-                className="composer-add"
-                disabled
-                aria-label="Uploads unavailable during durable migration"
-                title="Uploads are unavailable during the durable-job migration"
-              >
-                <Plus size={20} />
-              </button>
-              <div className="model-picker">
-                <button
-                  type="button"
-                  className={`model-picker-trigger ${modelMenuOpen ? 'is-active' : ''}`}
-                  onClick={() => setModelMenuOpen((open) => !open)}
-                  disabled
-                  aria-expanded={modelMenuOpen}
-                  aria-haspopup="menu"
-                >
-                  <span className="model-picker-mark">✦</span>
-                  <span className="model-picker-label">{modelSelections?.options.llm.find((option) => option.id === modelSelections.models.llm)?.label || 'Agent model'}</span>
-                  <svg className="model-picker-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
-                </button>
-                {modelMenuOpen && modelSelections && (
-                  <div className="model-picker-menu" role="menu">
-                    {(['llm', 'image'] as const).map((group) => (
-                      <div key={group} className="model-picker-group">
-                        <span>{group === 'llm' ? 'Agent model' : 'Image model'}</span>
-                        {modelSelections.options[group].map((option) => (
-                          <button
-                            type="button"
-                            role="menuitemradio"
-                            aria-checked={modelSelections.models[group] === option.id}
-                            key={option.id}
-                            onClick={() => void selectModel(group, option.id)}
-                          >
-                            <span>{option.label}</span><small>{option.id}</small>
-                          </button>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="composer-spacer" />
-              <button className="send-button" disabled aria-label="Legacy chat unavailable"><span>Legacy chat unavailable</span></button>
-            </div>
-          </div>
-        </div>}
-      </main>
-
-      <StoryboardPanel
-        open={storyboardPanelOpen && workspaceView === 'workspace'}
-        artifacts={artifacts}
-        activeRenderStage={durableJob?.status === 'running' ? 'rendering' : undefined}
-        onClose={() => setStoryboardPanelOpen(false)}
-        onCountChange={setStoryboardCount}
-      />
-      <DeleteProjectDialog
-        session={pendingDelete}
-        deleting={deleting}
-        onCancel={() => !deleting && setPendingDelete(undefined)}
-        onConfirm={() => void confirmDelete()}
-      />
-      <NewProjectDialog
-        open={newProjectOpen}
-        name={newProjectName}
-        error={newProjectError}
-        creating={creatingProject}
-        onNameChange={(value) => {
-          setNewProjectName(value);
-          setNewProjectError('');
-        }}
-        onCancel={() => {
-          if (creatingProject) return;
-          setNewProjectOpen(false);
-          setNewProjectError('');
-        }}
-        onConfirm={() => setNewProjectOpen(false)}
-      />
-    </div>
-  );
-}
-
-function Sidebar({open, mobileOpen, sessions, selectedSessionId, activeView, onToggle, onMobileClose, onNew, onSelect, onWorkspace, onArtifacts, onDelete}: {
-  open: boolean;
-  mobileOpen: boolean;
-  sessions: SessionSummary[];
-  selectedSessionId: string;
-  activeView: WorkspaceView;
-  onToggle: () => void;
-  onMobileClose: () => void;
-  onNew: () => void;
-  onSelect: (sessionId: string) => void;
-  onWorkspace: () => void;
-  onArtifacts: () => void;
-  onDelete: (session: SessionSummary) => void;
-}) {
-  return (
-    <>
-      {mobileOpen && <button className="sidebar-scrim" onClick={onMobileClose} aria-label="Close navigation" />}
-      <aside className={`sidebar ${open ? 'is-open' : 'is-collapsed'} ${mobileOpen ? 'is-mobile-open' : ''}`}>
-        <div className="sidebar-brand">
-          <strong>AI Storyboard</strong>
-          <button className="icon-button sidebar-collapse desktop-only" onClick={onToggle} aria-label="Collapse navigation">
-            <PanelLeftClose size={17} />
-          </button>
-          <button className="icon-button mobile-only" onClick={onMobileClose} aria-label="Close navigation"><X size={18} /></button>
-        </div>
-        <nav className="primary-nav" aria-label="Primary navigation">
-          <button onClick={onNew}><FolderPlus size={17} /><span>New project</span></button>
-          <button className={activeView === 'workspace' ? 'is-active' : ''} onClick={onWorkspace}><Folder size={17} /><span>Workspace</span></button>
-          <button className={activeView === 'artifacts' ? 'is-active' : ''} onClick={onArtifacts}><Files size={17} /><span>Artifacts</span></button>
-        </nav>
-        <div className="session-section">
-          <div className="section-label"><span>Projects</span><span>{sessions.length}</span></div>
-          <div className="session-list">
-            {sessions.map((session) => (
-              <div
-                key={session.sessionId}
-                className={`session-item ${session.sessionId === selectedSessionId ? 'is-selected' : ''}`}
-              >
-                <button className="session-open" onClick={() => onSelect(session.sessionId)}>
-                  <span className="session-copy">
-                    <strong>{sessionTitle(session)}</strong>
-                    <small>{relativeTime(session.updatedAt)} · {stageLabel(session.stage)}</small>
-                  </span>
-                </button>
-                <button className="session-delete" onClick={() => onDelete(session)} aria-label={`Delete ${sessionTitle(session)}`} title="Delete project">
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            ))}
-            {sessions.length === 0 && <span className="empty-list">No projects yet</span>}
-          </div>
-        </div>
-        <div className="sidebar-footer">
-          <span className="avatar">V</span>
-          <div><strong>Local workspace</strong><small>Local · AI Storyboard</small></div>
-        </div>
-      </aside>
-    </>
-  );
-}
-
-function EmptyState() {
-  return (
-    <section className="empty-state">
-      <img className="empty-state-logo" src="/vimax-light.svg" alt="AI Storyboard" />
-      <h1>What should we create?</h1>
-    </section>
-  );
-}
-
-function MessageRow({message}: {message: Message}) {
-  if (message.role === 'activity') return <ActivityRow message={message} />;
-  return (
-    <article className={`message-row role-${message.role}`}>
-      <div className="message-body">
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={{a: (props) => <a {...props} target="_blank" rel="noreferrer" />}}>
-          {message.text}
-        </ReactMarkdown>
-      </div>
-    </article>
-  );
-}
-
-function ActivityRow({message}: {message: Message}) {
-  const stage = message.stage ? humanize(message.stage) : '';
-  const detail = stage.toLowerCase() === message.text.toLowerCase() ? message.text : [stage, message.text].filter(Boolean).join(' · ');
-  const toolKind = activityToolKind(message.tool);
-  return (
-    <div className={`activity-row status-${message.status || 'done'}`}>
-      <span className={`activity-indicator tool-${toolKind}`}><ActivityToolIcon tool={message.tool} /></span>
-      <div>
-        <strong>{humanize(message.tool || 'Workflow')}</strong>
-        <span>{detail}</span>
-      </div>
-    </div>
-  );
-}
-
-function ActivityToolIcon({tool}: {tool?: string}) {
-  const name = (tool || '').toLowerCase();
-  const props = {size: 13, strokeWidth: 1.8};
-  if (name.includes('narrative_planning') || name.includes('novel_planning')) return <FilePenLine {...props} />;
-  if (name.includes('render_video')) return <Film {...props} />;
-  if (name === 'view_image' || name.includes('image')) return <ImageIcon {...props} />;
-  if (name === 'read_json' || name === 'write_json') return <Braces {...props} />;
-  if (name === 'read_file' || name === 'write_file') return <FileText {...props} />;
-  if (name === 'list_files' || name === 'glob_files') return <Folder {...props} />;
-  if (name === 'search_text') return <Search {...props} />;
-  if (name.startsWith('memory_')) return <Brain {...props} />;
-  if (name.startsWith('todo_')) return <ListChecks {...props} />;
-  if (name === 'run_shell') return <Terminal {...props} />;
-  if (name === 'sleep') return <Clock3 {...props} />;
-  return <Wrench {...props} />;
-}
-
-function activityToolKind(tool?: string) {
-  const name = (tool || '').toLowerCase();
-  if (name.includes('narrative_planning') || name.includes('novel_planning')) return 'planning';
-  if (name.includes('render_video')) return 'render';
-  if (name === 'view_image' || name.includes('image')) return 'image';
-  if (name.startsWith('memory_')) return 'memory';
-  if (name.startsWith('todo_')) return 'todo';
-  if (name === 'run_shell') return 'shell';
-  if (name === 'sleep') return 'time';
-  return 'file';
-}
-
-function ThinkingRow({messages}: {messages: Message[]}) {
-  const running = [...messages].reverse().find((message) => message.role === 'activity' && message.status === 'running');
-  return (
-    <div className="thinking-row">
-      <span className="thinking-mark"><i /><i /><i /></span>
-      <span>{running ? `${humanize(running.tool || 'AI Storyboard')} · ${running.text}` : 'AI Storyboard is thinking'}</span>
-    </div>
-  );
-}
-
-function SlashCommandMenu({matches, contextPercent, onSelect}: {matches: SlashCommandMatch[]; contextPercent: number; onSelect: (command: string) => void}) {
-  return (
-    <div className="slash-command-menu" role="listbox" aria-label="Slash commands">
-      {matches.length > 0 ? matches.map((command) => (
-        <button key={command.name} role="option" aria-selected="false" onMouseDown={(event) => event.preventDefault()} onClick={() => onSelect(command.name)}>
-          <code><span><b>{command.matchedPrefix}</b><span>{command.unmatchedSuffix}</span></span>{command.name === '/compact' && <em>{contextPercent}%</em>}</code>
-          <small>{command.description}</small>
-        </button>
-      )) : <span className="slash-command-empty">No matching commands</span>}
-    </div>
-  );
-}
-
-function DeleteProjectDialog({session, deleting, onCancel, onConfirm}: {
-  session?: SessionSummary;
-  deleting: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  useEffect(() => {
-    if (!session) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !deleting) onCancel();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [deleting, onCancel, session]);
-
-  if (!session) return null;
-  return (
-    <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onCancel()}>
-      <section className="delete-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-project-title">
-        <span className="dialog-icon"><Trash2 size={18} /></span>
-        <div className="dialog-copy">
-          <h2 id="delete-project-title">Delete project?</h2>
-          <p><strong>{sessionTitle(session)}</strong> and its generated files will be permanently removed.</p>
-        </div>
-        <div className="dialog-actions">
-          <button onClick={onCancel} disabled={deleting} autoFocus>Cancel</button>
-          <button className="danger" onClick={onConfirm} disabled={deleting}>{deleting ? 'Deleting…' : 'Delete'}</button>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function NewProjectDialog({open, name, error, creating, onNameChange, onCancel, onConfirm}: {
-  open: boolean;
-  name: string;
-  error: string;
-  creating: boolean;
-  onNameChange: (value: string) => void;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !creating) onCancel();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [creating, onCancel, open]);
-
-  if (!open) return null;
-  return (
-    <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onCancel()}>
-      <form className="project-dialog" role="dialog" aria-modal="true" aria-labelledby="new-project-title" onSubmit={(event) => {
-        event.preventDefault();
-        onConfirm();
-      }}>
-        <span className="dialog-icon is-create"><FolderPlus size={18} /></span>
-        <div className="dialog-copy">
-          <h2 id="new-project-title">Create a new project</h2>
-          <p>Name the workspace before creating it.</p>
-        </div>
-        <label className="project-name-field">
-          <span>Project name</span>
-          <input
-            value={name}
-            onChange={(event) => onNameChange(event.target.value)}
-            placeholder="Untitled video"
-            maxLength={64}
-            autoFocus
-            disabled={creating}
-          />
-          {error && <small role="alert">{error}</small>}
-        </label>
-        <div className="dialog-actions">
-          <button type="button" onClick={onCancel} disabled={creating}>Cancel</button>
-          <button type="submit" className="primary" disabled={creating || !name.trim()}>{creating ? 'Creating…' : 'Create'}</button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
-function sessionTitle(session?: SessionSummary) {
-  if (!session) return 'New video';
-  if (session.projectName) return session.projectName;
-  const source = session.idea || session.summary;
-  if (source) return source.length > 38 ? `${source.slice(0, 38).trim()}…` : source;
-  return session.sessionId.replace(/^\d{8}-\d{6}-?/, '') || 'Untitled video';
-}
-
-function stageLabel(stage: string) {
-  const labels: Record<string, string> = {
-    created: 'Created',
-    narrative_planning: 'Planning',
-    narrative_planned: 'Plan ready',
-    novel_planning: 'Planning novel',
-    novel_planned: 'Novel ready',
-    rendering: 'Rendering',
-    rendered: 'Rendered',
-    error: 'Needs attention',
-  };
-  return labels[stage] || humanize(stage || 'Created');
-}
-
-function relativeTime(value: string) {
-  const timestamp = Date.parse(value);
-  if (!Number.isFinite(timestamp)) return 'Recently';
-  const delta = Math.max(0, Date.now() - timestamp);
-  const minutes = Math.floor(delta / 60_000);
-  if (minutes < 1) return 'Now';
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
+  const active = job && !['succeeded', 'failed', 'canceled'].includes(job.status);
+  return <main className="app-shell"><section className="empty-state">
+    <img className="empty-state-logo" src="/vimax-light.svg" alt="AI Storyboard" />
+    <h1>Durable storyboard render</h1>
+    <p>Project browsing, history, artifacts, uploads, and chat are unavailable during the durable-job migration.</p>
+    <label className="project-name-field"><span>Storyboard session ID</span>
+      <input value={sessionId} onChange={(event) => setSessionId(event.target.value)} placeholder="session-identifier" maxLength={96} />
+    </label>
+    <button className="send-button" type="button" onClick={() => void render()} disabled={Boolean(active)}>
+      {active ? 'Rendering…' : 'Render video'}
+    </button>
+    {job && <p role="status">Job {job.id}: {job.status}{job.progress?.stage ? ` · ${job.progress.stage}` : ''}{job.progress?.message ? ` — ${job.progress.message}` : ''}</p>}
+    {job?.result && <pre>{JSON.stringify(job.result, null, 2)}</pre>}
+    {error && <p className="inline-error" role="alert">{error}</p>}
+  </section></main>;
 }

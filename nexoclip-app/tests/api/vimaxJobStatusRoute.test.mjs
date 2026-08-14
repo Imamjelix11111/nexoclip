@@ -37,6 +37,15 @@ test('loads job status from the authenticated user default workspace, ignoring c
   ]);
 });
 
+test('returns persisted progress and completion result from the durable job record', async () => {
+  const GET = createVimaxJobStatusHandler({
+    getSession: async () => ({user_id: 'user-1'}), getWorkspace: async () => ({id: 'workspace-1'}),
+    getJob: async () => ({id: 'job-1', status: 'succeeded', progress: {stage: 'rendering'}, result: {generated: ['clip.mp4']}}),
+  });
+  const response = await GET(request(), {params: Promise.resolve({generationId: 'job-1'})});
+  assert.deepEqual(await response.json(), {generation: {id: 'job-1', status: 'succeeded', progress: {stage: 'rendering'}, result: {generated: ['clip.mp4']}}});
+});
+
 test('rejects unauthenticated status access', async () => {
   const GET = createVimaxJobStatusHandler({ getSession: async () => null });
   const response = await GET(request(), { params: Promise.resolve({ generationId: 'job-1' }) });

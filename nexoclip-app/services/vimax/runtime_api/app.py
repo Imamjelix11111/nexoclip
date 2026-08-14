@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import asyncio
+import json
 import os
 from typing import Any, Literal
+from urllib.request import Request, urlopen
 from secrets import compare_digest
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
@@ -57,6 +60,13 @@ class RuntimeBoundaryMiddleware:
         await self.app(scope, replay_receive, send)
 
 
+class ProgressCallback(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = Field(min_length=1, max_length=512)
+    token: str = Field(min_length=16, max_length=256)
+
+
 class ExecuteRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -64,6 +74,7 @@ class ExecuteRequest(BaseModel):
     kind: Literal["vimax_narrative_planning", "vimax_novel_planning", "vimax_render_video"]
     session_id: str = Field(default="", max_length=96)
     input: dict[str, Any] = Field(default_factory=dict)
+    progress_callback: ProgressCallback | None = None
 
 
 def require_runtime_token(
@@ -89,14 +100,34 @@ def create_app(*, executor: RuntimeExecutor | Any | None = None) -> FastAPI:
         request: ExecuteRequest,
         _: None = Depends(require_runtime_token),
     ) -> dict[str, Any]:
+        callbacks: list[asyncio.Task[None]] = []
+
+        def post_progress(event: dict[str, Any]) -> None:
+            if not request.progress_callback:
+                return
+            def send() -> None:
+                body = json.dumps(event).encode()
+                callback = Request(request.progress_callback.url, data=body, method="POST", headers={
+                    "Content-Type": "application/json", "X-NexoClip-Progress-Token": request.progress_callback.token,
+                })
+                with urlopen(callback, timeout=10):
+                    pass
+            callbacks.append(asyncio.create_task(asyncio.to_thread(send)))
+
         try:
-            return await runtime_executor.execute(
-                job_id=job_id,
-                workspace_id=request.workspace_id,
-                kind=request.kind,
-                session_id=request.session_id,
-                args=request.input,
-            )
+            execute_args = {
+                "job_id": job_id,
+                "workspace_id": request.workspace_id,
+                "kind": request.kind,
+                "session_id": request.session_id,
+                "args": request.input,
+            }
+            if request.progress_callback:
+                execute_args["progress_callback"] = post_progress
+            result = await runtime_executor.execute(**execute_args)
+            if callbacks:
+                await asyncio.gather(*callbacks)
+            return result
         except InvalidRuntimeRequest:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid execution request") from None
 

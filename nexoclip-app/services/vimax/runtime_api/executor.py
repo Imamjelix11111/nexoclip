@@ -47,6 +47,7 @@ class RuntimeExecutor:
         kind: ExecutionKind,
         session_id: str,
         args: dict[str, Any],
+        progress_callback: Any = None,
     ) -> dict[str, Any]:
         workspace_id = self._normalize_workspace_id(workspace_id)
         session_id = self._normalize_session_id(session_id)
@@ -63,7 +64,7 @@ class RuntimeExecutor:
                 requested_name=kind,
                 canonical_name=kind,
                 turn_id=job_id,
-                progress_callback=lambda event: progress.append(self._progress_dto(event)),
+                progress_callback=lambda event: self._emit_progress(progress, progress_callback, event),
             )
             method = getattr(adapter, kind)
             result = await method({**args, "session_id": session_id or args.get("session_id", "")}, runtime)
@@ -74,6 +75,12 @@ class RuntimeExecutor:
             "result": self._result_dto(result.metadata),
             "progress": progress,
         }
+
+    def _emit_progress(self, progress: list[dict[str, Any]], callback: Any, event: Any) -> None:
+        dto = self._progress_dto(event)
+        progress.append(dto)
+        if callback:
+            callback(dto)
 
     def _tenant_root(self, workspace_id: str) -> Path:
         root = self.tenants_root / workspace_id
