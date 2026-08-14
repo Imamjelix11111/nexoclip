@@ -123,6 +123,8 @@
     "@aws-sdk/client-s3": "^3.1109.0",
     "ai-agent": "file:./packages/Open-Poe-AI/packages/agents",
     "axios": "^1.7.0",
+    "bullmq": "^6.1.1",
+    "ioredis": "^6.0.0",
     "next": "^15.0.0",
     "pg": "^8.23.0",
     "react": "^19.0.0",
