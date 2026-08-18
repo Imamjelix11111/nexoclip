@@ -7,7 +7,7 @@ from typing import Any, Literal
 from urllib.request import Request, urlopen
 from secrets import compare_digest
 
-from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -16,6 +16,7 @@ from .executor import InvalidRuntimeRequest, RuntimeExecutor
 
 MAX_EXECUTE_BODY_BYTES = 1_000_000
 EXECUTE_PATH_PREFIX = "/internal/v1/jobs/"
+SESSIONS_PATH = "/internal/v1/sessions"
 
 
 class RuntimeBoundaryMiddleware:
@@ -25,7 +26,9 @@ class RuntimeBoundaryMiddleware:
         self.app = app
 
     async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
-        if scope["type"] != "http" or scope["method"] != "POST" or not scope["path"].startswith(EXECUTE_PATH_PREFIX):
+        is_execute = scope["method"] == "POST" and scope["path"].startswith(EXECUTE_PATH_PREFIX)
+        is_sessions = scope["path"] == SESSIONS_PATH and scope["method"] in {"GET", "POST"}
+        if scope["type"] != "http" or not (is_execute or is_sessions):
             await self.app(scope, receive, send)
             return
 
@@ -34,6 +37,10 @@ class RuntimeBoundaryMiddleware:
         token = headers.get(b"x-nexoclip-runtime-token", b"").decode("latin-1")
         if not expected or not token or not compare_digest(token, expected):
             await JSONResponse({"detail": "Unauthorized"}, status_code=status.HTTP_401_UNAUTHORIZED)(scope, receive, send)
+            return
+
+        if not is_execute:
+            await self.app(scope, receive, send)
             return
 
         body = bytearray()
@@ -67,6 +74,17 @@ class ProgressCallback(BaseModel):
     token: str = Field(min_length=16, max_length=256)
 
 
+class CreateSessionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workspace_id: str = Field(min_length=1, max_length=96)
+    project_name: str = Field(default="", max_length=64)
+
+
+class ListSessionsRequest(BaseModel):
+    workspace_id: str = Field(min_length=1, max_length=96)
+
+
 class ExecuteRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -74,6 +92,8 @@ class ExecuteRequest(BaseModel):
     kind: Literal["vimax_narrative_planning", "vimax_novel_planning", "vimax_render_video"]
     session_id: str = Field(default="", max_length=96)
     input: dict[str, Any] = Field(default_factory=dict)
+    attempt: int = Field(ge=1)
+    claim_token: str = Field(min_length=1, max_length=128)
     progress_callback: ProgressCallback | None = None
 
 
@@ -94,6 +114,24 @@ def create_app(*, executor: RuntimeExecutor | Any | None = None) -> FastAPI:
     async def healthz() -> dict[str, bool]:
         return {"ok": True}
 
+    @app.post("/internal/v1/sessions", status_code=status.HTTP_201_CREATED)
+    async def create_session(request: CreateSessionRequest, _: None = Depends(require_runtime_token)) -> dict[str, str]:
+        try:
+            session = runtime_executor.create_session(request.workspace_id, request.project_name)
+            return {"session_id": session["session_id"]}
+        except InvalidRuntimeRequest:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid workspace_id") from None
+
+    @app.get("/internal/v1/sessions")
+    async def list_sessions(
+        workspace_id: str = Query(min_length=1, max_length=96),
+        _: None = Depends(require_runtime_token),
+    ) -> dict[str, list[dict[str, Any]]]:
+        try:
+            return {"sessions": runtime_executor.list_sessions(workspace_id)}
+        except InvalidRuntimeRequest:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid workspace_id") from None
+
     @app.post("/internal/v1/jobs/{job_id}/execute")
     async def execute(
         job_id: str,
@@ -106,7 +144,7 @@ def create_app(*, executor: RuntimeExecutor | Any | None = None) -> FastAPI:
             if not request.progress_callback:
                 return
             def send() -> None:
-                body = json.dumps(event).encode()
+                body = json.dumps({**event, "attempt": request.attempt, "claim_token": request.claim_token}).encode()
                 callback = Request(request.progress_callback.url, data=body, method="POST", headers={
                     "Content-Type": "application/json", "X-NexoClip-Progress-Token": request.progress_callback.token,
                 })
@@ -126,7 +164,11 @@ def create_app(*, executor: RuntimeExecutor | Any | None = None) -> FastAPI:
                 execute_args["progress_callback"] = post_progress
             result = await runtime_executor.execute(**execute_args)
             if callbacks:
-                await asyncio.gather(*callbacks)
+                outcomes = await asyncio.gather(*callbacks, return_exceptions=True)
+                for outcome in outcomes:
+                    if isinstance(outcome, Exception):
+                        # Progress is advisory; a failed callback must never repeat a completed render.
+                        continue
             return result
         except InvalidRuntimeRequest:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid execution request") from None

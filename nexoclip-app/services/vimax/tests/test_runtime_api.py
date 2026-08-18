@@ -25,9 +25,74 @@ def payload(**overrides):
         "kind": "vimax_narrative_planning",
         "session_id": "session-1",
         "input": {},
+        "attempt": 1,
+        "claim_token": "claim-token",
     }
     request.update(overrides)
     return request
+
+
+@pytest.fixture
+def runtime_token(monkeypatch):
+    monkeypatch.setenv("VIMAX_RUNTIME_TOKEN", "test-token")
+    return "test-token"
+
+
+@pytest.fixture
+def client(monkeypatch, tmp_path, runtime_token):
+    monkeypatch.setenv("VIMAX_TENANTS_ROOT", str(tmp_path / "tenants"))
+    return TestClient(create_app())
+
+
+def test_list_sessions_returns_only_the_authenticated_workspace_sessions(client, runtime_token):
+    create = client.post(
+        "/internal/v1/sessions",
+        headers={"X-NexoClip-Runtime-Token": runtime_token},
+        json={"workspace_id": "workspace-a", "project_name": "Launch trailer"},
+    )
+    assert create.status_code == 201
+
+    client.post(
+        "/internal/v1/sessions",
+        headers={"X-NexoClip-Runtime-Token": runtime_token},
+        json={"workspace_id": "workspace-b", "project_name": "Private project"},
+    )
+
+    response = client.get(
+        "/internal/v1/sessions?workspace_id=workspace-a",
+        headers={"X-NexoClip-Runtime-Token": runtime_token},
+    )
+
+    assert response.status_code == 200
+    assert [item["projectName"] for item in response.json()["sessions"]] == ["Launch trailer"]
+    assert "workingDir" not in response.json()["sessions"][0]
+
+
+def test_sessions_authenticates_before_body_or_query_validation(client):
+    malformed_post = client.post("/internal/v1/sessions", content=b"{")
+    invalid_query = client.get("/internal/v1/sessions?workspace_id=../outside")
+
+    assert malformed_post.status_code == 401
+    assert invalid_query.status_code == 401
+
+
+def test_sessions_reject_malformed_workspace_id(client, runtime_token):
+    response = client.get(
+        "/internal/v1/sessions?workspace_id=../outside",
+        headers={"X-NexoClip-Runtime-Token": runtime_token},
+    )
+
+    assert response.status_code == 400
+
+
+def test_sessions_rejects_whitespace_padded_workspace_id(client, runtime_token):
+    response = client.post(
+        "/internal/v1/sessions",
+        headers={"X-NexoClip-Runtime-Token": runtime_token},
+        json={"workspace_id": " workspace-a ", "project_name": "Launch trailer"},
+    )
+
+    assert response.status_code == 400
 
 
 def test_execute_rejects_missing_service_token(monkeypatch, tmp_path):
@@ -111,6 +176,23 @@ def test_execute_posts_each_progress_event_to_worker_callback(monkeypatch, tmp_p
     )
     assert response.status_code == 200
     assert received[0].headers["X-nexoclip-progress-token"] == "x" * 16
+
+
+def test_progress_callback_failure_does_not_fail_completed_execution(monkeypatch, tmp_path):
+    monkeypatch.setenv("VIMAX_RUNTIME_TOKEN", "test-token")
+
+    class ProgressExecutor:
+        async def execute(self, **kwargs):
+            kwargs["progress_callback"]({"type": "tool_progress", "progress": {"stage": "rendering"}})
+            return {"job_id": "job-1", "ok": True, "result": {}, "progress": []}
+
+    monkeypatch.setattr("runtime_api.app.urlopen", lambda *_args, **_kwargs: (_ for _ in ()).throw(TimeoutError("callback failed")))
+    response = TestClient(create_app(executor=ProgressExecutor())).post(
+        "/internal/v1/jobs/job-1/execute",
+        headers={"X-NexoClip-Runtime-Token": "test-token"},
+        json={**payload(), "progress_callback": {"url": "http://worker/progress", "token": "x" * 16}},
+    )
+    assert response.status_code == 200
 
 
 def test_execute_rejects_unstructured_request_fields(monkeypatch, tmp_path):

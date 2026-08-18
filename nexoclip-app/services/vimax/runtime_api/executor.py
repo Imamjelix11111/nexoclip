@@ -76,6 +76,29 @@ class RuntimeExecutor:
             "progress": progress,
         }
 
+    def create_session(self, workspace_id: str, project_name: str) -> dict[str, Any]:
+        workspace_id = self._normalize_workspace_id(workspace_id)
+        return SessionIndex(self._tenant_root(workspace_id)).create(project_name=project_name)
+
+    def list_sessions(self, workspace_id: str) -> list[dict[str, Any]]:
+        workspace_id = self._normalize_workspace_id(workspace_id)
+        sessions = SessionIndex(self._tenant_root(workspace_id)).load().get("sessions", {})
+        if not isinstance(sessions, dict):
+            return []
+        records = [
+            {
+                "sessionId": str(record.get("session_id", session_id)),
+                "projectName": str(record.get("project_name", "") or ""),
+                "stage": str(record.get("stage", "created") or "created"),
+                "summary": str(record.get("summary", "") or ""),
+                "updatedAt": str(record.get("updated_at", "") or ""),
+                "createdAt": str(record.get("created_at", "") or ""),
+            }
+            for session_id, record in sessions.items()
+            if isinstance(record, dict)
+        ]
+        return sorted(records, key=lambda record: record["updatedAt"], reverse=True)
+
     def _emit_progress(self, progress: list[dict[str, Any]], callback: Any, event: Any) -> None:
         dto = self._progress_dto(event)
         progress.append(dto)
@@ -92,7 +115,7 @@ class RuntimeExecutor:
 
     @staticmethod
     def _normalize_workspace_id(workspace_id: str) -> str:
-        value = str(workspace_id).strip()
+        value = str(workspace_id)
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,95}", value):
             raise InvalidRuntimeRequest("Invalid workspace_id")
         return value
