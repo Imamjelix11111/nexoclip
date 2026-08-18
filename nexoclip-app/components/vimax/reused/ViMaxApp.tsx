@@ -76,11 +76,15 @@ export default function ViMaxApp() {
     setJob(restored ? {id: restored.id, status: restored.status} : undefined);
   }, [selectedSessionId]);
 
-  // Authoritative status polling against the durable generation record.
+  // Authoritative status polling against the durable generation record. A restored
+  // terminal job has no persisted result (only {id, status} is stored client-side), so
+  // it still needs one authoritative fetch to recover its result/artifacts after refresh
+  // — only the recurring interval is skipped once a job is terminal.
   useEffect(() => {
-    if (!job?.id || !selectedSessionId || TERMINAL_STATUSES.includes(job.status)) return;
+    if (!job?.id || !selectedSessionId || (TERMINAL_STATUSES.includes(job.status) && job.result)) return;
     const sessionId = selectedSessionId;
     const jobId = job.id;
+    const isTerminal = TERMINAL_STATUSES.includes(job.status);
     let cancelled = false;
     const refresh = async () => {
       try {
@@ -94,12 +98,13 @@ export default function ViMaxApp() {
       }
     };
     void refresh();
+    if (isTerminal) return () => { cancelled = true; };
     const timer = window.setInterval(() => void refresh(), 2_000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [job?.id, job?.status, selectedSessionId]);
+  }, [job?.id, job?.status, job?.result, selectedSessionId]);
 
   function selectSession(sessionId: string) {
     setLoadError('');
