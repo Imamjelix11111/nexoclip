@@ -2,7 +2,8 @@
 
 import {useCallback, useEffect, useState} from 'react';
 import {createVimaxSession, getVimaxJob, getVimaxSessions, submitVimaxJob} from './api';
-import {restoreDurableJob, saveDurableJob} from './vimaxWorkspaceState';
+import {DurableArtifactList} from './ArtifactViews';
+import {artifactsFromJobResult, restoreDurableJob, saveDurableJob} from './vimaxWorkspaceState';
 import type {DurableSessionSummary} from './types';
 
 // Kept during the durable storyboard migration: interactive chat/uploads and other
@@ -333,10 +334,10 @@ function StagePanel({session, job}: {session?: DurableSessionSummary; job?: Dura
           {job.progress?.stage && <p className="stage-line"><span>Stage</span><span>{humanize(job.progress.stage)}</span></p>}
           {job.progress?.message && <p className="stage-line"><span>Progress</span><span>{job.progress.message}</span></p>}
           {job.result && (
-            <details className="stage-result" open>
-              <summary>Result</summary>
-              <pre>{JSON.stringify(job.result, null, 2)}</pre>
-            </details>
+            <div className="stage-artifacts">
+              <h3>Artifacts</h3>
+              <DurableArtifactList artifacts={artifactsFromJobResult(job.result)} />
+            </div>
           )}
         </div>
       ) : (

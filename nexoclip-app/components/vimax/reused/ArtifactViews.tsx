@@ -18,7 +18,7 @@ import {
   type ReadinessStatus,
   type StoryboardPreview,
 } from './artifactPresentation';
-import type {Artifact, JsonValue, SessionSummary} from './types';
+import type {Artifact, DurableResultArtifact, JsonValue, SessionSummary} from './types';
 
 export function ArtifactsView({session, artifacts}: {session?: SessionSummary; artifacts: Artifact[]}) {
   const jsonArtifacts = useMemo(
@@ -226,6 +226,47 @@ function MediaPreviewDialog({artifact, onClose}: {artifact: Artifact; onClose: (
       </section>
     </div>
   );
+}
+
+// Durable job results carry only path/name/kind for their artifacts — no
+// browser-servable URL, size, or updatedAt exist yet (unlike the legacy
+// Artifact type above, which requires them). Render name/type/status only;
+// never point an <img>/<video> src at a URL that does not exist.
+export function DurableArtifactList({artifacts}: {artifacts: DurableResultArtifact[]}) {
+  if (artifacts.length === 0) {
+    return (
+      <div className="artifacts-empty">
+        <Files size={24} />
+        <strong>No artifacts yet</strong>
+        <span>Artifacts appear here once the render completes</span>
+      </div>
+    );
+  }
+  return (
+    <ul className="durable-artifact-list">
+      {artifacts.map((artifact) => (
+        <li key={artifact.path} className="durable-artifact-item">
+          <i>{durableArtifactIcon(artifact.kind)}</i>
+          <span className="durable-artifact-copy">
+            <strong>{artifact.name}</strong>
+            <small>{durableArtifactKindLabel(artifact.kind)} · {artifact.path}</small>
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function durableArtifactIcon(kind: DurableResultArtifact['kind']) {
+  if (kind === 'image') return <ImageIcon size={16} />;
+  if (kind === 'video') return <Video size={16} />;
+  return <FileJson size={16} />;
+}
+
+function durableArtifactKindLabel(kind: DurableResultArtifact['kind']) {
+  if (kind === 'image') return 'Image';
+  if (kind === 'video') return 'Video';
+  return 'Document';
 }
 
 function SectionHeading({title, detail}: {title: string; detail: string}) {

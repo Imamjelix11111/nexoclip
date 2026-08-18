@@ -41,6 +41,17 @@ export type Artifact = {
   url: string;
 };
 
+// Artifact metadata as reported directly on a durable job's `result.artifacts`.
+// Durable render jobs do not yet expose a browser-servable URL/size/updatedAt for
+// each artifact, so this intentionally omits those fields rather than faking them
+// (see Artifact above, which requires them). Render name/kind only — never point
+// media elements at a URL that does not exist.
+export type DurableResultArtifact = {
+  path: string;
+  name: string;
+  kind: 'image' | 'video' | 'document';
+};
+
 export type WorkspaceUpload = {
   name: string;
   path: string;

@@ -2,6 +2,8 @@
 // storyboard session. Kept free of React/browser globals so refresh behaviour can
 // be tested with a plain Map (see tests/components/vimaxWorkspaceState.test.mjs).
 
+import type {DurableResultArtifact} from './types';
+
 export type StoredJob = {id: string; status: string};
 type StoredJobs = Record<string, StoredJob>;
 
@@ -68,4 +70,46 @@ export function saveDurableJob(sessionId: string, job: StoredJob, storage: JobSt
   const all = readAll(storage);
   all[sessionId] = {id: job.id, status: job.status};
   writeRaw(storage, STORAGE_KEY, JSON.stringify(all));
+}
+
+const KNOWN_ARTIFACT_KINDS = new Set(['image', 'video', 'document']);
+
+// Maps the loosely-typed `result` from a durable job status response into safe
+// artifact panel entries. Defensive by design: `result` comes from the network
+// and must never crash the panel or leak an unsafe path into a fetch/URL.
+//
+// - `path` must be a non-empty relative string without `..` segments (rejects
+//   path traversal outright rather than sanitizing it, per the brief).
+// - `kind` normalizes to exactly 'image' | 'video' | 'document'; anything
+//   missing/unrecognized falls back to 'document' (the safest default: it never
+//   renders an <img>/<video> tag, only a name/type/status row).
+// - `name` falls back to the path's basename when absent/empty, so the panel
+//   never has to render a blank name.
+export function artifactsFromJobResult(result: unknown): DurableResultArtifact[] {
+  if (!result || typeof result !== 'object') return [];
+  const rawArtifacts = (result as {artifacts?: unknown}).artifacts;
+  if (!Array.isArray(rawArtifacts)) return [];
+
+  const mapped: DurableResultArtifact[] = [];
+  for (const entry of rawArtifacts) {
+    if (!entry || typeof entry !== 'object') continue;
+    const rawPath = (entry as {path?: unknown}).path;
+    if (typeof rawPath !== 'string') continue;
+    const path = rawPath.trim();
+    if (!path || path.includes('..')) continue;
+
+    const rawName = (entry as {name?: unknown}).name;
+    const name = typeof rawName === 'string' && rawName.trim().length > 0 ? rawName.trim() : basename(path);
+
+    const rawKind = (entry as {kind?: unknown}).kind;
+    const kind = KNOWN_ARTIFACT_KINDS.has(rawKind as string) ? (rawKind as DurableResultArtifact['kind']) : 'document';
+
+    mapped.push({path, name, kind});
+  }
+  return mapped;
+}
+
+function basename(path: string): string {
+  const segments = path.split('/').filter(Boolean);
+  return segments[segments.length - 1] || path;
 }
