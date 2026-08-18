@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {artifactsFromJobResult, restoreDurableJob, saveDurableJob} from '../../components/vimax/reused/vimaxWorkspaceState.ts';
+
+test('composer remains compact glass with a taller input', () => {
+  const css = readFileSync(new URL('../../components/vimax/reused/styles.css', import.meta.url), 'utf8');
+  assert.match(css, /\.composer textarea\s*\{[\s\S]*min-height:\s*44px/);
+  assert.match(css, /\.composer\s*\{[\s\S]*backdrop-filter:\s*blur/);
+});
 
 test('restores only the durable job belonging to the selected session', () => {
   const storage = new Map();
