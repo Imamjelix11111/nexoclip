@@ -21,9 +21,14 @@ export function createVimaxSessionsHandler({getSession = getCurrentSession, getW
     if (error) return error;
     const url = new URL(`${env.VIMAX_RUNTIME_URL.replace(/\/$/, '')}/internal/v1/sessions`);
     url.search = new URLSearchParams({workspace_id: workspace.id}).toString();
-    const response = await fetchFn(url.toString(), {
-      method: 'GET', headers: {'X-NexoClip-Runtime-Token': env.VIMAX_RUNTIME_TOKEN},
-    });
+    let response;
+    try {
+      response = await fetchFn(url.toString(), {
+        method: 'GET', headers: {'X-NexoClip-Runtime-Token': env.VIMAX_RUNTIME_TOKEN},
+      });
+    } catch {
+      return Response.json({error: 'Unable to list storyboard projects'}, {status: 502});
+    }
     if (!response.ok) return Response.json({error: 'Unable to list storyboard projects'}, {status: 502});
     return Response.json(await response.json(), {status: 200});
   }
@@ -33,10 +38,15 @@ export function createVimaxSessionsHandler({getSession = getCurrentSession, getW
     if (error) return error;
     let projectName = '';
     try { projectName = String((await request.json()).projectName || '').slice(0, 64); } catch {}
-    const response = await fetchFn(`${env.VIMAX_RUNTIME_URL.replace(/\/$/, '')}/internal/v1/sessions`, {
-      method: 'POST', headers: {'Content-Type': 'application/json', 'X-NexoClip-Runtime-Token': env.VIMAX_RUNTIME_TOKEN},
-      body: JSON.stringify({workspace_id: workspace.id, project_name: projectName}),
-    });
+    let response;
+    try {
+      response = await fetchFn(`${env.VIMAX_RUNTIME_URL.replace(/\/$/, '')}/internal/v1/sessions`, {
+        method: 'POST', headers: {'Content-Type': 'application/json', 'X-NexoClip-Runtime-Token': env.VIMAX_RUNTIME_TOKEN},
+        body: JSON.stringify({workspace_id: workspace.id, project_name: projectName}),
+      });
+    } catch {
+      return Response.json({error: 'Unable to create storyboard project'}, {status: 502});
+    }
     if (!response.ok) return Response.json({error: 'Unable to create storyboard project'}, {status: 502});
     return Response.json(await response.json(), {status: 201});
   }

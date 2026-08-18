@@ -74,6 +74,20 @@ test('returns 502 and never relays runtime details when the runtime catalog fetc
   assert.equal(body.includes('http://runtime'), false);
 });
 
+test('returns 502 and never relays runtime details when the runtime catalog fetch rejects', async () => {
+  const handler = createVimaxSessionsHandler({
+    getSession: async () => ({ user_id: 'user-1' }),
+    getWorkspace: async () => ({ id: 'workspace-server' }),
+    env: { VIMAX_RUNTIME_URL: 'http://runtime', VIMAX_RUNTIME_TOKEN: 'secret' },
+    fetchFn: async () => { throw new Error('getaddrinfo ENOTFOUND runtime at http://runtime'); },
+  });
+  const response = await handler(getRequest());
+  assert.equal(response.status, 502);
+  const body = await response.text();
+  assert.equal(body.includes('secret'), false);
+  assert.equal(body.includes('http://runtime'), false);
+});
+
 test('creates a durable session using only the server-derived workspace and a bounded project name', async () => {
   const calls = [];
   const handler = createVimaxSessionsHandler({
@@ -91,6 +105,20 @@ test('creates a durable session using only the server-derived workspace and a bo
   assert.deepEqual(calls, [
     ['http://runtime/internal/v1/sessions', { workspace_id: 'workspace-server', project_name: 'A'.repeat(64) }],
   ]);
+});
+
+test('returns 502 and never relays runtime details when the session creation fetch rejects', async () => {
+  const handler = createVimaxSessionsHandler({
+    getSession: async () => ({ user_id: 'user-1' }),
+    getWorkspace: async () => ({ id: 'workspace-server' }),
+    env: { VIMAX_RUNTIME_URL: 'http://runtime', VIMAX_RUNTIME_TOKEN: 'secret' },
+    fetchFn: async () => { throw new Error('connect ECONNREFUSED http://runtime'); },
+  });
+  const response = await handler(postRequest({ projectName: 'Trailer' }));
+  assert.equal(response.status, 502);
+  const body = await response.text();
+  assert.equal(body.includes('secret'), false);
+  assert.equal(body.includes('http://runtime'), false);
 });
 
 test('rejects unauthenticated session creation', async () => {
