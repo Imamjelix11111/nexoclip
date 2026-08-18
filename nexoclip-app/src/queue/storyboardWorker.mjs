@@ -8,7 +8,7 @@ import { recoverQueuedGenerations } from './generationQueue.js';
 import { createStoryboardRuntimeClient } from './storyboardRuntimeClient.js';
 import { createGenerationProcessor } from './generationWorker.js';
 import { recordGenerationProgress, recordGenerationProgressById, recoverExpiredGenerationJobs } from '../repositories/generationStateRepository.js';
-import { releaseGenerationReservation, settleUnreservedGeneration } from '../services/generationCreditSettlementService.js';
+import { releaseGenerationReservation, recoverUnreservedGenerations, settleUnreservedGeneration } from '../services/generationCreditSettlementService.js';
 
 const REQUIRED = ['REDIS_URL', 'VIMAX_RUNTIME_URL', 'VIMAX_RUNTIME_TOKEN'];
 
@@ -30,17 +30,29 @@ export function createStoryboardProcessor({ pool, runtimeClient, onError = conso
         onProgress: async (event) => recordGenerationProgress(pool, {
           workspaceId: job.workspace_id,
           generationId: job.id,
+          attempt: Number(job.attempt_count),
+          claimToken: job.claim_token,
           progress: event?.progress || {stage: 'running'},
         }),
       });
       if (!response?.ok) throw Object.assign(new Error('Storyboard runtime rejected generation'), { code: 'PROVIDER_UNAVAILABLE' });
       return {
-        status: 'succeeded', provider: 'vimax', providerRequestId: response.provider_request_id || `runtime:${job.id}`,
-        result: response.result || {},
+        status: 'succeeded', provider: 'vimax',
+        result: {...(response.result || {}), artifacts: runtimeArtifacts(job.workspace_id, response.result || {})},
       };
     },
     onError,
     ...options,
+  });
+}
+
+function runtimeArtifacts(workspaceId, result) {
+  const paths = [...new Set(Object.values(result).flatMap((value) => Array.isArray(value) ? value : [value]).filter((value) => typeof value === 'string'))];
+  return paths.flatMap((path) => {
+    const normalized = path.replaceAll('\\', '/').replace(/^\/+/, '');
+    if (!normalized || normalized.includes('..') || !normalized.startsWith(`${workspaceId}/`)) return [];
+    const name = normalized.split('/').at(-1);
+    return [{path: normalized, name, kind: /\.(mp4|mov|webm)$/i.test(name) ? 'video' : 'file'}];
   });
 }
 
@@ -55,7 +67,7 @@ async function createProgressServer({token, pool}) {
     for await (const chunk of request) body += chunk;
     try {
       const event = JSON.parse(body);
-      const progress = await recordGenerationProgressById(pool, {generationId: jobId, progress: event.progress || {stage: 'running'}});
+      const progress = await recordGenerationProgressById(pool, {generationId: jobId, attempt: Number(event.attempt), claimToken: event.claim_token, progress: event.progress || {stage: 'running'}});
       response.writeHead(progress ? 204 : 404).end();
     } catch { response.writeHead(400).end(); }
   });
@@ -85,6 +97,7 @@ export async function createStoryboardWorker({
     progressCallbackUrl: config.progressCallbackUrl || progress.url, progressToken: config.progressToken,
   });
   const recoverNow = async () => {
+    await recoverUnreservedGenerations(pool);
     const expired = await recoverExpired(pool);
     for (const job of expired) {
       if (job.status === 'failed') {

@@ -40,6 +40,8 @@ export function createStoryboardRuntimeClient({ baseUrl, token, fetch = globalTh
             kind: job.kind,
             session_id: typeof parameters.sessionId === 'string' ? parameters.sessionId : '',
             input: safeInput(job.kind, parameters.input),
+            attempt: Number(job.attempt_count),
+            claim_token: job.claim_token,
             ...(progressCallbackUrl && progressToken ? {progress_callback: {url: `${progressCallbackUrl.replace(/\/$/, '')}/${encodeURIComponent(job.id)}`, token: progressToken}} : {}),
           }),
         });

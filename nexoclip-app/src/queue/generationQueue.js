@@ -2,10 +2,12 @@ const DEFAULT_BATCH_SIZE = 50;
 const CLAIM_LEASE = "interval '5 minutes'";
 
 function messageFor(job) {
+  const attempt = Number(job.attempt_count) + 1;
   return {
     type: 'generation',
     generationId: job.id,
     workspaceId: job.workspace_id,
+    attempt,
   };
 }
 
@@ -23,19 +25,21 @@ async function claimQueued(client, limit) {
        FOR UPDATE SKIP LOCKED
        LIMIT $1
      )
-     RETURNING id, workspace_id, status`,
+     RETURNING id, workspace_id, status, attempt_count`,
     [limit],
   );
   return result.rows;
 }
 
-async function markPublished(pool, generationId) {
-  await pool.query(
+async function markPublished(pool, generationId, attempt) {
+  const result = await pool.query(
     `UPDATE generation_jobs
      SET queue_published_at = now(), queue_claimed_at = NULL, updated_at = now()
-     WHERE id = $1 AND status = 'queued' AND queue_published_at IS NULL`,
-    [generationId],
+     WHERE id = $1 AND attempt_count = $2 AND status = 'queued' AND queue_published_at IS NULL
+     RETURNING id`,
+    [generationId, attempt],
   );
+  return result.rows[0] || null;
 }
 
 async function releaseClaim(pool, generationId) {
@@ -68,9 +72,10 @@ export function createQueuePublisher({ pool, queue, batchSize = DEFAULT_BATCH_SI
       let published = 0;
       for (const job of jobs) {
         try {
-          await queue.enqueue(messageFor(job), { idempotencyKey: `generation:${job.id}` });
-          await markPublished(pool, job.id);
-          published += 1;
+          const message = messageFor(job);
+          const delivery = await queue.enqueue(message, { idempotencyKey: `generation:${job.id}:attempt:${message.attempt}` });
+          if (!delivery?.runnable) throw new Error('Generation queue did not create a runnable delivery');
+          if (await markPublished(pool, job.id, job.attempt_count)) published += 1;
         } catch (error) {
           await releaseClaim(pool, job.id);
           throw error;

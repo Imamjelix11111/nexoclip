@@ -13,6 +13,7 @@ import {
   createUserWithWorkspace,
   findUserByEmail,
 } from '../repositories/userRepository.js';
+import { grantOnboardingCreditsInTransaction } from './creditPricingService.js';
 
 const DEFAULT_TTL_SECONDS = 60 * 60 * 24 * 30;
 
@@ -62,6 +63,7 @@ export async function registerUser({ email, password, displayName, workspaceName
       workspaceSlug: `${slugify(name)}-${cryptoRandomSuffix()}`,
     });
     const session = await createSessionForClient(client, user.id);
+    await grantOnboardingCreditsInTransaction(client, { workspaceId: workspace.id });
     await client.query('COMMIT');
     return { user, workspace, ...session };
   } catch (error) {
@@ -113,6 +115,7 @@ export async function loginWithGoogle({ email, displayName }) {
         workspaceName: name,
         workspaceSlug: `${slugify(name)}-${cryptoRandomSuffix()}`,
       });
+      await grantOnboardingCreditsInTransaction(client, { workspaceId: created.workspace.id });
       user = created.user;
     }
     const session = await createSessionForClient(client, user.id);

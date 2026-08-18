@@ -5,7 +5,7 @@ import {
   lockCreditAccount,
   updateCreditBalance,
 } from '../repositories/creditRepository.js';
-import { findPendingUnreservedTerminalGenerations, lockGenerationForSettlement, settleUnreservedGeneration as transitionUnreservedGeneration, updateGenerationSettlement } from '../repositories/generationSettlementRepository.js';
+import { findPendingTerminalGenerations, lockGenerationForSettlement, settleUnreservedGeneration as transitionUnreservedGeneration, updateGenerationSettlement } from '../repositories/generationSettlementRepository.js';
 
 function validateAmount(amount) {
   if (!Number.isFinite(Number(amount)) || Number(amount) < 0) throw new TypeError('Settlement amount is invalid');
@@ -48,7 +48,6 @@ async function settle(pool, { workspaceId, generationId, action, amount }) {
 }
 
 export async function captureGenerationCredits(pool, { workspaceId, generationId, actualCost }) {
-  const cost = validateAmount(actualCost);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -56,6 +55,7 @@ export async function captureGenerationCredits(pool, { workspaceId, generationId
     if (!generation) throw new Error('Generation not found');
     if (generation.settlement_status !== 'pending') { await client.query('COMMIT'); return generation; }
     const estimated = validateAmount(generation.estimated_cost);
+    const cost = actualCost === undefined ? estimated : validateAmount(actualCost);
     const refund = estimated - cost;
     if (refund < 0) throw new Error('Actual cost exceeds reservation');
     const idempotencyKey = `generation:settlement:capture:${generationId}`;
@@ -94,10 +94,13 @@ export async function settleUnreservedGeneration(pool, { workspaceId, generation
 }
 
 export async function recoverUnreservedGenerations(pool) {
-  const generations = await findPendingUnreservedTerminalGenerations(pool);
-  return Promise.all(generations.map(({ workspace_id: workspaceId, id: generationId, status }) =>
-    settleUnreservedGeneration(pool, { workspaceId, generationId, status }),
-  ));
+  const generations = await findPendingTerminalGenerations(pool);
+  return Promise.all(generations.map(async ({ workspace_id: workspaceId, id: generationId, status, reservation_ledger_id: reservationLedgerId }) => {
+    if (reservationLedgerId === null) return settleUnreservedGeneration(pool, { workspaceId, generationId, status });
+    return status === 'succeeded'
+      ? captureGenerationCredits(pool, { workspaceId, generationId, actualCost: undefined })
+      : releaseGenerationReservation(pool, { workspaceId, generationId });
+  }));
 }
 
 export function releaseGenerationReservation(pool, args) {

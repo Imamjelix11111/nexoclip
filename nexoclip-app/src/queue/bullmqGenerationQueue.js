@@ -9,11 +9,13 @@ export function createBullMqGenerationQueue({ Queue, Worker, connection, queueNa
   const producer = new Queue(queueName, { connection });
   return {
     async enqueue(message, { idempotencyKey }) {
-      await producer.add('generation', message, {
+      const job = await producer.add('generation', message, {
         jobId: bullMqJobId(idempotencyKey),
         removeOnComplete: true,
         removeOnFail: false,
       });
+      const state = await job.getState();
+      return { runnable: !['failed', 'completed'].includes(state) };
     },
 
     createWorker(handler, options = {}) {
