@@ -96,7 +96,7 @@ export function artifactsFromJobResult(result: unknown): DurableResultArtifact[]
     const rawPath = (entry as {path?: unknown}).path;
     if (typeof rawPath !== 'string') continue;
     const path = rawPath.trim();
-    if (!path || path.includes('..')) continue;
+    if (!path || path.includes('..') || path.startsWith('/')) continue;
 
     const rawName = (entry as {name?: unknown}).name;
     const name = typeof rawName === 'string' && rawName.trim().length > 0 ? rawName.trim() : basename(path);
