@@ -559,24 +559,28 @@ export default function AudioStudio({
   }, []);
 
   // ── Persistence: Save ────────────────────────────────────────────────────
+  // Kept in a ref so the unmount-flush effect below always sees the latest
+  // values, even though it only re-subscribes once (empty deps).
+  const persistStateRef = useRef();
+  persistStateRef.current = { selectedModelId, params, internalHistory, activeResultUrl, activeResultTitle, view };
+
+  const writePersistedState = useCallback(() => {
+    try {
+      localStorage.setItem(PERSIST_KEY, JSON.stringify(persistStateRef.current));
+    } catch (err) {
+      console.warn("Failed to save AudioStudio persistence:", err);
+    }
+  }, [PERSIST_KEY]);
+
   useEffect(() => {
-    const timer = setTimeout(() => {
-      try {
-        const state = {
-          selectedModelId,
-          params,
-          internalHistory,
-          activeResultUrl,
-          activeResultTitle,
-          view,
-        };
-        localStorage.setItem(PERSIST_KEY, JSON.stringify(state));
-      } catch (err) {
-        console.warn("Failed to save AudioStudio persistence:", err);
-      }
-    }, 500);
+    const timer = setTimeout(writePersistedState, 500);
     return () => clearTimeout(timer);
-  }, [selectedModelId, params, internalHistory, activeResultUrl, activeResultTitle, view]);
+  }, [selectedModelId, params, internalHistory, activeResultUrl, activeResultTitle, view, writePersistedState]);
+
+  // The tab switcher unmounts this component. Without this, switching tabs
+  // within the 500ms debounce window above cancels the pending write and
+  // silently drops the latest generation history.
+  useEffect(() => () => writePersistedState(), [writePersistedState]);
 
   // ── Handle Dropped Files ────────────────────────────────────────────────
   useEffect(() => {

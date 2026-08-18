@@ -90,6 +90,7 @@ const TABS_CONFIG = {
         id: "eyes_details",
         label: "Eye Features",
         options: [
+          { id: "eyes_normal",           label: "Normal",        img: `${CDN}/eyes_type_eyes_human.webp`,               promptVal: "" },
           { id: "eyes_different_colors", label: "Heterochromia", img: `${CDN}/eyes_details_eyes_different_colors.webp`, promptVal: "heterochromia different eye colors" },
           { id: "eyes_blind",            label: "Blind Eye",     img: `${CDN}/eyes_details_eyes_blind.webp`,            promptVal: "one cloudy blind eye" },
           { id: "eyes_scarred",          label: "Scarred Eye",   img: `${CDN}/eyes_details_eyes_scarred.webp`,          promptVal: "scar running across one eye" },
@@ -123,6 +124,7 @@ const TABS_CONFIG = {
         id: "horns",
         label: "Horns",
         options: [
+          { id: "horns_none", label: "None", img: `${CDN}/ears_ears_no.webp`, promptVal: "" },
           { id: "small_horns", label: "Small Horns", img: `${CDN}/horns_small_horns.webp`, promptVal: "small horns on forehead" },
           { id: "big_horns",   label: "Big Horns",   img: `${CDN}/horns_big_horns.webp`,   promptVal: "large curved horns" },
           { id: "antlers",     label: "Antlers",      img: `${CDN}/horns_antlers.webp`,      promptVal: "deer antlers on head" },
@@ -132,6 +134,7 @@ const TABS_CONFIG = {
         id: "skin_conditions",
         label: "Skin Conditions",
         options: [
+          { id: "condition_natural",      label: "Natural",      img: `${CDN}/face_skin_material_face_skin_human.webp`,     promptVal: "" },
           { id: "condition_vitiligo",     label: "Vitiligo",     img: `${CDN}/skin_conditions_condition_vitiligo.webp`,     promptVal: "vitiligo skin condition" },
           { id: "condition_pigmentation", label: "Pigmentation", img: `${CDN}/skin_conditions_condition_pigmentation.webp`, promptVal: "hyperpigmentation" },
           { id: "condition_freckles",     label: "Freckles",     img: `${CDN}/skin_conditions_condition_freckles.webp`,     promptVal: "freckled skin" },
@@ -243,8 +246,8 @@ const TABS_CONFIG = {
         id: "hair",
         label: "Hair / Head Growth",
         options: [
-          { id: "hair_bald",      label: "Bald",       img: `${CDN}/hair_hair_bald.webp`,      promptVal: "bald head" },
           { id: "hair_short",     label: "Short Hair", img: `${CDN}/hair_hair_short.webp`,     promptVal: "short hair" },
+          { id: "hair_bald",      label: "Bald",       img: `${CDN}/hair_hair_bald.webp`,      promptVal: "bald head" },
           { id: "hair_long",      label: "Long Hair",  img: `${CDN}/hair_hair_long.webp`,      promptVal: "long flowing hair" },
           { id: "hair_afro",      label: "Afro",       img: `${CDN}/hair_hair_afro.webp`,      promptVal: "afro hairstyle" },
           { id: "hair_punk",      label: "Punk",       img: `${CDN}/hair_hair_punk.webp`,      promptVal: "punk mohawk hairstyle" },
@@ -257,6 +260,7 @@ const TABS_CONFIG = {
         id: "accessories",
         label: "Accessories & Markings",
         options: [
+          { id: "accessory_none",          label: "None",                img: `${CDN}/ears_ears_no.webp`,                        promptVal: "" },
           { id: "accessory_tattoos",       label: "Tattoos",            img: `${CDN}/accessories_accessory_tattoos.webp`,       promptVal: "covered in tattoos" },
           { id: "accessory_piercing",      label: "Piercings",          img: `${CDN}/accessories_accessory_piercing.webp`,      promptVal: "multiple piercings" },
           { id: "accessory_scarification", label: "Scarification",      img: `${CDN}/accessories_accessory_scarification.webp`, promptVal: "ritual scarification marks" },
@@ -410,18 +414,21 @@ export default function AiInfluencerStudio({
       if (onGenerate) {
         res = await onGenerate({ prompt, aspectRatio, selections: selectedOptions });
       } else {
+        const workspaceId = typeof window !== "undefined" ? window.sessionStorage.getItem("nexoclip_workspace_id") : null;
         res = await generateImage(apiKey, {
           model: INFLUENCER_MODEL,
           prompt,
           aspect_ratio: aspectRatio,
+          workspace_id: workspaceId,
         });
       }
-      if (res?.url) {
-        setCurrentResult(res.url);
-        setHistory((prev) => [{ url: res.url, prompt, ts: Date.now() }, ...prev]);
+      const outputUrl = res?.url || res?.outputs?.[0]?.url;
+      if (outputUrl) {
+        setCurrentResult(outputUrl);
+        setHistory((prev) => [{ url: outputUrl, prompt, ts: Date.now() }, ...prev]);
         setSelectedHistoryIdx(0);
         onGenerationComplete?.({
-          url: res.url,
+          url: outputUrl,
           model: INFLUENCER_MODEL,
           prompt,
           type: "image",

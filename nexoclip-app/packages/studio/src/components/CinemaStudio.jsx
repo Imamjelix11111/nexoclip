@@ -619,22 +619,28 @@ export default function CinemaStudio({
 
   // ── Adjust height on load ────────────────────────────────────────────────
   // ── Persistence: Save ────────────────────────────────────────────────────
+  // Kept in a ref so the unmount-flush effect below always sees the latest
+  // values, even though it only re-subscribes once (empty deps).
+  const persistStateRef = useRef();
+  persistStateRef.current = { settings, resolution, internalHistory, uploadedImage };
+
+  const writePersistedState = useCallback(() => {
+    try {
+      localStorage.setItem(PERSIST_KEY, JSON.stringify(persistStateRef.current));
+    } catch (err) {
+      console.warn("Failed to save CinemaStudio persistence:", err);
+    }
+  }, [PERSIST_KEY]);
+
   useEffect(() => {
-    const timer = setTimeout(() => {
-      try {
-        const state = {
-          settings,
-          resolution,
-          internalHistory,
-          uploadedImage,
-        };
-        localStorage.setItem(PERSIST_KEY, JSON.stringify(state));
-      } catch (err) {
-        console.warn("Failed to save CinemaStudio persistence:", err);
-      }
-    }, 500); // 500ms debounce
+    const timer = setTimeout(writePersistedState, 500); // 500ms debounce
     return () => clearTimeout(timer);
-  }, [settings, resolution, internalHistory, uploadedImage]);
+  }, [settings, resolution, internalHistory, uploadedImage, writePersistedState]);
+
+  // The tab switcher unmounts this component (unlike ImageStudio, which is only
+  // hidden). Without this, switching tabs within the 500ms debounce window above
+  // cancels the pending write and silently drops the latest generation history.
+  useEffect(() => () => writePersistedState(), [writePersistedState]);
 
   // Derive effective history (prop wins over internal)
   const history = historyItems != null ? historyItems : internalHistory;
@@ -665,18 +671,21 @@ export default function CinemaStudio({
     );
 
     try {
+      const workspaceId = typeof window !== "undefined" ? window.sessionStorage.getItem("nexoclip_workspace_id") : null;
       const res = await generateImage(apiKey, {
         model: uploadedImage ? "nano-banana-pro-edit" : "nano-banana-pro",
         prompt: finalPrompt,
         aspect_ratio: settings.aspect_ratio,
-        resolution: resolution.toLowerCase(),
+        resolution,
         negative_prompt: "blurry, low quality, distortion, bad composition",
         images_list: uploadedImage ? [uploadedImage] : [],
+        workspace_id: workspaceId,
       });
 
-      if (res && res.url) {
+      const outputUrl = res?.url || res?.outputs?.[0]?.url;
+      if (outputUrl) {
         const entry = {
-          url: res.url,
+          url: outputUrl,
           timestamp: Date.now(),
           settings: {
             prompt: basePrompt,
@@ -694,11 +703,11 @@ export default function CinemaStudio({
           setInternalHistory((prev) => [entry, ...prev].slice(0, 50));
         }
 
-        setCanvasUrl(res.url);
+        setCanvasUrl(outputUrl);
 
         if (onGenerationComplete) {
           onGenerationComplete({
-            url: res.url,
+            url: outputUrl,
             model: "nano-banana-pro",
             prompt: basePrompt,
             type: "cinema",

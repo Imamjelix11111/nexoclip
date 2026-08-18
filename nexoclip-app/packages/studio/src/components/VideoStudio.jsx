@@ -13,6 +13,8 @@ import {
   t2vModels,
   i2vModels,
   v2vModels,
+  openRouterT2VModels,
+  openRouterI2VModels,
   getAspectRatiosForVideoModel,
   getDurationsForModel,
   getResolutionsForVideoModel,
@@ -153,20 +155,20 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
       id: "all",
       label: "All",
       entries: [
-        ...t2vModels.map((model) => ({ model, category: "t2v" })),
-        ...i2vModels.map((model) => ({ model, category: "i2v" })),
+        ...openRouterT2VModels.map((model) => ({ model, category: "t2v" })),
+        ...openRouterI2VModels.map((model) => ({ model, category: "i2v" })),
         ...v2vModels.map((model) => ({ model, category: "v2v" })),
       ],
     },
     {
       id: "t2v",
       label: "Text to Video",
-      entries: t2vModels.map((model) => ({ model, category: "t2v" })),
+      entries: openRouterT2VModels.map((model) => ({ model, category: "t2v" })),
     },
     {
       id: "i2v",
       label: "Image to Video",
-      entries: i2vModels.map((model) => ({ model, category: "i2v" })),
+      entries: openRouterI2VModels.map((model) => ({ model, category: "i2v" })),
     },
     {
       id: "v2v",
@@ -471,7 +473,7 @@ export default function VideoStudio({
   const [v2vMode, setV2vMode] = useState(false);
 
   // ── model / params ──
-  const defaultModel = t2vModels[0];
+  const defaultModel = openRouterT2VModels[0];
   const [selectedModel, setSelectedModel] = useState(defaultModel.id);
   const [selectedModelName, setSelectedModelName] = useState(defaultModel.name);
   const [selectedAr, setSelectedAr] = useState(
@@ -706,32 +708,38 @@ export default function VideoStudio({
   }, [applyControlsForModel, defaultModel.id]);
 
   // ── Persistence: Save ────────────────────────────────────────────────────
+  // Kept in a ref so the unmount-flush effect below always sees the latest
+  // values, even though it only re-subscribes once (empty deps).
+  const persistStateRef = useRef();
+  persistStateRef.current = {
+    imageMode,
+    v2vMode,
+    selectedModel,
+    selectedModelName,
+    selectedAr,
+    selectedDuration,
+    selectedResolution,
+    selectedQuality,
+    selectedMode,
+    selectedEffect,
+    uploadedImageUrl,
+    uploadedImageUrls,
+    uploadedVideoUrl,
+    uploadedVideoName,
+    prompt,
+    localHistory,
+  };
+
+  const writePersistedState = useCallback(() => {
+    try {
+      localStorage.setItem(PERSIST_KEY, JSON.stringify(persistStateRef.current));
+    } catch (err) {
+      console.warn("Failed to save VideoStudio persistence:", err);
+    }
+  }, [PERSIST_KEY]);
+
   useEffect(() => {
-    const timer = setTimeout(() => {
-      try {
-        const state = {
-          imageMode,
-          v2vMode,
-          selectedModel,
-          selectedModelName,
-          selectedAr,
-          selectedDuration,
-          selectedResolution,
-          selectedQuality,
-          selectedMode,
-          selectedEffect,
-          uploadedImageUrl,
-          uploadedImageUrls,
-          uploadedVideoUrl,
-          uploadedVideoName,
-          prompt,
-          localHistory,
-        };
-        localStorage.setItem(PERSIST_KEY, JSON.stringify(state));
-      } catch (err) {
-        console.warn("Failed to save VideoStudio persistence:", err);
-      }
-    }, 500); // 500ms debounce
+    const timer = setTimeout(writePersistedState, 500); // 500ms debounce
     return () => clearTimeout(timer);
   }, [
     imageMode,
@@ -750,7 +758,13 @@ export default function VideoStudio({
     uploadedVideoName,
     prompt,
     localHistory,
+    writePersistedState,
   ]);
+
+  // The tab switcher unmounts this component. Without this, switching tabs
+  // within the 500ms debounce window above cancels the pending write and
+  // silently drops the latest generation history.
+  useEffect(() => () => writePersistedState(), [writePersistedState]);
 
   // ── Derived UI values ────────────────────────────────────────────────────
 
@@ -789,7 +803,7 @@ export default function VideoStudio({
         : null;
       const targetModel = imageMode
         ? i2vModels.find((model) => model.id === selectedModel)
-        : sibling || i2vModels[0];
+        : sibling || openRouterI2VModels[0];
 
       if (!targetModel) return;
 
@@ -941,7 +955,7 @@ export default function VideoStudio({
     const currentT2V = t2vModels.find((m) => m.id === selectedModel);
     if (currentT2V?.inputs?.images_list) return;
     setImageMode(false);
-    const first = t2vModels[0];
+    const first = openRouterT2VModels[0];
     setSelectedModel(first.id);
     setSelectedModelName(first.name);
     applyControlsForModel(first.id, false, false);
@@ -956,7 +970,7 @@ export default function VideoStudio({
       // Reset to text-to-video if empty list
       if (isMotionControlSelection(selectedModel, v2vMode)) return;
       setImageMode(false);
-      const first = t2vModels[0];
+      const first = openRouterT2VModels[0];
       setSelectedModel(first.id);
       setSelectedModelName(first.name);
       applyControlsForModel(first.id, false, false);
@@ -1047,7 +1061,7 @@ export default function VideoStudio({
     setUploadedVideoUrl(null);
     setUploadedVideoName(null);
     setV2vMode(false);
-    const first = t2vModels[0];
+    const first = openRouterT2VModels[0];
     setSelectedModel(first.id);
     setSelectedModelName(first.name);
     applyControlsForModel(first.id, false, false);
@@ -1203,7 +1217,8 @@ export default function VideoStudio({
           });
       } else if (imageMode) {
         const maxImgs = getMaxImagesForI2VModel(selectedModel);
-        const i2vParams = { model: selectedModel };
+        const workspaceId = typeof window !== "undefined" ? window.sessionStorage.getItem("nexoclip_workspace_id") : null;
+        const i2vParams = { model: selectedModel, workspace_id: workspaceId };
         if (maxImgs > 2) {
           i2vParams.images_list = uploadedImageUrls;
         } else {
@@ -1254,7 +1269,8 @@ export default function VideoStudio({
           });
       } else {
         // T2V (including extend mode)
-        const params = { model: selectedModel };
+        const workspaceId = typeof window !== "undefined" ? window.sessionStorage.getItem("nexoclip_workspace_id") : null;
+        const params = { model: selectedModel, workspace_id: workspaceId };
         if (trimmedPrompt) params.prompt = trimmedPrompt;
 
         if (isExtendMode) {
@@ -1361,7 +1377,7 @@ export default function VideoStudio({
     setUploadedVideoUrl(null);
     setUploadedVideoName(null);
     setV2vMode(false);
-    const first = t2vModels[0];
+    const first = openRouterT2VModels[0];
     setSelectedModel(first.id);
     setSelectedModelName(first.name);
     applyControlsForModel(first.id, false, false);

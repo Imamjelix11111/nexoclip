@@ -1305,10 +1305,9 @@ export default function ImageStudio({
       );
 
       results.forEach((res) => {
-        if (res && res.url) {
-          const output = res.outputs?.[0];
-          const outputUrl = res.url || output?.url;
-          if (outputUrl) {
+        const output = res?.outputs?.[0];
+        const outputUrl = res?.url || output?.url;
+        if (outputUrl) {
           const entry = {
             id: res.id || res.providerRequestId || Math.random().toString(36).substring(7),
             url: outputUrl,
@@ -1324,7 +1323,6 @@ export default function ImageStudio({
             prompt: prompt.trim(),
             type: "image",
           });
-          }
         }
       });
     } catch (e) {

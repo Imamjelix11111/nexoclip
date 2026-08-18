@@ -934,6 +934,7 @@ export default function DrawModal({
       if (!blob) throw new Error("Canvas serialization failed");
 
       const uploadedUrl = await uploadFile(apiKey, blob);
+      const workspaceId = typeof window !== "undefined" ? window.sessionStorage.getItem("nexoclip_workspace_id") : null;
 
       const results = await Promise.all(
         Array.from({ length: batchSize }).map(async () => {
@@ -942,6 +943,7 @@ export default function DrawModal({
             prompt: promptText.trim() || "Edit the image based on the drawing overlay",
             images_list: [uploadedUrl],
             aspect_ratio: aspectRatio === "Auto" ? "1:1" : aspectRatio,
+            workspace_id: workspaceId,
           };
           return await generateI2I(apiKey, genParams);
         }),

@@ -1,4 +1,4 @@
-import { getModelById, getVideoModelById, getI2IModelById, getI2VModelById, getV2VModelById, getRecastModelById, getLipSyncModelById, getAudioModelById, OPENROUTER_IMAGE_MODEL_MAP } from './models.js';
+import { getModelById, getVideoModelById, getI2IModelById, getI2VModelById, getV2VModelById, getRecastModelById, getLipSyncModelById, getAudioModelById, OPENROUTER_IMAGE_MODEL_MAP, OPENROUTER_VIDEO_MODEL_MAP } from './models.js';
 
 // In an http(s) browser we route through the host app's proxy (Next.js routes
 // under /api/* re-issue the call server-side) so api.muapi.ai CORS is bypassed.
@@ -90,7 +90,56 @@ export async function generateI2I(_apiKey, params) {
     return response.json();
 }
 
+// Async submit-then-poll against our OpenRouter video proxy — used only for models
+// present in OPENROUTER_VIDEO_MODEL_MAP; everything else stays on the MuAPI path
+// below (submitAndPoll), unchanged.
+async function generateVideoOpenRouter(model, params) {
+    const body = { model, prompt: params.prompt || '' };
+    if (params.aspect_ratio) body.aspect_ratio = params.aspect_ratio;
+    if (params.duration) body.duration = Number(params.duration);
+    if (params.resolution) body.resolution = params.resolution;
+    if (params.seed !== undefined && params.seed !== -1) body.seed = params.seed;
+
+    const imageUrls = params.images_list?.length ? params.images_list : (params.image_url ? [params.image_url] : []);
+    const frameImages = imageUrls.map((url, index) => ({
+        type: 'image_url',
+        image_url: { url },
+        frame_type: index === 0 ? 'first_frame' : 'last_frame',
+    }));
+    if (params.last_image) {
+        frameImages.push({ type: 'image_url', image_url: { url: params.last_image }, frame_type: 'last_frame' });
+    }
+    if (frameImages.length) body.frame_images = frameImages;
+
+    const workspaceHeaders = params.workspace_id ? { 'x-workspace-id': params.workspace_id } : {};
+    const submitRes = await fetch('/api/openrouter/videos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...workspaceHeaders },
+        body: JSON.stringify(body),
+    });
+    if (!submitRes.ok) throw new Error(`OpenRouter video request failed: ${submitRes.status}`);
+    const submitData = await submitRes.json();
+    const jobId = submitData.id;
+    if (!jobId) throw new Error('No job id returned from video submission');
+    if (params.onRequestId) params.onRequestId(jobId);
+
+    const maxAttempts = 120; // 120 * 5s = 10 minutes
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        const pollRes = await fetch(`/api/openrouter/videos/${jobId}`, { headers: workspaceHeaders });
+        if (!pollRes.ok) throw new Error(`OpenRouter video poll failed: ${pollRes.status}`);
+        const pollData = await pollRes.json();
+        if (pollData.status === 'completed') return { provider: 'openrouter', status: 'succeeded', id: jobId, url: pollData.url };
+        if (['failed', 'cancelled', 'expired'].includes(pollData.status)) {
+            throw new Error(`Video generation ${pollData.status}: ${pollData.error || 'unknown error'}`);
+        }
+    }
+    throw new Error('Video generation timed out after polling.');
+}
+
 export async function generateVideo(apiKey, params) {
+    const openRouterModel = OPENROUTER_VIDEO_MODEL_MAP[params.model];
+    if (openRouterModel) return generateVideoOpenRouter(openRouterModel, params);
     const modelInfo = getVideoModelById(params.model);
     const endpoint = modelInfo?.endpoint || params.model;
     const payload = {};
@@ -108,6 +157,8 @@ export async function generateVideo(apiKey, params) {
 }
 
 export async function generateI2V(apiKey, params) {
+    const openRouterModel = OPENROUTER_VIDEO_MODEL_MAP[params.model];
+    if (openRouterModel) return generateVideoOpenRouter(openRouterModel, params);
     const modelInfo = getI2VModelById(params.model);
     const endpoint = modelInfo?.endpoint || params.model;
     const payload = {};
@@ -219,15 +270,20 @@ export async function generateAudio(apiKey, params) {
     return submitAndPoll(endpoint, payload, apiKey, params.onRequestId, 900);
 }
 
-export function uploadFile(apiKey, file, onProgress) {
+// Uploads reference files to our own R2-backed storage, not MuAPI — the app no
+// longer holds a client-side MuAPI key (see StandaloneShell.js), and this endpoint
+// is authenticated by session cookie + workspace, like the OpenRouter image route.
+export function uploadFile(_apiKey, file, onProgress) {
     return new Promise((resolve, reject) => {
-        const url = `${BASE_URL}/api/v1/upload_file`;
+        const workspaceId = typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null;
+        const url = '/api/uploads';
         const formData = new FormData();
         formData.append('file', file);
 
         const xhr = new XMLHttpRequest();
         xhr.open('POST', url);
-        xhr.setRequestHeader('x-api-key', apiKey);
+        xhr.withCredentials = true;
+        if (workspaceId) xhr.setRequestHeader('x-workspace-id', workspaceId);
 
         if (onProgress) {
             xhr.upload.onprogress = (event) => {
@@ -242,7 +298,7 @@ export function uploadFile(apiKey, file, onProgress) {
             if (xhr.status >= 200 && xhr.status < 300) {
                 try {
                     const data = JSON.parse(xhr.responseText);
-                    const fileUrl = data.url || data.file_url || data.data?.url;
+                    const fileUrl = data.url;
                     if (!fileUrl) {
                         reject(new Error('No URL returned from file upload'));
                     } else {
@@ -255,7 +311,7 @@ export function uploadFile(apiKey, file, onProgress) {
                 let detail = xhr.statusText;
                 try {
                     const errObj = JSON.parse(xhr.responseText);
-                    detail = errObj.detail || detail;
+                    detail = errObj.error || errObj.detail || detail;
                 } catch (e) {
                     // fallback to statusText
                 }
@@ -571,7 +627,7 @@ export async function executeWorkflow(apiKey, workflowId, inputs) {
     const submitData = await response.json();
     const runId = submitData.run_id || submitData.id;
     if (!runId) return submitData;
-    
+
     // Poll for results
     return await pollWorkflowResult(runId, apiKey);
 };
@@ -692,7 +748,7 @@ export async function getNodeStatus(apiKey, runId) {
  */
 export async function handleProxyRequest(prefix, path, method, headers, body, apiKey) {
     const url = `${BASE_URL}/${prefix}/${path}`;
-    
+
     const finalHeaders = new Headers(headers);
     finalHeaders.delete('host');
     finalHeaders.delete('connection');
@@ -712,7 +768,7 @@ export async function handleProxyRequest(prefix, path, method, headers, body, ap
 
         const contentType = response.headers.get('Content-Type') || 'application/json';
         const buffer = await response.arrayBuffer();
-        
+
         return {
             status: response.status,
             contentType,
@@ -732,7 +788,7 @@ export async function handleServerSideProxy(prefix, request, params, apiKey) {
         const slug = await params;
         const pathSegments = slug.path || [];
         const path = pathSegments.join('/');
-        
+
         const method = request.method;
         let body = null;
         if (method !== 'GET' && method !== 'HEAD') {
@@ -743,11 +799,11 @@ export async function handleServerSideProxy(prefix, request, params, apiKey) {
         const pathWithSearch = search ? `${path}${search}` : path;
 
         return await handleProxyRequest(
-            prefix, 
-            pathWithSearch, 
-            method, 
-            request.headers, 
-            body, 
+            prefix,
+            pathWithSearch,
+            method,
+            request.headers,
+            body,
             apiKey
         );
     } catch (error) {

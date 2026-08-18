@@ -3363,6 +3363,30 @@ export const OPENROUTER_IMAGE_MODEL_MAP = {
   'seedream-5.0-edit': 'bytedance-seed/seedream-5-0-pro',
 };
 
+// Only flagship, unambiguous 1:1 matches to OpenRouter's video catalog
+// (https://openrouter.ai/models?input_modalities=video) are mapped here — MuAPI's
+// tier/quality variants (e.g. seedance-2-vip-*-1080p) have no clear OpenRouter
+// equivalent and stay on MuAPI.
+export const OPENROUTER_VIDEO_MODEL_MAP = {
+  'seedance-v2.0-t2v': 'bytedance/seedance-2.0',
+  'seedance-v2.0-i2v': 'bytedance/seedance-2.0',
+  'veo3.1-text-to-video': 'google/veo-3.1',
+  'veo3.1-image-to-video': 'google/veo-3.1',
+  'veo3.1-fast-text-to-video': 'google/veo-3.1-fast',
+  'veo3.1-fast-image-to-video': 'google/veo-3.1-fast',
+  'veo3.1-lite-text-to-video': 'google/veo-3.1-lite',
+  'veo3.1-lite-image-to-video': 'google/veo-3.1-lite',
+  'kling-v3.0-pro-text-to-video': 'kwaivgi/kling-v3.0-pro',
+  'kling-v3.0-pro-image-to-video': 'kwaivgi/kling-v3.0-pro',
+  'kling-v3.0-standard-text-to-video': 'kwaivgi/kling-v3.0-std',
+  'kling-v3.0-standard-image-to-video': 'kwaivgi/kling-v3.0-std',
+  'minimax-hailuo-2.3-pro-t2v': 'minimax/hailuo-2.3',
+  'minimax-hailuo-2.3-pro-i2v': 'minimax/hailuo-2.3',
+  'minimax-hailuo-2.3-standard-t2v': 'minimax/hailuo-2.3',
+  'minimax-hailuo-2.3-standard-i2v': 'minimax/hailuo-2.3',
+  'openai-sora-2-pro-text-to-video': 'openai/sora-2-pro',
+};
+
 export const getModelById = (id) => t2iModels.find(m => m.id === id);
 
 export const getAspectRatiosForModel = (modelId) => {
@@ -19429,6 +19453,8 @@ export const getI2IModelById = (id) => i2iModels.find(m => m.id === id);
 
 export const openRouterT2IModels = t2iModels.filter((model) => OPENROUTER_IMAGE_MODEL_MAP[model.id]);
 export const openRouterI2IModels = i2iModels.filter((model) => OPENROUTER_IMAGE_MODEL_MAP[model.id]);
+export const openRouterT2VModels = t2vModels.filter((model) => OPENROUTER_VIDEO_MODEL_MAP[model.id]);
+export const openRouterI2VModels = i2vModels.filter((model) => OPENROUTER_VIDEO_MODEL_MAP[model.id]);
 export const getI2VModelById = (id) => i2vModels.find(m => m.id === id);
 
 export const getMaxImagesForI2VModel = (modelId) => {

@@ -562,27 +562,31 @@ export default function RecastStudio({
   };
 
   // ── Persistence: Save ──────────────────────────────────────────────────────
+  // Kept in a ref so the unmount-flush effect below always sees the latest
+  // values, even though it only re-subscribes once (empty deps).
+  const persistStateRef = useRef();
+  persistStateRef.current = {
+    selectedModelId,
+    selectedAspectRatio,
+    characterOrientation,
+    videoUrl,
+    videoName,
+    imageUrl,
+    imageName,
+    prompt,
+    internalHistory,
+  };
+
+  const writePersistedState = useCallback(() => {
+    try {
+      localStorage.setItem(PERSIST_KEY, JSON.stringify(persistStateRef.current));
+    } catch (err) {
+      console.warn("Failed to save RecastStudio persistence:", err);
+    }
+  }, [PERSIST_KEY]);
+
   useEffect(() => {
-    const timer = setTimeout(() => {
-      try {
-        localStorage.setItem(
-          PERSIST_KEY,
-          JSON.stringify({
-            selectedModelId,
-            selectedAspectRatio,
-            characterOrientation,
-            videoUrl,
-            videoName,
-            imageUrl,
-            imageName,
-            prompt,
-            internalHistory,
-          }),
-        );
-      } catch (err) {
-        console.warn("Failed to save RecastStudio persistence:", err);
-      }
-    }, 500);
+    const timer = setTimeout(writePersistedState, 500);
     return () => clearTimeout(timer);
   }, [
     selectedModelId,
@@ -594,7 +598,13 @@ export default function RecastStudio({
     imageName,
     prompt,
     internalHistory,
+    writePersistedState,
   ]);
+
+  // The tab switcher unmounts this component. Without this, switching tabs
+  // within the 500ms debounce window above cancels the pending write and
+  // silently drops the latest generation history.
+  useEffect(() => () => writePersistedState(), [writePersistedState]);
 
   // ── Derived model info ──────────────────────────────────────────────────────
   const selectedModel = getRecastModelById(selectedModelId);

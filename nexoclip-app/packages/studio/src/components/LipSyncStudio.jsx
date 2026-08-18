@@ -424,27 +424,33 @@ export default function LipSyncStudio({
   }, []);
 
   // ── Persistence: Save ────────────────────────────────────────────────────
+  // Kept in a ref so the unmount-flush effect below always sees the latest
+  // values, even though it only re-subscribes once (empty deps).
+  const persistStateRef = useRef();
+  persistStateRef.current = {
+    inputMode,
+    selectedModelId,
+    selectedResolution,
+    imageUrl,
+    imageName,
+    videoUrl,
+    videoName,
+    audioUrl,
+    audioName,
+    prompt,
+    internalHistory,
+  };
+
+  const writePersistedState = useCallback(() => {
+    try {
+      localStorage.setItem(PERSIST_KEY, JSON.stringify(persistStateRef.current));
+    } catch (err) {
+      console.warn("Failed to save LipSyncStudio persistence:", err);
+    }
+  }, [PERSIST_KEY]);
+
   useEffect(() => {
-    const timer = setTimeout(() => {
-      try {
-        const state = {
-          inputMode,
-          selectedModelId,
-          selectedResolution,
-          imageUrl,
-          imageName,
-          videoUrl,
-          videoName,
-          audioUrl,
-          audioName,
-          prompt,
-          internalHistory,
-        };
-        localStorage.setItem(PERSIST_KEY, JSON.stringify(state));
-      } catch (err) {
-        console.warn("Failed to save LipSyncStudio persistence:", err);
-      }
-    }, 500); // 500ms debounce
+    const timer = setTimeout(writePersistedState, 500); // 500ms debounce
     return () => clearTimeout(timer);
   }, [
     inputMode,
@@ -458,7 +464,13 @@ export default function LipSyncStudio({
     audioName,
     prompt,
     internalHistory,
+    writePersistedState,
   ]);
+
+  // The tab switcher unmounts this component. Without this, switching tabs
+  // within the 500ms debounce window above cancels the pending write and
+  // silently drops the latest generation history.
+  useEffect(() => () => writePersistedState(), [writePersistedState]);
 
   // ── Derived model info ──────────────────────────────────────────────────
   const selectedModel = lipsyncModels.find((m) => m.id === selectedModelId);
