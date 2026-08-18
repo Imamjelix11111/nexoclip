@@ -1,6 +1,6 @@
 'use client';
 
-import {useCallback, useEffect, useState} from 'react';
+import {useCallback, useEffect, useLayoutEffect, useState} from 'react';
 import {createVimaxSession, getVimaxJob, getVimaxSessions, submitVimaxJob} from './api';
 import {DurableArtifactList} from './ArtifactViews';
 import {artifactsFromJobResult, restoreDurableJob, saveDurableJob} from './vimaxWorkspaceState';
@@ -27,6 +27,16 @@ function jobStorage() {
 }
 
 export default function ViMaxApp() {
+  // AI Storyboard is dark-mode only; it never follows the site theme or system preference.
+  useLayoutEffect(() => {
+    const previous = document.documentElement.dataset.theme;
+    document.documentElement.dataset.theme = 'dark';
+    return () => {
+      if (previous === undefined) delete document.documentElement.dataset.theme;
+      else document.documentElement.dataset.theme = previous;
+    };
+  }, []);
+
   const [sessions, setSessions] = useState<DurableSessionSummary[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState('');
   const [job, setJob] = useState<DurableJob>();
@@ -198,9 +208,19 @@ export default function ViMaxApp() {
             </div>
           )}
           {workspaceView === 'artifacts' ? (
-            <section className="empty-state">
-              <h1>Artifacts</h1>
-              <p>{UNAVAILABLE_MESSAGE}</p>
+            <section className="storyboard-stage">
+              <header className="storyboard-stage-header">
+                <strong>Artifacts</strong>
+              </header>
+              {!selectedSessionId ? (
+                <p className="stage-empty">Select a project to see its render artifacts.</p>
+              ) : job?.result ? (
+                <div className="stage-artifacts">
+                  <DurableArtifactList artifacts={artifactsFromJobResult(job.result)} />
+                </div>
+              ) : (
+                <p className="stage-empty">No render artifacts yet for this project.</p>
+              )}
             </section>
           ) : !selectedSessionId ? (
             <EmptyState onNew={openNewProjectDialog} />
