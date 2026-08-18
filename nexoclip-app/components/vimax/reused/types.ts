@@ -1,3 +1,7 @@
+// Legacy shape emitted by the retired interactive agent bridge and still consumed
+// by ArtifactViews/events. `workingDir`, `idea`, and `compactionTurns` are NOT part
+// of the durable session catalog (Task 1 excludes filesystem paths for security);
+// the durable browser flow uses DurableSessionSummary below instead.
 export type SessionSummary = {
   sessionId: string;
   projectName: string;
@@ -8,6 +12,17 @@ export type SessionSummary = {
   updatedAt: string;
   createdAt: string;
   compactionTurns: number;
+};
+
+// Exactly the fields the durable session catalog (`GET /api/vimax/sessions`)
+// returns. No workingDir/tenant root ever crosses to the browser.
+export type DurableSessionSummary = {
+  sessionId: string;
+  projectName: string;
+  stage: string;
+  summary: string;
+  updatedAt: string;
+  createdAt: string;
 };
 
 export type ModelOption = {id: string; label: string};

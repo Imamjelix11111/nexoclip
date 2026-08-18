@@ -1,4 +1,4 @@
-import type {Artifact, JsonValue} from './types';
+import type {Artifact, DurableSessionSummary, JsonValue} from './types';
 
 export async function getJsonArtifact(artifact: Artifact): Promise<JsonValue> {
   const separator = artifact.url.includes('?') ? '&' : '?';
@@ -23,6 +23,14 @@ export type VimaxJobRequest = {
 
 export async function submitVimaxJob(input: VimaxJobRequest) {
   return request<{id: string; status: string}>('/api/vimax/jobs', {method: 'POST', body: JSON.stringify(input)});
+}
+
+export async function getVimaxSessions(): Promise<{sessions: DurableSessionSummary[]}> {
+  return request<{sessions: DurableSessionSummary[]}>('/api/vimax/sessions');
+}
+
+export async function createVimaxSession(projectName = '') {
+  return request<{session_id: string}>('/api/vimax/sessions', {method: 'POST', body: JSON.stringify({projectName})});
 }
 
 export async function getVimaxJob(generationId: string) {
