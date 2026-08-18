@@ -380,3 +380,36 @@ def test_executor_response_dto_redacts_embedded_paths_and_drops_unknown_objects(
     assert "unknown" not in result["result"]
     assert result["result"]["generated"] == ["artifacts/clip.mp4"]
     assert result["progress"][0]["progress"]["metadata"]["generated"] == ["artifacts/clip.mp4"]
+
+
+def test_execute_tolerates_incidental_whitespace_around_workspace_id(monkeypatch, tmp_path):
+    root = tmp_path / "tenants"
+
+    class FakeSessionIndex:
+        def __init__(self, workspace_root):
+            pass
+
+        def get(self, session_id):
+            return {"session_id": session_id}
+
+    class FakeAdapters:
+        def __init__(self, workspace_root, session_index):
+            pass
+
+        async def vimax_narrative_planning(self, args, runtime):
+            return ToolResult("vimax_narrative_planning", True, "done", {})
+
+    monkeypatch.setattr("runtime_api.executor.SessionIndex", FakeSessionIndex)
+    monkeypatch.setattr("runtime_api.executor.ViMaxAdapters", FakeAdapters)
+
+    result = asyncio.run(
+        RuntimeExecutor(root).execute(
+            job_id="job-1",
+            workspace_id=" workspace-1 ",
+            kind="vimax_narrative_planning",
+            session_id="s1",
+            args={},
+        )
+    )
+
+    assert result["ok"] is True

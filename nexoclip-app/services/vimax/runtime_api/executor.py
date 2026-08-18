@@ -77,10 +77,12 @@ class RuntimeExecutor:
         }
 
     def create_session(self, workspace_id: str, project_name: str) -> dict[str, Any]:
+        self._reject_whitespace_padded_workspace_id(workspace_id)
         workspace_id = self._normalize_workspace_id(workspace_id)
         return SessionIndex(self._tenant_root(workspace_id)).create(project_name=project_name)
 
     def list_sessions(self, workspace_id: str) -> list[dict[str, Any]]:
+        self._reject_whitespace_padded_workspace_id(workspace_id)
         workspace_id = self._normalize_workspace_id(workspace_id)
         sessions = SessionIndex(self._tenant_root(workspace_id)).load().get("sessions", {})
         if not isinstance(sessions, dict):
@@ -115,10 +117,16 @@ class RuntimeExecutor:
 
     @staticmethod
     def _normalize_workspace_id(workspace_id: str) -> str:
-        value = str(workspace_id)
+        value = str(workspace_id).strip()
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,95}", value):
             raise InvalidRuntimeRequest("Invalid workspace_id")
         return value
+
+    @staticmethod
+    def _reject_whitespace_padded_workspace_id(workspace_id: str) -> None:
+        value = str(workspace_id)
+        if value != value.strip():
+            raise InvalidRuntimeRequest("Invalid workspace_id")
 
     @staticmethod
     def _normalize_session_id(session_id: str) -> str:
