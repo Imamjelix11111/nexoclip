@@ -1,40 +1,66 @@
-import { NextResponse } from 'next/server';
 import { createOpenRouterVideoAdapter } from '../../../../src/providers/openrouter/videoAdapter.js';
 import { SESSION_COOKIE } from '../../../../src/lib/auth/session.js';
 import { resolveTenantContext } from '../../../../src/services/tenantContext.js';
+import { getPool } from '../../../../src/db/pool.js';
+import { createJob as createJobService } from '../../../../src/services/jobService.js';
 
-export async function POST(request) {
-  if (!process.env.OPENROUTER_API_KEY) {
-    return NextResponse.json({ error: 'OpenRouter is not configured' }, { status: 503 });
-  }
-  let body;
-  try { body = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 }); }
-  if (!body?.model || !body?.prompt) {
-    return NextResponse.json({ error: 'model and prompt are required' }, { status: 400 });
-  }
-  try {
-    const workspaceId = request.headers.get('x-workspace-id');
-    if (!workspaceId) return NextResponse.json({ error: 'x-workspace-id is required' }, { status: 400 });
-    await resolveTenantContext({ token: request.cookies.get(SESSION_COOKIE)?.value, workspaceId });
-  } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: error.message === 'Authentication required' ? 401 : 403 });
-  }
-  try {
-    const adapter = createOpenRouterVideoAdapter({ apiKey: process.env.OPENROUTER_API_KEY });
-    const result = await adapter.submit({
-      model: body.model,
-      prompt: body.prompt,
-      duration: body.duration,
-      resolution: body.resolution,
-      aspectRatio: body.aspect_ratio,
-      generateAudio: body.generate_audio,
-      seed: body.seed,
-      frameImages: body.frame_images,
-      referenceImages: (body.input_references || []).map((item) => item?.image_url?.url).filter(Boolean),
-    });
-    return NextResponse.json(result);
-  } catch (error) {
-    const status = Number.isInteger(error?.status) ? error.status : 502;
-    return NextResponse.json({ error: error?.message || 'OpenRouter request failed', code: error?.code }, { status });
-  }
+export function createVideoSubmitHandler({
+  resolveTenant = resolveTenantContext,
+  env = process.env,
+  submitVideo = (params) => createOpenRouterVideoAdapter({ apiKey: env.OPENROUTER_API_KEY }).submit(params),
+  createJob = createJobService,
+  pool,
+} = {}) {
+  return async function POST(request) {
+    if (!env.OPENROUTER_API_KEY) {
+      return Response.json({ error: 'OpenRouter is not configured' }, { status: 503 });
+    }
+    let body;
+    try { body = await request.json(); } catch { return Response.json({ error: 'Invalid JSON body' }, { status: 400 }); }
+    if (!body?.model || !body?.prompt) {
+      return Response.json({ error: 'model and prompt are required' }, { status: 400 });
+    }
+
+    let tenant;
+    try {
+      const workspaceId = request.headers.get('x-workspace-id');
+      if (!workspaceId) return Response.json({ error: 'x-workspace-id is required' }, { status: 400 });
+      tenant = await resolveTenant({ token: request.cookies.get(SESSION_COOKIE)?.value, workspaceId });
+    } catch (error) {
+      return Response.json({ error: error.message }, { status: error.message === 'Authentication required' ? 401 : 403 });
+    }
+
+    try {
+      const result = await submitVideo({
+        model: body.model,
+        prompt: body.prompt,
+        duration: body.duration,
+        resolution: body.resolution,
+        aspectRatio: body.aspect_ratio,
+        generateAudio: body.generate_audio,
+        seed: body.seed,
+        frameImages: body.frame_images,
+        referenceImages: (body.input_references || []).map((item) => item?.image_url?.url).filter(Boolean),
+      });
+
+      const job = await createJob({
+        // Lazily resolved: only touched by consumers that actually read it, so
+        // an injected createJob (tests) never forces a real DB pool to exist.
+        get pool() { return pool ?? getPool(); },
+        workspaceId: tenant.workspace.id,
+        kind: 'video',
+        params: { providerId: result.id, model: body.model, prompt: body.prompt },
+      });
+
+      return Response.json(
+        { id: result.id, job_id: job.id, status: 'queued', polling_url: result.polling_url },
+        { status: 202 },
+      );
+    } catch (error) {
+      const status = Number.isInteger(error?.status) ? error.status : 502;
+      return Response.json({ error: error?.message || 'OpenRouter request failed', code: error?.code }, { status });
+    }
+  };
 }
+
+export const POST = createVideoSubmitHandler();

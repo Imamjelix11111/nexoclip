@@ -1,4 +1,5 @@
 import { getModelById, getVideoModelById, getI2IModelById, getI2VModelById, getV2VModelById, getRecastModelById, getLipSyncModelById, getAudioModelById, OPENROUTER_IMAGE_MODEL_MAP, OPENROUTER_VIDEO_MODEL_MAP } from './models.js';
+import { rememberActiveJob, forgetActiveJob } from '../../../src/lib/jobs/durableJobStore.js';
 
 // In an http(s) browser we route through the host app's proxy (Next.js routes
 // under /api/* re-issue the call server-side) so api.muapi.ai CORS is bypassed.
@@ -120,20 +121,39 @@ async function generateVideoOpenRouter(model, params) {
     if (!submitRes.ok) throw new Error(`OpenRouter video request failed: ${submitRes.status}`);
     const submitData = await submitRes.json();
     const jobId = submitData.id;
+    const durableJobId = submitData.job_id;
     if (!jobId) throw new Error('No job id returned from video submission');
     if (params.onRequestId) params.onRequestId(jobId);
+
+    const hasLocalStorage = typeof window !== 'undefined' && window.localStorage;
+    if (durableJobId && params.workspace_id && hasLocalStorage) {
+        rememberActiveJob(params.workspace_id, durableJobId, window.localStorage);
+    }
+    const forgetJob = () => {
+        if (durableJobId && params.workspace_id && hasLocalStorage) {
+            forgetActiveJob(params.workspace_id, durableJobId, window.localStorage);
+        }
+    };
 
     const maxAttempts = 120; // 120 * 5s = 10 minutes
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         await new Promise((resolve) => setTimeout(resolve, 5000));
-        const pollRes = await fetch(`/api/openrouter/videos/${jobId}`, { headers: workspaceHeaders });
+        const pollUrl = durableJobId
+            ? `/api/openrouter/videos/${jobId}?job_id=${encodeURIComponent(durableJobId)}`
+            : `/api/openrouter/videos/${jobId}`;
+        const pollRes = await fetch(pollUrl, { headers: workspaceHeaders });
         if (!pollRes.ok) throw new Error(`OpenRouter video poll failed: ${pollRes.status}`);
         const pollData = await pollRes.json();
-        if (pollData.status === 'completed') return { provider: 'openrouter', status: 'succeeded', id: jobId, url: pollData.url };
+        if (pollData.status === 'completed') {
+            forgetJob();
+            return { provider: 'openrouter', status: 'succeeded', id: jobId, url: pollData.url };
+        }
         if (['failed', 'cancelled', 'expired'].includes(pollData.status)) {
+            forgetJob();
             throw new Error(`Video generation ${pollData.status}: ${pollData.error || 'unknown error'}`);
         }
     }
+    forgetJob();
     throw new Error('Video generation timed out after polling.');
 }
 
