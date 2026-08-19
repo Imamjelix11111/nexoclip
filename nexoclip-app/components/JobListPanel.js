@@ -64,7 +64,7 @@ export default function JobListPanel() {
         try {
           const res = await fetch(
             `/api/openrouter/videos/${providerId}?job_id=${encodeURIComponent(durableId)}`,
-            { credentials: 'include' },
+            { credentials: 'include', headers: { 'x-workspace-id': workspaceId } },
           );
           if (res.ok) {
             const data = await res.json();
