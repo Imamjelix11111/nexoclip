@@ -47,6 +47,7 @@ export async function GET(request, { params }) {
       return NextResponse.json({ status: status.status, error: status.error || null });
     }
     if (status.status !== 'completed') {
+      await markJobStatus({ workspaceId: tenant.workspace.id, jobId, status: 'running' });
       return NextResponse.json({ status: status.status });
     }
     const { buffer, contentType } = await adapter.downloadContent(id, 0);

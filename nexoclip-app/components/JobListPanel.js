@@ -2,6 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { toJobListItem } from '../src/lib/jobs/jobDisplay.js';
+import { restoreActiveJobs, forgetActiveJob } from '../src/lib/jobs/durableJobStore.js';
+
+const REATTACH_POLL_MS = 5000;
+const REATTACH_MAX_ATTEMPTS = 180;
+const TERMINAL_JOB_STATUSES = ['succeeded', 'failed', 'canceled'];
+const TERMINAL_POLL_STATUSES = ['completed', 'failed', 'cancelled', 'expired'];
 
 // Header panel: polls active jobs while any are running, shows recent on open.
 export default function JobListPanel() {
@@ -23,6 +29,71 @@ export default function JobListPanel() {
     const timer = window.setInterval(() => poll(open ? '' : '?status=active'), 3000);
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [open]);
+
+  // Reattach polling for jobs that were still active when the page was last unloaded.
+  // Runs once on mount so a mid-generation refresh doesn't strand the durable job in
+  // 'queued' forever (the OpenRouter video route only advances when a browser polls it).
+  useEffect(() => {
+    let cancelled = false;
+    const timers = [];
+
+    async function reattach(workspaceId, durableId) {
+      let job;
+      try {
+        const res = await fetch(`/api/jobs/${durableId}`, { credentials: 'include' });
+        if (!res.ok) return;
+        ({ job } = await res.json());
+      } catch {
+        return;
+      }
+      if (cancelled || !job) return;
+      if (TERMINAL_JOB_STATUSES.includes(job.status)) {
+        forgetActiveJob(workspaceId, durableId, window.localStorage);
+        return;
+      }
+      const providerId = job.params?.providerId;
+      if (!providerId) {
+        forgetActiveJob(workspaceId, durableId, window.localStorage);
+        return;
+      }
+
+      let attempts = 0;
+      const tick = async () => {
+        if (cancelled) return;
+        attempts += 1;
+        try {
+          const res = await fetch(
+            `/api/openrouter/videos/${providerId}?job_id=${encodeURIComponent(durableId)}`,
+            { credentials: 'include' },
+          );
+          if (res.ok) {
+            const data = await res.json();
+            if (TERMINAL_POLL_STATUSES.includes(data.status)) {
+              forgetActiveJob(workspaceId, durableId, window.localStorage);
+              window.clearInterval(timer);
+              return;
+            }
+          }
+        } catch {
+          /* transient — keep polling */
+        }
+        if (attempts >= REATTACH_MAX_ATTEMPTS) {
+          window.clearInterval(timer);
+        }
+      };
+      const timer = window.setInterval(tick, REATTACH_POLL_MS);
+      timers.push(timer);
+      tick();
+    }
+
+    const workspaceId = window.sessionStorage.getItem('nexoclip_workspace_id');
+    if (workspaceId) {
+      const ids = restoreActiveJobs(workspaceId, window.localStorage);
+      ids.forEach((durableId) => reattach(workspaceId, durableId));
+    }
+
+    return () => { cancelled = true; timers.forEach((t) => window.clearInterval(t)); };
+  }, []);
 
   const activeCount = items.filter((i) => i.status === 'queued' || i.status === 'running').length;
 
