@@ -157,12 +157,6 @@ const NodesNavbar = ({ addNode, apiNodeModels, filterNodeTypes = null, nodeSchem
         { label: "Generate Audio", icon: <AiOutlineAudio />, hasSubmenu: true, id: "generate-audio" },
       ]
     },
-    {
-      label: "API Models",
-      items: [
-        { label: "Api Node", icon: <RiInputMethodLine />, hasSubmenu: true, id: "api-models" },
-      ]
-    }
   ];
 
   const getSubmenuItems = (id) => {
@@ -205,7 +199,6 @@ const NodesNavbar = ({ addNode, apiNodeModels, filterNodeTypes = null, nodeSchem
       ...text.map(m => ({ ...m, type: "textNode" })),
       ...audio.map(m => ({ ...m, type: "audioNode" })),
       ...textUtils.map(m => ({ ...m, type: m.id === "video-combiner" ? "vidConcatNode" : "concatNode" })),
-      ...apiNodeModels.map(m => ({ ...m, type: "apiNode" })),
     ];
 
     const filtered = allModels.filter(m => m && m.name && m.name.toLowerCase().includes(searchQuery.toLowerCase()));

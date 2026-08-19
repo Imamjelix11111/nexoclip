@@ -1,7 +1,29 @@
 import axios from "axios";
 import { toast } from "react-hot-toast";
 
-export const imageModels = [
+// Only models with a real OpenRouter equivalent are kept in the pickers. The
+// "*-passthrough" entries are upload/input nodes (no model call) and are always
+// kept. Everything else is a MuAPI-only model with no OpenRouter counterpart and
+// is filtered out below (see the filtered re-exports at the bottom of this file).
+const OPENROUTER_WORKFLOW_MODELS = new Set([
+  // passthrough / input nodes — never filtered
+  "image-passthrough", "video-passthrough", "audio-passthrough", "text-passthrough",
+  // image → OpenRouter image models (verified via /api/v1/models)
+  "nano-banana", "nano-banana-edit",            // google/gemini-2.5-flash-image
+  "nano-banana-pro", "nano-banana-pro-edit",    // google/gemini-3-pro-image
+  "gpt-image-1.5",                              // openai/gpt-5-image
+  // video → OpenRouter video models (verified: veo-3.1, seedance-2.0; rest per OpenRouter video cookbook)
+  "veo3.1-text-to-video", "veo3.1-image-to-video",           // google/veo-3.1
+  "veo3.1-fast-text-to-video", "veo3.1-fast-image-to-video", // google/veo-3.1-fast
+  "openai-sora-2-pro-text-to-video", "openai-sora-2-pro-image-to-video", // openai/sora-2-pro
+  "seedance-v1.5-pro-t2v", "seedance-v1.5-pro-i2v",          // bytedance/seedance-1-5-pro
+  "wan2.6-text-to-video", "wan2.6-image-to-video",           // alibaba/wan-2.6
+  // audio → OpenRouter audio models (verified via /api/v1/models: lyria + gpt-audio)
+  "suno-create-music",                          // google/lyria-3-pro-preview (music gen)
+  "minimax-speech-2.6-hd", "minimax-speech-2.6-turbo",       // openai/gpt-audio (TTS)
+]);
+
+const _imageModelsRaw = [
   {
     id: "image-passthrough",
     name: "Input Image",
@@ -226,7 +248,7 @@ export const imageModels = [
   }
 ];
 
-export const videoModels = [
+const _videoModelsRaw = [
   {
     id: "video-passthrough",
     name: "Input Video",
@@ -589,7 +611,7 @@ export const textModels = [
   }
 ];
 
-export const audioModels = [
+const _audioModelsRaw = [
   {
     id: "audio-passthrough",
     name: "Input Audio",
@@ -638,6 +660,14 @@ export const audioModels = [
     input_params: {}
   }
 ];
+
+// Trim each picker to models that have a real OpenRouter equivalent. Passthrough
+// (upload/input) entries are always kept; textModels is left as-is (all its
+// entries are OpenRouter-native LLMs).
+const _keepOpenRouter = (m) => OPENROUTER_WORKFLOW_MODELS.has(m.id);
+export const imageModels = _imageModelsRaw.filter(_keepOpenRouter);
+export const videoModels = _videoModelsRaw.filter(_keepOpenRouter);
+export const audioModels = _audioModelsRaw.filter(_keepOpenRouter);
 
 export const concatModels = [
   {
