@@ -394,15 +394,8 @@ export default function ClippingStudio({
     }
   };
 
-  const handlePromptInput = (e) => {
-    const val = e.target.value;
-    if (val.trim().match(/^https?:\/\/[^\s]+$/i)) {
-      setVideoUrl(val.trim());
-      setPrompt("");
-      return;
-    }
-    setPrompt(val);
-  };
+  const handlePromptInput = (e) => setPrompt(e.target.value);
+  const handleVideoUrlInput = (e) => setVideoUrl(e.target.value.trim());
 
   // ── Video File Handlers ──
   const handleVideoFileChange = async (e) => {
@@ -447,11 +440,14 @@ export default function ClippingStudio({
     setResult(null);
 
     try {
+      const workspaceId = typeof window !== "undefined" ? window.sessionStorage.getItem("nexoclip_workspace_id") : null;
       const params = {
         video_url: videoUrl,
         num_highlights: numHighlights,
         aspect_ratio: aspectRatio,
         return_coordinates_only: returnCoordinatesOnly,
+        topic_hint: prompt,
+        workspace_id: workspaceId,
       };
 
       const res = await runClipping(apiKey, params);
@@ -606,7 +602,7 @@ export default function ClippingStudio({
                       muted
                       loop
                       playsInline
-                      onMouseOver={(e) => e.target.play()}
+                      onMouseOver={(e) => e.target.play().catch(() => {})}
                       onMouseOut={(e) => {
                         e.target.pause();
                         e.target.currentTime = 0;
@@ -799,7 +795,7 @@ export default function ClippingStudio({
                             loop
                             muted
                             playsInline
-                            onMouseOver={(e) => e.target.play()}
+                            onMouseOver={(e) => e.target.play().catch(() => {})}
                             onMouseOut={(e) => {
                               e.target.pause();
                               e.target.currentTime = 0;
@@ -958,12 +954,22 @@ export default function ClippingStudio({
               </button>
             )}
 
-            {/* Prompt textarea (supports direct URL pasting too) */}
-            <div className="flex-1 flex flex-col gap-1">
+            <div className="flex-1 flex flex-col gap-1.5">
+              {/* Video source URL — separate from the prompt so both can be set at once */}
+              {!videoUrl && (
+                <input
+                  type="text"
+                  value={videoUrl}
+                  onChange={handleVideoUrlInput}
+                  placeholder="Or paste a video URL (YouTube or direct link)"
+                  className="w-full bg-transparent text-xs text-white/70 placeholder:text-white/30 border border-white/10 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-[#22d3ee]/50"
+                />
+              )}
+              {/* Prompt textarea — steers which highlights get picked */}
               <PromptTextarea
                 value={prompt}
                 onChange={handlePromptInput}
-                placeholder="Describe prompt / highlights to extract"
+                placeholder={'Describe the highlights to extract (optional) — e.g. "focus on the funny moments"'}
               />
             </div>
           </div>
