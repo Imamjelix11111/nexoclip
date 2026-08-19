@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import AccountMenu from './AccountMenu';
+import JobListPanel from './JobListPanel.js';
 import AssetsContent from './AssetsContent';
 // Default tab is kept static so the first paint of /studio has no loading flash.
 import { ImageStudio } from 'studio';
@@ -653,6 +654,7 @@ export default function StandaloneShell({ initialTab, children }) {
               </span>
             </div>
 
+            <JobListPanel />
             <AccountMenu />
           </div>
         </header>
