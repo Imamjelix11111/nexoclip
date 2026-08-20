@@ -19,21 +19,17 @@ export async function findJob(client, workspaceId, id) {
   return result.rows[0] || null;
 }
 
-export async function listJobs(client, { workspaceId, statuses = null, limit = 50 }) {
-  if (statuses && statuses.length) {
-    const result = await client.query(
-      `SELECT ${RETURN_COLS} FROM generation_jobs
-       WHERE workspace_id = $1 AND status = ANY($2)
-       ORDER BY created_at DESC LIMIT $3`,
-      [workspaceId, statuses, limit],
-    );
-    return result.rows;
-  }
+export async function listJobs(client, { workspaceId, statuses = null, kind = null, limit = 50 }) {
+  const where = ['workspace_id = $1'];
+  const params = [workspaceId];
+  if (statuses && statuses.length) { params.push(statuses); where.push(`status = ANY($${params.length})`); }
+  if (kind) { params.push(kind); where.push(`kind = $${params.length}`); }
+  params.push(limit);
   const result = await client.query(
     `SELECT ${RETURN_COLS} FROM generation_jobs
-     WHERE workspace_id = $1
-     ORDER BY created_at DESC LIMIT $2`,
-    [workspaceId, limit],
+     WHERE ${where.join(' AND ')}
+     ORDER BY created_at DESC LIMIT $${params.length}`,
+    params,
   );
   return result.rows;
 }

@@ -19,7 +19,8 @@ export function createJobsListHandler({
 
     const url = new URL(request.url);
     const statuses = url.searchParams.get('status') === 'active' ? ['queued', 'running'] : null;
-    const { jobs } = await listJobs({ pool, workspaceId: workspace.id, statuses });
+    const kind = url.searchParams.get('kind') || null;
+    const { jobs } = await listJobs({ pool, workspaceId: workspace.id, statuses, kind });
     return Response.json({ jobs });
   };
 }

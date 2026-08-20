@@ -22,8 +22,8 @@ export async function getJob({ pool, workspaceId, id }) {
   return toJob(await jobRepository.findJob(pool, workspaceId, id));
 }
 
-export async function listJobs({ pool, workspaceId, statuses = null, limit = 50 }) {
-  const rows = await jobRepository.listJobs(pool, { workspaceId, statuses, limit });
+export async function listJobs({ pool, workspaceId, statuses = null, kind = null, limit = 50 }) {
+  const rows = await jobRepository.listJobs(pool, { workspaceId, statuses, kind, limit });
   return { jobs: rows.map(toJob) };
 }
 
