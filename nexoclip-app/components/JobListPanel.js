@@ -51,8 +51,23 @@ export default function JobListPanel() {
         forgetActiveJob(workspaceId, durableId, window.localStorage);
         return;
       }
-      const providerId = job.params?.providerId;
-      if (!providerId) {
+
+      let pollUrl;
+      if (job.kind === 'video') {
+        const providerId = job.params?.providerId;
+        if (!providerId) {
+          forgetActiveJob(workspaceId, durableId, window.localStorage);
+          return;
+        }
+        pollUrl = `/api/openrouter/videos/${providerId}?job_id=${encodeURIComponent(durableId)}`;
+      } else if (job.kind === 'clipping') {
+        const pythonJobId = job.params?.pythonJobId;
+        if (!pythonJobId) {
+          forgetActiveJob(workspaceId, durableId, window.localStorage);
+          return;
+        }
+        pollUrl = `/api/ai-clip/jobs/${pythonJobId}?job_id=${encodeURIComponent(durableId)}`;
+      } else {
         forgetActiveJob(workspaceId, durableId, window.localStorage);
         return;
       }
@@ -63,7 +78,7 @@ export default function JobListPanel() {
         attempts += 1;
         try {
           const res = await fetch(
-            `/api/openrouter/videos/${providerId}?job_id=${encodeURIComponent(durableId)}`,
+            pollUrl,
             { credentials: 'include', headers: { 'x-workspace-id': workspaceId } },
           );
           if (res.ok) {

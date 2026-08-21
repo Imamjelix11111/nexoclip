@@ -5,7 +5,6 @@ import toast, { Toaster } from "react-hot-toast";
 import { generateVideo, generateI2V, processV2V, uploadFile } from "../muapi.js";
 import { formatErrorMessage } from "../utils/formatError.js";
 import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
-import DurableJobHistory from "../../../../components/DurableJobHistory.js";
 import DrawModal from "./DrawModal.jsx";
 import MobileGenerationActions, {
   GenerationCopyButtons,
@@ -692,6 +691,7 @@ export default function VideoStudio({
         if (data.uploadedVideoUrl) setUploadedVideoUrl(data.uploadedVideoUrl);
         if (data.uploadedVideoName) setUploadedVideoName(data.uploadedVideoName);
         if (data.prompt) setPrompt(data.prompt);
+        if (data.localHistory) setLocalHistory(data.localHistory);
 
         // Update control visibility based on restored model/mode
         applyControlsForModel(
@@ -727,6 +727,7 @@ export default function VideoStudio({
     uploadedVideoUrl,
     uploadedVideoName,
     prompt,
+    localHistory,
   };
 
   const writePersistedState = useCallback(() => {
@@ -756,6 +757,7 @@ export default function VideoStudio({
     uploadedVideoUrl,
     uploadedVideoName,
     prompt,
+    localHistory,
     writePersistedState,
   ]);
 
@@ -1431,11 +1433,6 @@ export default function VideoStudio({
     >
       {/* ── CENTRAL GALLERY AREA ── */}
       <div className="flex-1 w-full max-w-7xl mx-auto overflow-y-auto custom-scrollbar pb-40 lg:pb-32 px-2">
-        {history.length === 0 && (
-          <div className="pt-4">
-            <DurableJobHistory kind="video" onSelect={(it) => setFullscreenUrl(it.url)} />
-          </div>
-        )}
         {history.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full pt-4 animate-fade-in-up">
             {history.map((entry, idx) => {

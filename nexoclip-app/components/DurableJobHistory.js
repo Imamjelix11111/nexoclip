@@ -8,7 +8,7 @@ export function historyItemsFromJobs(jobs) {
   return (jobs || [])
     .map(toJobListItem)
     .filter((it) => it.outputUrl)
-    .map((it) => ({ id: it.id, url: it.outputUrl, title: it.title, kind: it.kind }));
+    .map((it) => ({ id: it.id, url: it.outputUrl, title: it.title, kind: it.kind, thumbnailUrl: it.thumbnailUrl }));
 }
 
 // Reads the durable job list for one feature kind, replacing per-studio localStorage history.
@@ -44,8 +44,13 @@ export default function DurableJobHistory({ kind, onSelect }) {
           onClick: () => onSelect?.(it),
           className: 'overflow-hidden rounded-lg border border-white/10 hover:border-white/30',
         },
-        // eslint-disable-next-line @next/next/no-img-element
-        createElement('img', { src: it.url, alt: it.title, className: 'h-full w-full object-cover' }),
+        it.thumbnailUrl
+          // eslint-disable-next-line @next/next/no-img-element
+          ? createElement('img', { src: it.thumbnailUrl, alt: it.title, className: 'h-full w-full object-cover' })
+          : it.kind === 'image'
+            // eslint-disable-next-line @next/next/no-img-element
+            ? createElement('img', { src: it.url, alt: it.title, className: 'h-full w-full object-cover' })
+            : createElement('video', { src: it.url, muted: true, className: 'h-full w-full object-cover' }),
       ),
     ),
   );
