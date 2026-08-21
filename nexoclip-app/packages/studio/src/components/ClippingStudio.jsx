@@ -5,6 +5,7 @@ import toast, { Toaster } from "react-hot-toast";
 import { runClipping, uploadFile } from "../muapi.js";
 import { formatErrorMessage } from "../utils/formatError.js";
 import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
+import DurableJobHistory from "../../../../components/DurableJobHistory.js";
 import MobileGenerationActions, {
   GenerationCopyButtons,
 } from "./MobileGenerationActions.jsx";
@@ -297,7 +298,6 @@ export default function ClippingStudio({
         if (data.numHighlights) setNumHighlights(data.numHighlights);
         if (data.aspectRatio) setAspectRatio(data.aspectRatio);
         if (data.returnCoordinatesOnly !== undefined) setReturnCoordinatesOnly(data.returnCoordinatesOnly);
-        if (data.history) setHistory(data.history);
         if (data.result) setResult(data.result);
       }
     } catch (err) {
@@ -314,7 +314,6 @@ export default function ClippingStudio({
           numHighlights,
           aspectRatio,
           returnCoordinatesOnly,
-          history,
           result,
         };
         localStorage.setItem(PERSIST_KEY, JSON.stringify(state));
@@ -323,7 +322,7 @@ export default function ClippingStudio({
       }
     }, 500);
     return () => clearTimeout(timer);
-  }, [videoUrl, numHighlights, aspectRatio, returnCoordinatesOnly, history, result]);
+  }, [videoUrl, numHighlights, aspectRatio, returnCoordinatesOnly, result]);
 
   // ── Handle Dropped Files ────────────────────────────────────────────────
   useEffect(() => {
@@ -524,6 +523,18 @@ export default function ClippingStudio({
         {generateError && (
           <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded text-xs font-semibold leading-relaxed mb-6">
             {generateError}
+          </div>
+        )}
+
+        {/* Durable history: past clipping runs loaded from the job store */}
+        {!result && history.length === 0 && (
+          <div className="pt-4">
+            <DurableJobHistory
+              kind="clipping"
+              onSelect={(it) =>
+                handleSelectHistory({ id: it.id, videoUrl: it.url, clips: [it.url], coordinates: [] })
+              }
+            />
           </div>
         )}
 

@@ -5,6 +5,7 @@ import toast, { Toaster } from "react-hot-toast";
 import { generateImage, generateI2I, uploadFile } from "../muapi.js";
 import { formatErrorMessage } from "../utils/formatError.js";
 import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
+import DurableJobHistory from "../../../../components/DurableJobHistory.js";
 import DrawModal from "./DrawModal.jsx";
 import MobileGenerationActions, {
   GenerationCopyButtons,
@@ -972,7 +973,6 @@ export default function ImageStudio({
         if (data.uploadedImageUrls) setUploadedImageUrls(data.uploadedImageUrls);
         if (data.uploadHistory) setUploadHistory(data.uploadHistory);
         if (data.batchSize) setBatchSize(data.batchSize);
-        if (data.localHistory) setLocalHistory(data.localHistory);
       }
     } catch (err) {
       console.warn("Failed to load ImageStudio persistence:", err);
@@ -996,7 +996,6 @@ export default function ImageStudio({
           uploadedImageUrls,
           uploadHistory,
           batchSize,
-          localHistory,
         };
         localStorage.setItem(PERSIST_KEY, JSON.stringify(state));
       } catch (err) {
@@ -1016,7 +1015,6 @@ export default function ImageStudio({
     uploadedImageUrls,
     uploadHistory,
     batchSize,
-    localHistory,
   ]);
 
   const processDroppedImages = async (files) => {
@@ -1349,6 +1347,11 @@ export default function ImageStudio({
       
       {/* ── CENTRAL GALLERY AREA ── */}
       <div className="flex-1 w-full max-w-7xl mx-auto overflow-y-auto custom-scrollbar pb-40 lg:pb-32 px-2">
+        {history.length === 0 && (
+          <div className="pt-4">
+            <DurableJobHistory kind="image" onSelect={(it) => setFullscreenUrl(it.url)} />
+          </div>
+        )}
         {history.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 w-full pt-4 animate-fade-in-up">
             {history.map((entry, idx) => (
