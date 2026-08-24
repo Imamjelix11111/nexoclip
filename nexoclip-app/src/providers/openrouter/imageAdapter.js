@@ -6,12 +6,33 @@ const ERROR_MESSAGES = {
   404: ['OPENROUTER_NOT_FOUND', 'OpenRouter model or endpoint not found'],
 };
 
-function normalizeError(status) {
-  const [code, message] = ERROR_MESSAGES[status] || [
-    status >= 500 ? 'OPENROUTER_UNAVAILABLE' : 'OPENROUTER_REQUEST_FAILED',
-    status >= 500 ? 'OpenRouter is temporarily unavailable' : 'OpenRouter request failed',
-  ];
-  return { code, status, message };
+const MODEL_UNAVAILABLE_PATTERN = /model/i;
+const UNAVAILABLE_REASON_PATTERN = /(not found|not a valid|unsupported|unavailable|does not exist|no endpoints)/i;
+function isModelUnavailableDetail(detail) {
+  return MODEL_UNAVAILABLE_PATTERN.test(detail) && UNAVAILABLE_REASON_PATTERN.test(detail);
+}
+
+function networkError() {
+  return { code: 'OPENROUTER_UNAVAILABLE', status: 503, message: 'OpenRouter is temporarily unavailable' };
+}
+
+async function normalizeError(response) {
+  const status = response.status;
+  if (ERROR_MESSAGES[status]) {
+    const [code, message] = ERROR_MESSAGES[status];
+    return { code, status, message };
+  }
+  if (status === 400) {
+    let detail = '';
+    try { const body = await response.json(); detail = body?.error?.message || body?.message || ''; } catch { /* no readable body */ }
+    if (isModelUnavailableDetail(detail)) {
+      return { code: 'OPENROUTER_MODEL_UNAVAILABLE', status, message: 'OpenRouter has no route for this model' };
+    }
+    return { code: 'OPENROUTER_REQUEST_FAILED', status, message: 'OpenRouter request failed' };
+  }
+  return status >= 500
+    ? { code: 'OPENROUTER_UNAVAILABLE', status, message: 'OpenRouter is temporarily unavailable' }
+    : { code: 'OPENROUTER_REQUEST_FAILED', status, message: 'OpenRouter request failed' };
 }
 
 function normalizeImage(image) {
@@ -49,9 +70,9 @@ export function createOpenRouterImageAdapter({ baseUrl = DEFAULT_BASE_URL, apiKe
           body: JSON.stringify(body),
         });
       } catch {
-        throw normalizeError(503);
+        throw networkError();
       }
-      if (!response.ok) throw normalizeError(response.status);
+      if (!response.ok) throw await normalizeError(response);
       const payload = await response.json();
       const outputs = (payload.data || []).map(normalizeImage);
       if (!outputs.length) throw Object.assign(new Error('OpenRouter returned no images'), { code: 'OPENROUTER_INVALID_RESPONSE' });

@@ -1,0 +1,69 @@
+import { createOpenRouterImageAdapter } from './openrouter/imageAdapter.js';
+import { createOpenRouterVideoAdapter } from './openrouter/videoAdapter.js';
+import { createOpenAIImageAdapter } from './direct/imageAdapters.js';
+import { createGoogleImageAdapter } from './direct/imageAdapters.js';
+import { createBytePlusImageAdapter } from './direct/imageAdapters.js';
+import { createBytePlusAdapter } from './direct/byteplusAdapter.js';
+import { getDirectProvider, isRetryableProviderError, createDirectProviderUnavailableError } from './providerRegistry.js';
+
+function directConfigured(env, provider) {
+  if (provider === 'google') return Boolean(env.GEMINI_API_KEY || env.GOOGLE_API_KEY);
+  if (provider === 'openai') return Boolean(env.OPENAI_API_KEY);
+  if (provider === 'byteplus') return Boolean(env.BYTEPLUS_API_KEY && env.BYTEPLUS_BASE_URL);
+  return false;
+}
+
+// BytePlus's task status vocabulary ('succeeded'/'running'/'queued'/'failed') doesn't match
+// the OpenRouter vocabulary ('completed'/'failed'/'cancelled'/'expired') that the video poll
+// route checks against — an un-normalized 'succeeded' never satisfies `status !== 'completed'`,
+// so a BytePlus job would poll as "running" forever even after it actually finished.
+function normalizeBytePlusStatus(status) {
+  if (status?.status === 'succeeded') return { ...status, status: 'completed' };
+  return status;
+}
+
+function directAdapter(env, provider, operation, fetchImpl) {
+  if (operation === 'image' && provider === 'google') return createGoogleImageAdapter({ apiKey: env.GEMINI_API_KEY || env.GOOGLE_API_KEY, fetch: fetchImpl });
+  if (operation === 'image' && provider === 'openai') return createOpenAIImageAdapter({ apiKey: env.OPENAI_API_KEY, fetch: fetchImpl });
+  if (operation === 'image' && provider === 'byteplus') return createBytePlusImageAdapter({ apiKey: env.BYTEPLUS_API_KEY, baseUrl: env.BYTEPLUS_BASE_URL, fetch: fetchImpl });
+  if (operation === 'video' && provider === 'byteplus') return createBytePlusAdapter({ apiKey: env.BYTEPLUS_API_KEY, baseUrl: env.BYTEPLUS_BASE_URL, fetch: fetchImpl });
+  return null;
+}
+
+export function createProviderRouter({ env = process.env, fetch: fetchImpl = globalThis.fetch } = {}) {
+  const openrouterImage = () => createOpenRouterImageAdapter({ apiKey: env.OPENROUTER_API_KEY, fetch: fetchImpl });
+  const openrouterVideo = () => createOpenRouterVideoAdapter({ apiKey: env.OPENROUTER_API_KEY, fetch: fetchImpl });
+
+  async function withFallback(operation, params, primary) {
+    try { return await primary(); } catch (error) {
+      const mapping = getDirectProvider(params.model);
+      // OpenRouter's 400 wording for "I don't carry this model" isn't a stable contract to pattern-match,
+      // so any 400 is treated as a routing gap (not a malformed request) once the model is already on the
+      // explicit direct-fallback allowlist below. Unmapped models still hard-fail on 400 as before.
+      // 402 (insufficient OpenRouter account credits) is an OpenRouter-side capacity problem, not a
+      // problem with this request, so it gets the same treatment for mapped models.
+      const retryable = isRetryableProviderError(error) || (mapping && [400, 402].includes(Number(error?.status)));
+      if (!retryable) throw error;
+      // Models outside the explicit direct-fallback allowlist remain OpenRouter-only.
+      if (!mapping) throw error;
+      if (!directConfigured(env, mapping.provider)) {
+        throw createDirectProviderUnavailableError(params.model, mapping.provider);
+      }
+      const adapter = directAdapter(env, mapping.provider, operation, fetchImpl);
+      if (!adapter) throw createDirectProviderUnavailableError(params.model, mapping.provider);
+      const result = operation === 'image' ? await adapter.generate({ ...params, model: mapping.model }) : await adapter.submit({ ...params, model: mapping.model });
+      return { ...result, provider: mapping.provider };
+    }
+  }
+
+  return {
+    generateImage: (params) => withFallback('image', params, () => openrouterImage().generate(params)),
+    submitVideo: (params) => withFallback('video', params, () => openrouterVideo().submit(params)),
+    pollVideo: async (provider, id) => {
+      if (provider === 'openrouter') return openrouterVideo().poll(id);
+      const status = await createBytePlusAdapter({ apiKey: env.BYTEPLUS_API_KEY, baseUrl: env.BYTEPLUS_BASE_URL, fetch: fetchImpl }).poll(id);
+      return normalizeBytePlusStatus(status);
+    },
+    downloadVideo: (provider, id, index = 0) => provider === 'openrouter' ? openrouterVideo().downloadContent(id, index) : createBytePlusAdapter({ apiKey: env.BYTEPLUS_API_KEY, baseUrl: env.BYTEPLUS_BASE_URL, fetch: fetchImpl }).downloadContent(id, index),
+  };
+}

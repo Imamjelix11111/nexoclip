@@ -3385,6 +3385,29 @@ export const OPENROUTER_VIDEO_MODEL_MAP = {
   'minimax-hailuo-2.3-standard-t2v': 'minimax/hailuo-2.3',
   'minimax-hailuo-2.3-standard-i2v': 'minimax/hailuo-2.3',
   'openai-sora-2-pro-text-to-video': 'openai/sora-2-pro',
+  'seedance-2-mini-image-to-video': 'bytedance/seedance-2.0-mini',
+};
+
+// Models whose images_list means "reference images" (2-9 photos the model composites
+// together, referenced in the prompt as @image1..@imageN), not "first frame + last
+// frame". Sending these through generateVideoOpenRouter's default frame_images path
+// (which tags image #2 as frame_type: 'last_frame') misinterprets a second reference
+// photo as "the video must end looking like this" — confirmed live against OpenRouter:
+// these models instead accept an input_references list of plain image_url entries,
+// same shape as the image/video reference contract used elsewhere in this app.
+export const OPENROUTER_MULTI_REFERENCE_MODELS = new Set([
+  'seedance-2-mini-image-to-video',
+]);
+
+// Video-to-video: only models confirmed live against OpenRouter's video-input
+// contract (input_references entries of type 'video_url') are mapped. MuAPI's
+// single-purpose tools (watermark remover, face swap, upscaler, etc.) are not
+// generative video models under the hood and stay on MuAPI even where the name
+// suggests a matching vendor.
+export const OPENROUTER_V2V_MODEL_MAP = {
+  'runway-aleph-v2v': 'runway/aleph-2',
+  'wan2.7-video-extend': 'alibaba/wan-2.7',
+  'wan2.7-video-edit': 'alibaba/wan-2.7',
 };
 
 export const getModelById = (id) => t2iModels.find(m => m.id === id);

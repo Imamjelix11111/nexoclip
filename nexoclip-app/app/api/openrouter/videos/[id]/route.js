@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createOpenRouterVideoAdapter } from '../../../../../src/providers/openrouter/videoAdapter.js';
+import { createProviderRouter } from '../../../../../src/providers/providerRouter.js';
+import { getJob as getJobService } from '../../../../../src/services/jobService.js';
 import { SESSION_COOKIE } from '../../../../../src/lib/auth/session.js';
 import { resolveTenantContext } from '../../../../../src/services/tenantContext.js';
 import { persistUploadedAsset } from '../../../../../src/services/uploadedAssetService.js';
@@ -16,9 +17,6 @@ async function markJobStatus({ workspaceId, jobId, status, result, error }) {
 }
 
 export async function GET(request, { params }) {
-  if (!process.env.OPENROUTER_API_KEY) {
-    return NextResponse.json({ error: 'OpenRouter is not configured' }, { status: 503 });
-  }
   const { id } = await params;
   if (!id) return NextResponse.json({ error: 'job id is required' }, { status: 400 });
 
@@ -34,9 +32,16 @@ export async function GET(request, { params }) {
     return NextResponse.json({ error: error.message }, { status: error.message === 'Authentication required' ? 401 : 403 });
   }
 
-  const adapter = createOpenRouterVideoAdapter({ apiKey: process.env.OPENROUTER_API_KEY });
+  let provider = 'openrouter';
   try {
-    const status = await adapter.poll(id);
+    const job = jobId ? await getJobService({ pool: getPool(), workspaceId: tenant.workspace.id, id: jobId }) : null;
+    provider = job?.params?.provider || 'openrouter';
+  } catch {
+    // Legacy jobs may not be readable here; retain OpenRouter compatibility.
+  }
+  const router = createProviderRouter({ env: process.env });
+  try {
+    const status = await router.pollVideo(provider, id);
     if (status.status === 'failed' || status.status === 'cancelled' || status.status === 'expired') {
       await markJobStatus({
         workspaceId: tenant.workspace.id,
@@ -50,7 +55,7 @@ export async function GET(request, { params }) {
       await markJobStatus({ workspaceId: tenant.workspace.id, jobId, status: 'running' });
       return NextResponse.json({ status: status.status });
     }
-    const { buffer, contentType } = await adapter.downloadContent(id, 0);
+    const { buffer, contentType } = await router.downloadVideo(provider, id, 0);
     const asset = await persistUploadedAsset({
       workspaceId: tenant.workspace.id,
       buffer,

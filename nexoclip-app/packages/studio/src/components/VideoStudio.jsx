@@ -1619,8 +1619,11 @@ export default function VideoStudio({
           <div className="flex flex-col gap-3">
             {/* Inline list of uploaded media files */}
             <div className="flex items-center gap-2.5 flex-wrap">
-              {/* Main image preview */}
-              {uploadedImageUrl && (
+              {/* Main image preview — hidden for multi-image models (Seedance Extend, etc.):
+                  applyImageReferenceUrl always sets both uploadedImageUrl and uploadedImageUrls
+                  to the same image, and the multi-image list below already renders it, so
+                  showing both here would duplicate the same reference image. */}
+              {uploadedImageUrl && !(imageMode && getMaxImagesForI2VModel(selectedModel) > 2) && (
                 <div className={PROMPT_MEDIA_PREVIEW_CLASS}>
                   <img src={uploadedImageUrl} alt="" className="w-full h-full object-cover" />
                   <button

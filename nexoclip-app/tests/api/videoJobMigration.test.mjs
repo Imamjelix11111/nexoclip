@@ -29,6 +29,24 @@ test('submitting a video creates a durable video job and returns its id', async 
   assert.deepEqual(created, { workspaceId: 'ws-1', kind: 'video' });
 });
 
+test('extracts a video_url input_reference into referenceVideos for video-to-video submits', async () => {
+  let submittedParams;
+  const handler = createVideoSubmitHandler({
+    resolveTenant: async () => ({ workspace: { id: 'ws-1' } }),
+    env: { OPENROUTER_API_KEY: 'k' },
+    submitVideo: async (params) => { submittedParams = params; return { id: 'or-1', polling_url: 'p', status: 'pending' }; },
+    createJob: async () => ({ id: 'job-1', status: 'queued' }),
+  });
+  const res = await handler(postReq({
+    model: 'runway/aleph-2',
+    prompt: 'make it night time',
+    input_references: [{ type: 'video_url', video_url: { url: 'https://cdn.example/in.mp4' } }],
+  }));
+  assert.equal(res.status, 202);
+  assert.deepEqual(submittedParams.referenceVideos, ['https://cdn.example/in.mp4']);
+  assert.deepEqual(submittedParams.referenceImages, []);
+});
+
 test('missing model/prompt is 400 before any job is created', async () => {
   let calls = 0;
   const handler = createVideoSubmitHandler({

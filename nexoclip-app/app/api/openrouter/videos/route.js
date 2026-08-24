@@ -1,4 +1,4 @@
-import { createOpenRouterVideoAdapter } from '../../../../src/providers/openrouter/videoAdapter.js';
+import { createProviderRouter } from '../../../../src/providers/providerRouter.js';
 import { SESSION_COOKIE } from '../../../../src/lib/auth/session.js';
 import { resolveTenantContext } from '../../../../src/services/tenantContext.js';
 import { getPool } from '../../../../src/db/pool.js';
@@ -7,14 +7,11 @@ import { createJob as createJobService } from '../../../../src/services/jobServi
 export function createVideoSubmitHandler({
   resolveTenant = resolveTenantContext,
   env = process.env,
-  submitVideo = (params) => createOpenRouterVideoAdapter({ apiKey: env.OPENROUTER_API_KEY }).submit(params),
+  submitVideo = (params) => createProviderRouter({ env }).submitVideo(params),
   createJob = createJobService,
   pool,
 } = {}) {
   return async function POST(request) {
-    if (!env.OPENROUTER_API_KEY) {
-      return Response.json({ error: 'OpenRouter is not configured' }, { status: 503 });
-    }
     let body;
     try { body = await request.json(); } catch { return Response.json({ error: 'Invalid JSON body' }, { status: 400 }); }
     if (!body?.model || !body?.prompt) {
@@ -41,6 +38,7 @@ export function createVideoSubmitHandler({
         seed: body.seed,
         frameImages: body.frame_images,
         referenceImages: (body.input_references || []).map((item) => item?.image_url?.url).filter(Boolean),
+        referenceVideos: (body.input_references || []).map((item) => item?.video_url?.url).filter(Boolean),
       });
 
       const job = await createJob({
@@ -49,7 +47,7 @@ export function createVideoSubmitHandler({
         get pool() { return pool ?? getPool(); },
         workspaceId: tenant.workspace.id,
         kind: 'video',
-        params: { providerId: result.id, model: body.model, prompt: body.prompt },
+        params: { providerId: result.id, provider: result.provider || 'openrouter', model: body.model, prompt: body.prompt },
       });
 
       return Response.json(
@@ -58,7 +56,7 @@ export function createVideoSubmitHandler({
       );
     } catch (error) {
       const status = Number.isInteger(error?.status) ? error.status : 502;
-      return Response.json({ error: error?.message || 'OpenRouter request failed', code: error?.code }, { status });
+      return Response.json({ error: error?.message || 'Video generation failed', code: error?.code, model: body?.model, provider: error?.provider }, { status });
     }
   };
 }

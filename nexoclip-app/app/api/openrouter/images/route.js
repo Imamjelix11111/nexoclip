@@ -1,4 +1,4 @@
-import { createOpenRouterImageAdapter } from '../../../../src/providers/openrouter/imageAdapter.js';
+import { createProviderRouter } from '../../../../src/providers/providerRouter.js';
 import { SESSION_COOKIE } from '../../../../src/lib/auth/session.js';
 import { resolveTenantContext } from '../../../../src/services/tenantContext.js';
 import { persistGeneratedImage } from '../../../../src/services/generatedImageService.js';
@@ -8,16 +8,13 @@ import { createJob as createJobService, updateJobStatus as updateJobStatusServic
 export function createImageHandler({
   resolveTenant = resolveTenantContext,
   env = process.env,
-  generate = (params) => createOpenRouterImageAdapter({ apiKey: env.OPENROUTER_API_KEY }).generate(params),
+  generate = (params) => createProviderRouter({ env }).generateImage(params),
   persist = persistGeneratedImage,
   createJob = createJobService,
   updateJobStatus = updateJobStatusService,
   pool,
 } = {}) {
   return async function POST(request) {
-    if (!env.OPENROUTER_API_KEY) {
-      return Response.json({ error: 'OpenRouter is not configured' }, { status: 503 });
-    }
     let body;
     try { body = await request.json(); } catch { return Response.json({ error: 'Invalid JSON body' }, { status: 400 }); }
     if (!body?.model || !body?.prompt) {
@@ -75,7 +72,7 @@ export function createImageHandler({
       return Response.json({ ...result, outputs, job_id: job?.id ?? null });
     } catch (error) {
       const status = Number.isInteger(error?.status) ? error.status : 502;
-      return Response.json({ error: error?.message || 'OpenRouter request failed', code: error?.code }, { status });
+      return Response.json({ error: error?.message || 'Image generation failed', code: error?.code, model: body?.model, provider: error?.provider }, { status });
     }
   };
 }

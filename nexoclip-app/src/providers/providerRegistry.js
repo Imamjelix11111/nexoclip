@@ -1,0 +1,62 @@
+const DIRECT_MODEL_MAP = new Map([
+  ['google-imagen4', { provider: 'google', model: 'imagen-4.0-generate-001' }],
+  ['google-imagen4-fast', { provider: 'google', model: 'imagen-4.0-fast-generate-001' }],
+  ['google-imagen4-ultra', { provider: 'google', model: 'imagen-4.0-ultra-generate-001' }],
+  ['dola-seedream-5-0-pro-260628', { provider: 'byteplus', model: 'dola-seedream-5-0-pro-260628' }],
+  ['bytedance-seed/seedream-5-0-pro', { provider: 'byteplus', model: 'dola-seedream-5-0-pro-260628' }],
+  ['seedream-5-0-260128', { provider: 'byteplus', model: 'seedream-5-0-260128' }],
+  ['seedream-5-0-lite-260128', { provider: 'byteplus', model: 'seedream-5-0-260128' }],
+  ['seedream-4-5-251128', { provider: 'byteplus', model: 'seedream-4-5-251128' }],
+  ['seedream-4-0-250828', { provider: 'byteplus', model: 'seedream-4-0-250828' }],
+  ['seedream-3.0-t2i', { provider: 'byteplus', model: 'seedream-3.0-t2i' }],
+  ['dreamina-seedance-2-5-260628', { provider: 'byteplus', model: 'dreamina-seedance-2-5-260628' }],
+  ['dreamina-seedance-2-0-260128', { provider: 'byteplus', model: 'dreamina-seedance-2-0-260128' }],
+  ['dreamina-seedance-2-0-fast-260128', { provider: 'byteplus', model: 'dreamina-seedance-2-0-fast-260128' }],
+  ['dreamina-seedance-2-0-mini-260615', { provider: 'byteplus', model: 'dreamina-seedance-2-0-mini-260615' }],
+  ['seedance-1-5-pro-251215', { provider: 'byteplus', model: 'seedance-1-5-pro-251215' }],
+  ['seedance-1-0-pro-250528', { provider: 'byteplus', model: 'seedance-1-0-pro-250528' }],
+  ['seedance-1-0-pro-fast-251015', { provider: 'byteplus', model: 'seedance-1-0-pro-fast-251015' }],
+  ['seedance-v2.0-t2v', { provider: 'byteplus', model: 'dreamina-seedance-2-0-260128' }],
+  ['seedance-v2.0-i2v', { provider: 'byteplus', model: 'dreamina-seedance-2-0-260128' }],
+  ['seedance-v2.0-extend', { provider: 'byteplus', model: 'dreamina-seedance-2-0-260128' }],
+  ['bytedance/seedance-2.0', { provider: 'byteplus', model: 'dreamina-seedance-2-0-260128' }],
+  ['bytedance/seedance-2.0-mini', { provider: 'byteplus', model: 'dreamina-seedance-2-0-mini-260615' }],
+  ['openai/gpt-5-image', { provider: 'openai', model: 'gpt-image-1' }],
+  ['openai/gpt-5-image-mini', { provider: 'openai', model: 'gpt-image-1-mini' }],
+  ['openai/gpt-5.4-image-2', { provider: 'openai', model: 'gpt-image-2' }],
+]);
+
+const DIRECT_PREFIXES = [
+  ['google/', 'google'],
+  ['gpt-image-', 'openai'],
+  ['openai/gpt-image-', 'openai'],
+];
+
+export function getDirectProvider(model) {
+  if (typeof model !== 'string' || !model.trim()) return null;
+  const normalized = model.trim();
+  const mapped = DIRECT_MODEL_MAP.get(normalized);
+  if (mapped) return { ...mapped };
+  const prefix = DIRECT_PREFIXES.find(([value]) => normalized.toLowerCase().startsWith(value));
+  if (!prefix) return null;
+  // OpenRouter-namespaced prefixes ('google/', 'openai/gpt-image-') strip the vendor namespace;
+  // bare prefixes ('gpt-image-') already match the direct provider's own model name as-is.
+  const namespaceEnd = prefix[0].indexOf('/');
+  const directModel = namespaceEnd === -1 ? normalized : normalized.slice(namespaceEnd + 1);
+  return { provider: prefix[1], model: directModel };
+}
+
+export function isRetryableProviderError(error) {
+  const status = Number(error?.status);
+  if (status === 403 && error?.code === 'OPENROUTER_AUTHORIZATION_FAILED') return true;
+  // OpenRouter returns 400 when it has no route for a model it doesn't carry;
+  // that's a routing gap, not a malformed request, so a mapped direct provider may still serve it.
+  if (status === 400 && error?.code === 'OPENROUTER_MODEL_UNAVAILABLE') return true;
+  if (status) return [408, 409, 429].includes(status) || status >= 500;
+  return error instanceof TypeError || error?.code === 'ETIMEDOUT' || error?.code === 'ECONNRESET';
+}
+
+export function createDirectProviderUnavailableError(model, provider) {
+  const label = provider || 'the model owner';
+  return Object.assign(new Error(`Model ${model} has no configured fallback direct provider (${label})`), { code: 'DIRECT_PROVIDER_UNAVAILABLE', status: 503, model, provider: provider || null });
+}

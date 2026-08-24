@@ -6,12 +6,44 @@ const ERROR_MESSAGES = {
   404: ['OPENROUTER_NOT_FOUND', 'OpenRouter model or endpoint not found'],
 };
 
+// Most video-editing models take their source video as an input_references entry
+// of type 'video_url' (confirmed live for runway/aleph-2). Alibaba's Wan 2.7 is an
+// exception — confirmed live that it rejects a video_url input_reference with
+// "does not accept video input references", but accepts a raw top-level `video`
+// field instead (one of its documented passthrough parameters).
+const VIDEO_PASSTHROUGH_FIELD = {
+  'alibaba/wan-2.7': 'video',
+};
+
+const MODEL_UNAVAILABLE_PATTERN = /model/i;
+const UNAVAILABLE_REASON_PATTERN = /(not found|not a valid|unsupported|unavailable|does not exist|no endpoints)/i;
+function isModelUnavailableDetail(detail) {
+  return MODEL_UNAVAILABLE_PATTERN.test(detail) && UNAVAILABLE_REASON_PATTERN.test(detail);
+}
+
 function normalizeError(status) {
   const [code, message] = ERROR_MESSAGES[status] || [
     status >= 500 ? 'OPENROUTER_UNAVAILABLE' : 'OPENROUTER_REQUEST_FAILED',
     status >= 500 ? 'OpenRouter is temporarily unavailable' : 'OpenRouter request failed',
   ];
   return { code, status, message };
+}
+
+async function normalizeSubmitError(response) {
+  const status = response.status;
+  if (ERROR_MESSAGES[status]) {
+    const [code, message] = ERROR_MESSAGES[status];
+    return { code, status, message };
+  }
+  if (status === 400) {
+    let detail = '';
+    try { const body = await response.json(); detail = body?.error?.message || body?.message || ''; } catch { /* no readable body */ }
+    if (isModelUnavailableDetail(detail)) {
+      return { code: 'OPENROUTER_MODEL_UNAVAILABLE', status, message: 'OpenRouter has no route for this model' };
+    }
+    return { code: 'OPENROUTER_REQUEST_FAILED', status, message: 'OpenRouter request failed' };
+  }
+  return normalizeError(status);
 }
 
 export function createOpenRouterVideoAdapter({ baseUrl = DEFAULT_BASE_URL, apiKey, fetch: fetchImpl = globalThis.fetch } = {}) {
@@ -21,7 +53,7 @@ export function createOpenRouterVideoAdapter({ baseUrl = DEFAULT_BASE_URL, apiKe
   const authHeaders = { Authorization: `Bearer ${apiKey}` };
 
   return {
-    async submit({ model, prompt, duration, resolution, aspectRatio, generateAudio, seed, frameImages, referenceImages } = {}) {
+    async submit({ model, prompt, duration, resolution, aspectRatio, generateAudio, seed, frameImages, referenceImages, referenceVideos } = {}) {
       if (!model || typeof model !== 'string') throw new TypeError('model is required');
       if (!prompt || typeof prompt !== 'string') throw new TypeError('prompt is required');
       const body = { model, prompt };
@@ -31,8 +63,14 @@ export function createOpenRouterVideoAdapter({ baseUrl = DEFAULT_BASE_URL, apiKe
       if (generateAudio !== undefined) body.generate_audio = generateAudio;
       if (seed !== undefined) body.seed = seed;
       if (frameImages?.length) body.frame_images = frameImages;
-      if (referenceImages?.length) {
-        body.input_references = referenceImages.map((url) => ({ type: 'image_url', image_url: { url } }));
+      const imageRefs = (referenceImages || []).map((url) => ({ type: 'image_url', image_url: { url } }));
+      const passthroughField = VIDEO_PASSTHROUGH_FIELD[model];
+      if (passthroughField && referenceVideos?.length) {
+        body[passthroughField] = referenceVideos[0];
+        if (imageRefs.length) body.input_references = imageRefs;
+      } else {
+        const videoRefs = (referenceVideos || []).map((url) => ({ type: 'video_url', video_url: { url } }));
+        if (imageRefs.length || videoRefs.length) body.input_references = [...videoRefs, ...imageRefs];
       }
 
       let response;
@@ -45,7 +83,7 @@ export function createOpenRouterVideoAdapter({ baseUrl = DEFAULT_BASE_URL, apiKe
       } catch {
         throw normalizeError(503);
       }
-      if (!response.ok) throw normalizeError(response.status);
+      if (!response.ok) throw await normalizeSubmitError(response);
       return response.json();
     },
 
