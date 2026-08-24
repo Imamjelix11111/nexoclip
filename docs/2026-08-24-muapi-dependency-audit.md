@@ -3,6 +3,40 @@
 Date: 2026-08-24
 Related: `docs/2026-08-24-provider-fallback-notes.md` (OpenRouter → direct provider fallback)
 
+## Update (same day, after the audit)
+
+Two rows moved from "pure MuAPI" to "hybrid" after this doc was written —
+tracked here rather than silently editing the original audit result below.
+
+- **Video Studio V2V**: 3 of the ~35 V2V models now route through OpenRouter
+  first — `runway-aleph-v2v` (→ `runway/aleph-2`), `wan2.7-video-extend` and
+  `wan2.7-video-edit` (→ `alibaba/wan-2.7`). These were the only V2V models
+  where OpenRouter's video-input contract could be confirmed live (SKU/
+  passthrough-param evidence, not just name-matching). The other ~32 V2V
+  models (Kling motion-control, Luma, MMAudio, watermark/upscale/face-swap
+  tools, etc.) are still pure MuAPI, no fallback — see the caveat that killed
+  `seedance-2-watermark-remover` below.
+- **Video Studio I2V**: `seedance-2-mini-image-to-video` ("Seedance 2 Mini")
+  added to `OPENROUTER_VIDEO_MODEL_MAP` → `bytedance/seedance-2.0-mini`, with
+  BytePlus direct fallback to `dreamina-seedance-2-0-mini-260615`. This also
+  surfaced and fixed a real bug: `generateVideoOpenRouter` was tagging every
+  image past the first as `frame_type: 'last_frame'` (i.e. "the video must
+  end looking like this"), which is wrong for reference-style multi-image
+  models — multi-reference models now send `input_references` instead.
+- "Seedance 2 Omni Reference" (`seedance-2-omni-reference`, 9-image
+  reference model) itself was **not** added — no equivalent standalone model
+  ID exists on OpenRouter's video catalog; the reference capability lives on
+  the base `bytedance/seedance-2.0`/`-mini` model IDs already mapped above.
+
+**Caveat worth remembering:** `seedance-2-watermark-remover` and its "pro"
+variant were deliberately *not* mapped despite matching by name — MuAPI's
+description reveals it actually runs on LaMa AI inpainting, not the Seedance
+generative model, so rerouting it through `bytedance/seedance-2.0` + a text
+instruction would change the actual algorithm and likely the output quality,
+not just the backend. Name-matching against MuAPI's model list is not
+sufficient evidence on its own; each mapping in this doc was confirmed live
+against the actual OpenRouter/BytePlus schema before being added.
+
 ## Why this exists
 
 While debugging the OpenRouter → BytePlus fallback, we asked "does Vibe
@@ -31,7 +65,7 @@ pattern as Vibe Motion)
 | Audio Studio | `generateAudio` | model-dependent (`getAudioModelById(...).endpoint`) |
 | Recast Studio | `processRecast` | model-dependent (`getRecastModelById(...).endpoint`) |
 | Marketing Studio | `generateMarketingStudioAd` | `seedance-2-vip-omni-reference` / `sd-2-vip-omni-reference-1080p` |
-| Video Studio (V2V sub-feature) | `processV2V` | model-dependent (`getV2VModelById(...).endpoint`) |
+| Video Studio (V2V sub-feature, ~32 of 35 models) | `processV2V` | model-dependent (`getV2VModelById(...).endpoint`) — see Update above for the 3 exceptions |
 | Workflow Studio | `executeWorkflow`, `runSingleNode`, node schema calls | full node-based workflow engine |
 
 Also flagged but unresolved: `muapi.js` exports a full Agent-chat API surface
@@ -49,7 +83,8 @@ effort on it.**
 
 | Studio | Functions | Notes |
 |---|---|---|
-| Video Studio (T2V / I2V generation) | `generateVideo`, `generateI2V` | Checks `OPENROUTER_VIDEO_MODEL_MAP[params.model]` first; falls back to MuAPI `submitAndPoll` only for models not in that map. Not the same as our `providerRouter.js` OpenRouter→direct fallback — this is a static model-to-backend routing table, decided client-side, not a retry-on-failure path. |
+| Video Studio (T2V / I2V generation) | `generateVideo`, `generateI2V` | Checks `OPENROUTER_VIDEO_MODEL_MAP[params.model]` first; falls back to MuAPI `submitAndPoll` only for models not in that map. Not the same as our `providerRouter.js` OpenRouter→direct fallback — this is a static model-to-backend routing table, decided client-side, not a retry-on-failure path. Now includes `seedance-2-mini-image-to-video`. |
+| Video Studio (V2V, 3 of 35 models) | `processV2V` | `runway-aleph-v2v`, `wan2.7-video-extend`, `wan2.7-video-edit` only — via `OPENROUTER_V2V_MODEL_MAP`, no MuAPI fallback for the OpenRouter leg on these three. Falls back to `providerRouter.js` (BytePlus/etc) same as image/video generation for the ones with a direct-provider mapping. |
 
 ### OpenRouter-only (covered by today's fallback work)
 
