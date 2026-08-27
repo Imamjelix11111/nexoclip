@@ -15,6 +15,7 @@ import {
   v2vModels,
   openRouterT2VModels,
   openRouterI2VModels,
+  openRouterV2VModels,
   getAspectRatiosForVideoModel,
   getDurationsForModel,
   getResolutionsForVideoModel,
@@ -157,7 +158,7 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
       entries: [
         ...openRouterT2VModels.map((model) => ({ model, category: "t2v" })),
         ...openRouterI2VModels.map((model) => ({ model, category: "i2v" })),
-        ...v2vModels.map((model) => ({ model, category: "v2v" })),
+        ...openRouterV2VModels.map((model) => ({ model, category: "v2v" })),
       ],
     },
     {
@@ -173,7 +174,7 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
     {
       id: "v2v",
       label: "Video Tools",
-      entries: v2vModels.map((model) => ({ model, category: "v2v" })),
+      entries: openRouterV2VModels.map((model) => ({ model, category: "v2v" })),
     },
   ];
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -881,7 +882,7 @@ export default function VideoStudio({
           setImageMode(false);
         }
         setV2vMode(true);
-        const firstV2V = v2vModels[0];
+        const firstV2V = openRouterV2VModels[0];
         setSelectedModel(firstV2V.id);
         setSelectedModelName(firstV2V.name);
         applyControlsForModel(firstV2V.id, false, true);
@@ -1039,7 +1040,7 @@ export default function VideoStudio({
             setImageMode(false);
           }
           setV2vMode(true);
-          const firstV2V = v2vModels[0];
+          const firstV2V = openRouterV2VModels[0];
           setSelectedModel(firstV2V.id);
           setSelectedModelName(firstV2V.name);
           applyControlsForModel(firstV2V.id, false, true);
