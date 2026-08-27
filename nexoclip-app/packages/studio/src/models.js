@@ -20006,6 +20006,7 @@ export const v2vModels = [
     "provider_name": "Kling AI"
   }
 ];
+export const openRouterV2VModels = v2vModels.filter((model) => OPENROUTER_V2V_MODEL_MAP[model.id]);
 
 // ─── LipSync / Speech-to-Video models ────────────────────────────────────────
 // Image-based: portrait image + audio → talking video
