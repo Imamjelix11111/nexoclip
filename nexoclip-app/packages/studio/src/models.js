@@ -3386,6 +3386,38 @@ export const OPENROUTER_VIDEO_MODEL_MAP = {
   'minimax-hailuo-2.3-standard-i2v': 'minimax/hailuo-2.3',
   'openai-sora-2-pro-text-to-video': 'openai/sora-2-pro',
   'seedance-2-mini-image-to-video': 'bytedance/seedance-2.0-mini',
+  'kling-o1-text-to-video': 'kwaivgi/kling-video-o1',
+  'kling-o1-image-to-video': 'kwaivgi/kling-video-o1',
+  'kling-o1-reference-to-video': 'kwaivgi/kling-video-o1',
+  'kling-o1-standard-image-to-video': 'kwaivgi/kling-video-o1',
+  'kling-o1-standard-reference-to-video': 'kwaivgi/kling-video-o1',
+  'grok-imagine-text-to-video': 'x-ai/grok-imagine-video',
+  'grok-imagine-image-to-video': 'x-ai/grok-imagine-video',
+  'grok-imagine-video-1-5-preview': 'x-ai/grok-imagine-video-1.5',
+  'happy-horse-1-text-to-video-1080p': 'alibaba/happyhorse-1.0',
+  'happy-horse-1-text-to-video-720p': 'alibaba/happyhorse-1.0',
+  'happy-horse-1-image-to-video-1080p': 'alibaba/happyhorse-1.0',
+  'happy-horse-1-image-to-video-720p': 'alibaba/happyhorse-1.0',
+  'happy-horse-1-reference-to-video-1080p': 'alibaba/happyhorse-1.0',
+  'happy-horse-1-reference-to-video-720p': 'alibaba/happyhorse-1.0',
+  'happy-horse-1.1-text-to-video-1080p': 'alibaba/happyhorse-1.1',
+  'happy-horse-1.1-text-to-video-720p': 'alibaba/happyhorse-1.1',
+  'happy-horse-1.1-image-to-video-1080p': 'alibaba/happyhorse-1.1',
+  'happy-horse-1.1-image-to-video-720p': 'alibaba/happyhorse-1.1',
+  'happy-horse-1.1-reference-to-video-1080p': 'alibaba/happyhorse-1.1',
+  'happy-horse-1.1-reference-to-video-720p': 'alibaba/happyhorse-1.1',
+  'wan2.6-text-to-video': 'alibaba/wan-2.6',
+  'wan2.6-image-to-video': 'alibaba/wan-2.6',
+  'seedance-2.5-text-to-video': 'bytedance/seedance-2.5',
+  'seedance-2.5-text-to-video-480p': 'bytedance/seedance-2.5',
+  'seedance-2.5-image-to-video': 'bytedance/seedance-2.5',
+  'seedance-2.5-image-to-video-480p': 'bytedance/seedance-2.5',
+  'seedance-2.5-first-last-frame': 'bytedance/seedance-2.5',
+  'seedance-2.5-first-last-frame-480p': 'bytedance/seedance-2.5',
+  'seedance-2.5-omni-reference': 'bytedance/seedance-2.5',
+  'seedance-2.5-omni-reference-480p': 'bytedance/seedance-2.5',
+  'seedance-2-text-to-video-fast': 'bytedance/seedance-2.0-fast',
+  'seedance-2-image-to-video-fast': 'bytedance/seedance-2.0-fast',
 };
 
 // Models whose images_list means "reference images" (2-9 photos the model composites
@@ -3397,6 +3429,14 @@ export const OPENROUTER_VIDEO_MODEL_MAP = {
 // same shape as the image/video reference contract used elsewhere in this app.
 export const OPENROUTER_MULTI_REFERENCE_MODELS = new Set([
   'seedance-2-mini-image-to-video',
+  'kling-o1-reference-to-video',
+  'kling-o1-standard-reference-to-video',
+  'happy-horse-1-reference-to-video-1080p',
+  'happy-horse-1-reference-to-video-720p',
+  'happy-horse-1.1-reference-to-video-1080p',
+  'happy-horse-1.1-reference-to-video-720p',
+  'seedance-2.5-omni-reference',
+  'seedance-2.5-omni-reference-480p',
 ]);
 
 // Video-to-video: only models confirmed live against OpenRouter's video-input

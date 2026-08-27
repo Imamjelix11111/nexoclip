@@ -4,6 +4,8 @@ import {
   v2vModels,
   openRouterV2VModels,
   OPENROUTER_V2V_MODEL_MAP,
+  OPENROUTER_VIDEO_MODEL_MAP,
+  OPENROUTER_MULTI_REFERENCE_MODELS,
 } from '../../packages/studio/src/models.js';
 
 test('openRouterV2VModels only contains models present in OPENROUTER_V2V_MODEL_MAP', () => {
@@ -31,4 +33,81 @@ test('openRouterV2VModels includes the three known-mapped models', () => {
   assert.ok(ids.includes('runway-aleph-v2v'));
   assert.ok(ids.includes('wan2.7-video-extend'));
   assert.ok(ids.includes('wan2.7-video-edit'));
+});
+
+test('OPENROUTER_VIDEO_MODEL_MAP includes the new T2V/I2V mappings', () => {
+  const expected = {
+    'kling-o1-text-to-video': 'kwaivgi/kling-video-o1',
+    'kling-o1-image-to-video': 'kwaivgi/kling-video-o1',
+    'kling-o1-reference-to-video': 'kwaivgi/kling-video-o1',
+    'kling-o1-standard-image-to-video': 'kwaivgi/kling-video-o1',
+    'kling-o1-standard-reference-to-video': 'kwaivgi/kling-video-o1',
+    'grok-imagine-text-to-video': 'x-ai/grok-imagine-video',
+    'grok-imagine-image-to-video': 'x-ai/grok-imagine-video',
+    'grok-imagine-video-1-5-preview': 'x-ai/grok-imagine-video-1.5',
+    'happy-horse-1-text-to-video-1080p': 'alibaba/happyhorse-1.0',
+    'happy-horse-1-text-to-video-720p': 'alibaba/happyhorse-1.0',
+    'happy-horse-1-image-to-video-1080p': 'alibaba/happyhorse-1.0',
+    'happy-horse-1-image-to-video-720p': 'alibaba/happyhorse-1.0',
+    'happy-horse-1-reference-to-video-1080p': 'alibaba/happyhorse-1.0',
+    'happy-horse-1-reference-to-video-720p': 'alibaba/happyhorse-1.0',
+    'happy-horse-1.1-text-to-video-1080p': 'alibaba/happyhorse-1.1',
+    'happy-horse-1.1-text-to-video-720p': 'alibaba/happyhorse-1.1',
+    'happy-horse-1.1-image-to-video-1080p': 'alibaba/happyhorse-1.1',
+    'happy-horse-1.1-image-to-video-720p': 'alibaba/happyhorse-1.1',
+    'happy-horse-1.1-reference-to-video-1080p': 'alibaba/happyhorse-1.1',
+    'happy-horse-1.1-reference-to-video-720p': 'alibaba/happyhorse-1.1',
+    'wan2.6-text-to-video': 'alibaba/wan-2.6',
+    'wan2.6-image-to-video': 'alibaba/wan-2.6',
+    'seedance-2.5-text-to-video': 'bytedance/seedance-2.5',
+    'seedance-2.5-text-to-video-480p': 'bytedance/seedance-2.5',
+    'seedance-2.5-image-to-video': 'bytedance/seedance-2.5',
+    'seedance-2.5-image-to-video-480p': 'bytedance/seedance-2.5',
+    'seedance-2.5-first-last-frame': 'bytedance/seedance-2.5',
+    'seedance-2.5-first-last-frame-480p': 'bytedance/seedance-2.5',
+    'seedance-2.5-omni-reference': 'bytedance/seedance-2.5',
+    'seedance-2.5-omni-reference-480p': 'bytedance/seedance-2.5',
+    'seedance-2-text-to-video-fast': 'bytedance/seedance-2.0-fast',
+    'seedance-2-image-to-video-fast': 'bytedance/seedance-2.0-fast',
+  };
+  for (const [muapiId, openRouterModel] of Object.entries(expected)) {
+    assert.equal(OPENROUTER_VIDEO_MODEL_MAP[muapiId], openRouterModel, `mapping for ${muapiId}`);
+  }
+});
+
+test('reference-to-video / omni-reference ids are flagged as multi-reference', () => {
+  const expectedMultiRef = [
+    'kling-o1-reference-to-video',
+    'kling-o1-standard-reference-to-video',
+    'happy-horse-1-reference-to-video-1080p',
+    'happy-horse-1-reference-to-video-720p',
+    'happy-horse-1.1-reference-to-video-1080p',
+    'happy-horse-1.1-reference-to-video-720p',
+    'seedance-2.5-omni-reference',
+    'seedance-2.5-omni-reference-480p',
+  ];
+  for (const id of expectedMultiRef) {
+    assert.ok(OPENROUTER_MULTI_REFERENCE_MODELS.has(id), `${id} should be in OPENROUTER_MULTI_REFERENCE_MODELS`);
+  }
+});
+
+test('first-last-frame and plain image-to-video ids are NOT flagged as multi-reference', () => {
+  const notMultiRef = [
+    'seedance-2.5-first-last-frame',
+    'seedance-2.5-first-last-frame-480p',
+    'kling-o1-image-to-video',
+    'happy-horse-1.1-image-to-video-1080p',
+    'wan2.6-image-to-video',
+  ];
+  for (const id of notMultiRef) {
+    assert.equal(OPENROUTER_MULTI_REFERENCE_MODELS.has(id), false, `${id} should NOT be in OPENROUTER_MULTI_REFERENCE_MODELS`);
+  }
+});
+
+test('no new OPENROUTER_V2V_MODEL_MAP entries were added this pass', () => {
+  assert.deepEqual(Object.keys(OPENROUTER_V2V_MODEL_MAP).sort(), [
+    'runway-aleph-v2v',
+    'wan2.7-video-edit',
+    'wan2.7-video-extend',
+  ]);
 });
