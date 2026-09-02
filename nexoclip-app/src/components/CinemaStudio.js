@@ -1,5 +1,5 @@
 
-import { muapi } from '../lib/muapi.js';
+import { muapi } from '../lib/generationClient.js';
 import { CameraControls } from './CameraControls.js';
 import { buildNanoBananaPrompt, CAMERA_MAP, LENS_MAP, FOCAL_PERSPECTIVE, APERTURE_EFFECT } from '../lib/promptUtils.js';
 import { AuthModal } from './AuthModal.js';

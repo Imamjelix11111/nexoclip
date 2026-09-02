@@ -12,4 +12,4 @@ export { default as MarketingStudio } from './components/MarketingStudio';
 export { default as WorkflowStudio } from './components/WorkflowStudio';
 export { default as McpCliStudio } from './components/McpCliStudio';
 export { default as AiInfluencerStudio } from './components/AiInfluencerStudio';
-export * from './muapi';
+export * from './generationClient';

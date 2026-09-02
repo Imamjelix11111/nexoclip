@@ -1,4 +1,4 @@
-import { muapi } from '../lib/muapi.js';
+import { muapi } from '../lib/generationClient.js';
 import {
     t2iModels, getAspectRatiosForModel, getResolutionsForModel, getQualityFieldForModel,
     i2iModels, getAspectRatiosForI2IModel, getResolutionsForI2IModel, getQualityFieldForI2IModel,

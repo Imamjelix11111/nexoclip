@@ -225,7 +225,7 @@ const NodeFlow = ({ apiKey, initialNodeSchemas, initialWorkflowData }) => {
 
   // The npm resolution for this package pulls in its own, separate `axios` module
   // instance from Open-Higgsfield-ai/node_modules (different version than the one
-  // WhiteLabelShell.js/muapi.js use), so the ambient global axios interceptor those
+  // WhiteLabelShell.js/generationClient.js use), so the ambient global axios interceptor those
   // register to inject the white-label bearer token never applies to requests made
   // from here — every call below went out with no credentials at all. Attach the
   // token explicitly per-request instead of relying on that ambient interceptor.

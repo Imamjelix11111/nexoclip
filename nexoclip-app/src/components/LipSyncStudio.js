@@ -1,4 +1,4 @@
-import { muapi } from '../lib/muapi.js';
+import { muapi } from '../lib/generationClient.js';
 import { lipsyncModels, imageLipSyncModels, videoLipSyncModels, getLipSyncModelById, getResolutionsForLipSyncModel } from '../lib/models.js';
 import { AuthModal } from './AuthModal.js';
 import { t } from '../lib/i18n.js';

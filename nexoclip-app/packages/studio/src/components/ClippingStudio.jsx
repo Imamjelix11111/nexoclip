@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import toast, { Toaster } from "react-hot-toast";
-import { runClipping, uploadFile } from "../muapi.js";
+import { runClipping, uploadFile } from "../generationClient.js";
 import { formatErrorMessage } from "../utils/formatError.js";
 import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
 import DurableJobHistory from "../../../../components/DurableJobHistory.js";
