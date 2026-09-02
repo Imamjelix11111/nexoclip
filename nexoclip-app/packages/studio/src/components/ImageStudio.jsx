@@ -916,6 +916,8 @@ export default function ImageStudio({
   });
   const [selectedEffect, setSelectedEffect] = useState("");
   const [maxImages, setMaxImages] = useState(1);
+  const [seed, setSeed] = useState(null); // last-used seed, shown for reuse
+  const [seedLocked, setSeedLocked] = useState(false); // when true, reuse `seed` instead of randomizing
 
   // ── Prompt / upload state ───────────────────────────────────────────────
   const [prompt, setPrompt] = useState("");
@@ -1244,6 +1246,8 @@ export default function ImageStudio({
   };
 
   // ── Generation ───────────────────────────────────────────────────────────
+  const randomSeed = () => Math.floor(Math.random() * 2147483647);
+
   const handleGenerate = async () => {
     if (generating) return;
 
@@ -1268,16 +1272,23 @@ export default function ImageStudio({
     setGenerating(true);
     setGenerateError(null);
 
+    // Seed each batch item: locked reuses the same seed for reproducibility,
+    // otherwise every item gets its own random seed so re-generating a good
+    // one later (via lock) is possible instead of pure luck.
+    const lockedSeed = seedLocked ? (seed ?? randomSeed()) : null;
+    const batchSeeds = Array.from({ length: batchSize }).map(() => lockedSeed ?? randomSeed());
+
     try {
       const workspaceId = typeof window !== "undefined" ? window.sessionStorage.getItem("nexoclip_workspace_id") : null;
       const results = await Promise.all(
-        Array.from({ length: batchSize }).map(async () => {
+        batchSeeds.map(async (batchSeed) => {
           if (imageMode) {
             const genParams = {
               model: selectedModelId,
               images_list: uploadedImageUrls,
               image_url: uploadedImageUrls[0],
               aspect_ratio: selectedAr,
+              seed: batchSeed,
             };
             if (swapImageUrl) genParams.swap_url = swapImageUrl;
             if (prompt.trim()) genParams.prompt = prompt.trim();
@@ -1292,6 +1303,7 @@ export default function ImageStudio({
               model: selectedModelId,
               prompt: prompt.trim(),
               aspect_ratio: selectedAr,
+              seed: batchSeed,
             };
             if (currentQualityField && selectedQuality) {
               genParams[currentQualityField] = selectedQuality;
@@ -1301,6 +1313,7 @@ export default function ImageStudio({
           }
         })
       );
+      setSeed(batchSeeds[batchSeeds.length - 1]);
 
       results.forEach((res) => {
         const output = res?.outputs?.[0];
@@ -1708,6 +1721,85 @@ export default function ImageStudio({
                   )}
                 </div>
               )}
+
+              {/* Seed button */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDropdownOpen((o) => (o === "seed" ? null : "seed"));
+                  }}
+                  className={promptControlClassName({
+                    active: dropdownOpen === "seed" || seedLocked,
+                    compact: true,
+                  })}
+                  title={seedLocked ? `Seed locked: ${seed}` : "Seed: random each generation"}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-70 text-white shrink-0">
+                    {seedLocked ? (
+                      <>
+                        <rect x="5" y="11" width="14" height="9" rx="2" />
+                        <path d="M8 11V7a4 4 0 018 0v4" />
+                      </>
+                    ) : (
+                      <>
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <circle cx="8.5" cy="8.5" r="1" fill="currentColor" />
+                        <circle cx="15.5" cy="8.5" r="1" fill="currentColor" />
+                        <circle cx="8.5" cy="15.5" r="1" fill="currentColor" />
+                        <circle cx="15.5" cy="15.5" r="1" fill="currentColor" />
+                        <circle cx="12" cy="12" r="1" fill="currentColor" />
+                      </>
+                    )}
+                  </svg>
+                  <span className={PROMPT_CONTROL_LABEL_CLASS}>
+                    {seedLocked ? seed : "Seed"}
+                  </span>
+                </button>
+
+                {dropdownOpen === "seed" && (
+                  <PromptPopover
+                    onClick={(e) => e.stopPropagation()}
+                    className="min-w-[220px]"
+                  >
+                    <PromptPopoverHeader>Seed</PromptPopoverHeader>
+                    <div className="flex flex-col gap-2.5 px-1 pb-1">
+                      <p className="text-[10px] text-white/40 leading-relaxed">
+                        Lock a seed to reproduce the exact same result, or reuse the
+                        last one generated. Unlocked = a new random seed every time.
+                      </p>
+                      <input
+                        type="number"
+                        value={seed ?? ""}
+                        onChange={(e) => setSeed(e.target.value === "" ? null : Number(e.target.value))}
+                        placeholder="Random"
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/85 focus:outline-none focus:border-[#22d3ee]/40"
+                      />
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSeed(randomSeed())}
+                          className="flex-1 text-[11px] font-semibold text-white/60 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg py-1.5 transition-colors"
+                        >
+                          Randomize
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSeedLocked((v) => !v)}
+                          className={`flex-1 text-[11px] font-semibold rounded-lg py-1.5 border transition-colors ${
+                            seedLocked
+                              ? "text-[#22d3ee] bg-[#22d3ee]/10 border-[#22d3ee]/30"
+                              : "text-white/60 hover:text-white bg-white/5 hover:bg-white/10 border-white/10"
+                          }`}
+                        >
+                          {seedLocked ? "Locked" : "Lock seed"}
+                        </button>
+                      </div>
+                    </div>
+                  </PromptPopover>
+                )}
+              </div>
 
               {/* Batch size stepper */}
               <div className={promptControlClassName({ compact: true, className: "select-none" })}>

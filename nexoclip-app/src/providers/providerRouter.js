@@ -4,6 +4,7 @@ import { createOpenAIImageAdapter } from './direct/imageAdapters.js';
 import { createGoogleImageAdapter } from './direct/imageAdapters.js';
 import { createBytePlusImageAdapter } from './direct/imageAdapters.js';
 import { createBytePlusAdapter } from './direct/byteplusAdapter.js';
+import { createOpenAIVideoAdapter } from './direct/openaiVideoAdapter.js';
 import { getDirectProvider, isRetryableProviderError, createDirectProviderUnavailableError } from './providerRegistry.js';
 
 function directConfigured(env, provider) {
@@ -27,6 +28,7 @@ function directAdapter(env, provider, operation, fetchImpl) {
   if (operation === 'image' && provider === 'openai') return createOpenAIImageAdapter({ apiKey: env.OPENAI_API_KEY, fetch: fetchImpl });
   if (operation === 'image' && provider === 'byteplus') return createBytePlusImageAdapter({ apiKey: env.BYTEPLUS_API_KEY, baseUrl: env.BYTEPLUS_BASE_URL, fetch: fetchImpl });
   if (operation === 'video' && provider === 'byteplus') return createBytePlusAdapter({ apiKey: env.BYTEPLUS_API_KEY, baseUrl: env.BYTEPLUS_BASE_URL, fetch: fetchImpl });
+  if (operation === 'video' && provider === 'openai') return createOpenAIVideoAdapter({ apiKey: env.OPENAI_API_KEY, fetch: fetchImpl });
   return null;
 }
 
@@ -61,9 +63,11 @@ export function createProviderRouter({ env = process.env, fetch: fetchImpl = glo
     submitVideo: (params) => withFallback('video', params, () => openrouterVideo().submit(params)),
     pollVideo: async (provider, id) => {
       if (provider === 'openrouter') return openrouterVideo().poll(id);
-      const status = await createBytePlusAdapter({ apiKey: env.BYTEPLUS_API_KEY, baseUrl: env.BYTEPLUS_BASE_URL, fetch: fetchImpl }).poll(id);
-      return normalizeBytePlusStatus(status);
+      const status = await directAdapter(env, provider, 'video', fetchImpl).poll(id);
+      // Direct providers each speak their own status vocabulary; only BytePlus's diverges
+      // from the 'completed'/'failed' contract the video poll route checks against.
+      return provider === 'byteplus' ? normalizeBytePlusStatus(status) : status;
     },
-    downloadVideo: (provider, id, index = 0) => provider === 'openrouter' ? openrouterVideo().downloadContent(id, index) : createBytePlusAdapter({ apiKey: env.BYTEPLUS_API_KEY, baseUrl: env.BYTEPLUS_BASE_URL, fetch: fetchImpl }).downloadContent(id, index),
+    downloadVideo: (provider, id, index = 0) => provider === 'openrouter' ? openrouterVideo().downloadContent(id, index) : directAdapter(env, provider, 'video', fetchImpl).downloadContent(id, index),
   };
 }

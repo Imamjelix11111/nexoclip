@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { getDirectProvider } from '../../src/providers/providerRegistry.js';
 import { createProviderRouter } from '../../src/providers/providerRouter.js';
+import { createOpenAIImageAdapter } from '../../src/providers/direct/imageAdapters.js';
 
 test('maps OpenRouter GPT image models to direct OpenAI image models', () => {
   assert.deepEqual(getDirectProvider('openai/gpt-5-image'), { provider: 'openai', model: 'gpt-image-1' });
@@ -29,6 +30,26 @@ test('falls back to direct OpenAI when OpenRouter has no route for the GPT image
   assert.equal(result.provider, 'openai');
   assert.equal(calls.length, 2);
   assert.match(calls[1], /api\.openai\.com\/v1\/images\/generations/);
+});
+
+test('OpenAI adapter routes reference images through /images/edits as multipart, not /images/generations', async () => {
+  let editsCall;
+  const adapter = createOpenAIImageAdapter({
+    apiKey: 'oa-key',
+    fetch: async (url, options) => {
+      if (url === 'https://cdn.example.com/ref.jpg') {
+        return { ok: true, headers: { get: () => 'image/jpeg' }, arrayBuffer: async () => new TextEncoder().encode('fake-bytes').buffer };
+      }
+      editsCall = { url, options };
+      return { ok: true, status: 200, json: async () => ({ data: [{ b64_json: 'edited', mime_type: 'image/png' }] }) };
+    },
+  });
+  const result = await adapter.generate({ model: 'gpt-image-2', prompt: 'add a red hat', referenceImages: ['https://cdn.example.com/ref.jpg'] });
+  assert.match(editsCall.url, /api\.openai\.com\/v1\/images\/edits$/);
+  assert.ok(editsCall.options.body instanceof FormData);
+  assert.equal(editsCall.options.body.get('prompt'), 'add a red hat');
+  assert.ok(editsCall.options.body.get('image[]') instanceof Blob);
+  assert.deepEqual(result.outputs, [{ url: 'data:image/png;base64,edited', mimeType: 'image/png' }]);
 });
 
 test('reports DIRECT_PROVIDER_UNAVAILABLE when OPENAI_API_KEY is not configured', async () => {

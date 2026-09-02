@@ -30,6 +30,29 @@ test('parses Gemini inlineData image response', async () => {
   assert.deepEqual(result.outputs, [{ url: 'data:image/png;base64,abc123', mimeType: 'image/png' }]);
 });
 
+test('Gemini adapter sends reference images as inlineData parts ahead of the prompt', async () => {
+  let generateContentBody;
+  const adapter = createGoogleImageAdapter({
+    apiKey: 'secret',
+    fetch: async (url, options) => {
+      if (url === 'https://cdn.example.com/ref.jpg') {
+        return { ok: true, headers: { get: () => 'image/jpeg' }, arrayBuffer: async () => new TextEncoder().encode('fake-bytes').buffer };
+      }
+      generateContentBody = JSON.parse(options.body);
+      return { ok: true, status: 200, json: async () => ({
+        candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: 'edited' } }] } }],
+      }) };
+    },
+  });
+  const result = await adapter.generate({ model: 'gemini-2.5-flash-image', prompt: 'change background to white', referenceImages: ['https://cdn.example.com/ref.jpg'] });
+  const parts = generateContentBody.contents[0].parts;
+  assert.equal(parts.length, 2);
+  assert.equal(parts[0].inlineData.mimeType, 'image/jpeg');
+  assert.equal(Buffer.from(parts[0].inlineData.data, 'base64').toString(), 'fake-bytes');
+  assert.deepEqual(parts[1], { text: 'change background to white' });
+  assert.deepEqual(result.outputs, [{ url: 'data:image/png;base64,edited', mimeType: 'image/png' }]);
+});
+
 test('falls back to Gemini when OpenRouter rejects Gemini image access with 403', async () => {
   const calls = [];
   const router = createProviderRouter({

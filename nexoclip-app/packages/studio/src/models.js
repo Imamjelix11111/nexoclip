@@ -3385,6 +3385,7 @@ export const OPENROUTER_VIDEO_MODEL_MAP = {
   'minimax-hailuo-2.3-standard-t2v': 'minimax/hailuo-2.3',
   'minimax-hailuo-2.3-standard-i2v': 'minimax/hailuo-2.3',
   'openai-sora-2-pro-text-to-video': 'openai/sora-2-pro',
+  'openai-sora-2-pro-image-to-video': 'openai/sora-2-pro',
   'seedance-2-mini-image-to-video': 'bytedance/seedance-2.0-mini',
   'kling-o1-text-to-video': 'kwaivgi/kling-video-o1',
   'kling-o1-image-to-video': 'kwaivgi/kling-video-o1',
@@ -3437,6 +3438,9 @@ export const OPENROUTER_MULTI_REFERENCE_MODELS = new Set([
   'happy-horse-1.1-reference-to-video-720p',
   'seedance-2.5-omni-reference',
   'seedance-2.5-omni-reference-480p',
+  // Sora's `input_reference` is a single character/scene reference, not a first-frame
+  // anchor — same misinterpretation risk as above.
+  'openai-sora-2-pro-image-to-video',
 ]);
 
 // Video-to-video: only models confirmed live against OpenRouter's video-input
@@ -4945,6 +4949,7 @@ export const t2vModels = [
   {
     "id": "openai-sora-2-text-to-video",
     "name": "Sora 2",
+    "family": "sora-2",
     "inputs": {
       "prompt": {
         "type": "string",
@@ -4981,6 +4986,7 @@ export const t2vModels = [
   {
     "id": "openai-sora-2-pro-text-to-video",
     "name": "Sora 2 Pro",
+    "family": "sora-2-pro",
     "inputs": {
       "prompt": {
         "type": "string",
@@ -5513,6 +5519,7 @@ export const t2vModels = [
     "id": "openai-sora-2-standard-text-to-video",
     "name": "Sora 2 Standard",
     "endpoint": "openai-sora-2-standard-text-to-video",
+    "family": "sora-2-standard",
     "inputs": {
       "prompt": {
         "type": "string",
@@ -12785,7 +12792,7 @@ export const i2vModels = [
     "id": "openai-sora-2-image-to-video",
     "name": "Openai Sora 2 Image To Video",
     "endpoint": "openai-sora-2-image-to-video",
-    "family": "sora",
+    "family": "sora-2",
     "imageField": "images_list",
     "hasPrompt": true,
     "inputs": {
@@ -12856,7 +12863,7 @@ export const i2vModels = [
     "id": "openai-sora-2-pro-image-to-video",
     "name": "Openai Sora 2 Pro Image To Video",
     "endpoint": "openai-sora-2-pro-image-to-video",
-    "family": "sora",
+    "family": "sora-2-pro",
     "imageField": "images_list",
     "hasPrompt": true,
     "inputs": {
@@ -14709,7 +14716,7 @@ export const i2vModels = [
     "id": "openai-sora-2-standard-image-to-video",
     "name": "Sora 2 Standard",
     "endpoint": "openai-sora-2-standard-image-to-video",
-    "family": "sora",
+    "family": "sora-2-standard",
     "imageField": "image_url",
     "hasPrompt": true,
     "inputs": {

@@ -86,6 +86,7 @@ export async function generateI2I(_apiKey, params) {
     if (params.aspect_ratio) payload.aspect_ratio = params.aspect_ratio;
     if (params.resolution) payload.resolution = params.resolution;
     if (params.quality) payload.quality = params.quality;
+    if (params.seed !== undefined && params.seed !== -1) payload.seed = params.seed;
     const response = await fetch('/api/openrouter/images', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(params.workspace_id ? { 'x-workspace-id': params.workspace_id } : {}) }, body: JSON.stringify(payload) });
     if (!response.ok) throw new Error(`OpenRouter image request failed: ${response.status}`);
     return response.json();

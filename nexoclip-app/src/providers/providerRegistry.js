@@ -24,6 +24,10 @@ const DIRECT_MODEL_MAP = new Map([
   ['openai/gpt-5-image', { provider: 'openai', model: 'gpt-image-1' }],
   ['openai/gpt-5-image-mini', { provider: 'openai', model: 'gpt-image-1-mini' }],
   ['openai/gpt-5.4-image-2', { provider: 'openai', model: 'gpt-image-2' }],
+  // OpenRouter only carries Sora 2 Pro (no plain/standard Sora tiers) and — as of this
+  // writing — rejects it outright (403) regardless of whether an image reference is
+  // attached, so this always falls through to OpenAI's own Video API.
+  ['openai/sora-2-pro', { provider: 'openai', model: 'sora-2-pro' }],
 ]);
 
 const DIRECT_PREFIXES = [
