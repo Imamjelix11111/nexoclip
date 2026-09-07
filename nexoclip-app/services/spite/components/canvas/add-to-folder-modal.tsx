@@ -1,5 +1,6 @@
 'use client'
 
+import { withBasePath } from '@/lib/base-path'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -84,13 +85,13 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
   useEffect(() => {
     if (!open) return
     setLoading(true)
-    fetch(`/api/folders?type=${folderType}&projectId=${projectId}`)
+    fetch(withBasePath(`/api/folders?type=${folderType}&projectId=${projectId}`))
       .then(r => r.json())
       .then(data => setFolders(Array.isArray(data) ? data : []))
       .catch(console.error)
       .finally(() => setLoading(false))
 
-    fetch(`/api/assets?projectId=${projectId}`)
+    fetch(withBasePath(`/api/assets?projectId=${projectId}`))
       .then(r => r.json())
       .then(data => setAvailableAssets(Array.isArray(data) ? data : []))
       .catch(console.error)
@@ -120,7 +121,7 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
     // pre-selected (and later added to a folder properly).
     if (assetUrl) {
       let cancelled = false
-      fetch(`/api/assets/by-url?url=${encodeURIComponent(assetUrl)}`)
+      fetch(withBasePath(`/api/assets/by-url?url=${encodeURIComponent(assetUrl)}`))
         .then(r => r.json())
         .then(data => {
           if (cancelled || !data?.id) return
@@ -154,7 +155,7 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
     try {
       // 1) Ask the server for a presigned PUT URL. This route is tiny —
       //    just signing — so it never hits Vercel's body-size limit.
-      const presignRes = await fetch('/api/r2-presign', {
+      const presignRes = await fetch(withBasePath('/api/r2-presign'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -190,7 +191,7 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
 
       // 3) Record the asset (projectId required).
       const isVideo = file.type.startsWith('video/')
-      const assetRes = await fetch('/api/assets', {
+      const assetRes = await fetch(withBasePath('/api/assets'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: proxyUrl, type: isVideo ? 'video' : 'image', filename: file.name, projectId }),
@@ -238,7 +239,7 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
   const handleAddToExisting = async (folderId: string) => {
     if (!assetId) return
     try {
-      await fetch(`/api/folders/${folderId}`, {
+      await fetch(withBasePath(`/api/folders/${folderId}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ addAssetIds: [assetId] })
@@ -272,13 +273,13 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
 
       let res: Response
       if (editFolder) {
-        res = await fetch(`/api/folders/${editFolder.id}`, {
+        res = await fetch(withBasePath(`/api/folders/${editFolder.id}`), {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: newName.trim(), description: newDescription.trim() || null, setAssetIds: assetIds })
         })
       } else {
-        res = await fetch('/api/folders', {
+        res = await fetch(withBasePath('/api/folders'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -611,7 +612,7 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
                       const noun = typeLabels[editFolder.type].toLowerCase()
                       if (!window.confirm(`Delete the ${noun} "${editFolder.name}"? Assets inside stay in the library.`)) return
                       try {
-                        const res = await fetch(`/api/folders/${editFolder.id}`, { method: 'DELETE' })
+                        const res = await fetch(withBasePath(`/api/folders/${editFolder.id}`), { method: 'DELETE' })
                         if (!res.ok) throw new Error(`HTTP ${res.status}`)
                         toast.success(`Deleted "${editFolder.name}"`)
                         window.dispatchEvent(new CustomEvent('folders-changed'))

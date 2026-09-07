@@ -1,5 +1,6 @@
 "use client";
 
+import { withBasePath } from "@/lib/base-path";
 import { useSession, signIn } from "next-auth/react";
 import { useEffect, useState, useRef } from "react";
 import { FaYoutube, FaExclamationTriangle, FaClock, FaCheckCircle, FaTimesCircle, FaGlobe, FaLock, FaChevronDown, FaInstagram, FaFacebook, FaLinkedin, FaPinterest } from "react-icons/fa";
@@ -112,7 +113,7 @@ export default function WorkspaceDashboard() {
     if (!session?.user) return;
     
     // Fetch accounts
-    fetch("/api/social/accounts")
+    fetch(withBasePath("/api/social/accounts"))
       .then(res => res.json())
       .then(data => {
         setAccounts(data);
@@ -131,7 +132,7 @@ export default function WorkspaceDashboard() {
 
   const fetchPosts = () => {
     if (!session?.user) return;
-    fetch("/api/posts")
+    fetch(withBasePath("/api/posts"))
       .then(res => res.json())
       .then(data => {
         setPosts(Array.isArray(data) ? data : []);
@@ -147,7 +148,7 @@ export default function WorkspaceDashboard() {
     if (!hasProcessing) return;
 
     const interval = setInterval(() => {
-      fetch("/api/posts")
+      fetch(withBasePath("/api/posts"))
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) {
@@ -172,7 +173,7 @@ export default function WorkspaceDashboard() {
     formData.append("file", file);
 
     try {
-      const res = await fetch("/api/upload", {
+      const res = await fetch(withBasePath("/api/upload"), {
         method: "POST",
         body: formData
       });
@@ -222,7 +223,7 @@ export default function WorkspaceDashboard() {
     const account = accounts.find(a => a.id.toString() === selectedAccountId);
 
     try {
-      const res = await fetch("/api/posts", {
+      const res = await fetch(withBasePath("/api/posts"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -273,7 +274,7 @@ export default function WorkspaceDashboard() {
     if (!confirm("Are you sure you want to cancel and delete this post?")) return;
 
     try {
-      const res = await fetch(`/api/posts/${id}`, {
+      const res = await fetch(withBasePath(`/api/posts/${id}`), {
         method: "DELETE"
       });
       const data = await res.json();
@@ -292,7 +293,7 @@ export default function WorkspaceDashboard() {
   // Retry a failed post (reschedules it to run immediately)
   const handleRetryPost = async (post) => {
     try {
-      const res = await fetch(`/api/posts/${post.id}`, {
+      const res = await fetch(withBasePath(`/api/posts/${post.id}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

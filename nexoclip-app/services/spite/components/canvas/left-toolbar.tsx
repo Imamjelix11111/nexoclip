@@ -1,5 +1,6 @@
 'use client'
 
+import { withBasePath } from '@/lib/base-path'
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
 import useSWR from 'swr'
@@ -219,7 +220,7 @@ export function LeftToolbar({
     return Array.isArray(d) ? d : []
   }
   const { data: generatedAssets = [], isLoading: loadingHistory, mutate: mutateAssets } = useSWR<GeneratedAsset[]>(
-    historyOpen ? `/api/assets?projectId=${projectId}` : null,
+    historyOpen ? withBasePath(`/api/assets?projectId=${projectId}`) : null,
     fetcher,
     { refreshInterval: 3000, revalidateOnFocus: true }
   )
@@ -228,7 +229,7 @@ export function LeftToolbar({
   // folder-create from a node toolbar — which doesn't require the assets
   // panel to be open — still triggers a refetch + repaints the sidebar
   // when the user does open the panel afterwards.
-  const foldersKey = projectId ? `/api/folders?projectId=${projectId}` : null
+  const foldersKey = projectId ? withBasePath(`/api/folders?projectId=${projectId}`) : null
   const { data: folders = [], mutate: mutateFolders } = useSWR<{
     id: string
     name: string
@@ -334,7 +335,7 @@ export function LeftToolbar({
       formData.append('name', file.name.replace(/\.[^/.]+$/, ''))
       formData.append('category', expandedCategory)
 
-      const response = await fetch(`/api/projects/${projectId}/assets/upload`, {
+      const response = await fetch(withBasePath(`/api/projects/${projectId}/assets/upload`), {
         method: 'POST',
         body: formData,
       })
@@ -354,7 +355,7 @@ export function LeftToolbar({
 
   const handleDeleteAsset = async (asset: Asset) => {
     try {
-      const response = await fetch(`/api/projects/${projectId}/assets/upload`, {
+      const response = await fetch(withBasePath(`/api/projects/${projectId}/assets/upload`), {
         method: 'DELETE',
         body: JSON.stringify({
           assetId: asset.id,
@@ -429,7 +430,7 @@ export function LeftToolbar({
     const ids = Array.from(selectedAssetIds)
     const results = await Promise.all(
       ids.map(id =>
-        fetch(`/api/assets/${id}`, { method: 'DELETE' })
+        fetch(withBasePath(`/api/assets/${id}`), { method: 'DELETE' })
           .then(r => ({ id, status: r.status }))
           .catch(() => ({ id, status: 0 }))
       )
@@ -1013,7 +1014,7 @@ export function LeftToolbar({
                               onClick={async () => {
                                 if (!window.confirm(`Delete the ${typeLabel.toLowerCase()} "${activeFolder.name}"? Assets inside stay in the library.`)) return
                                 try {
-                                  const res = await fetch(`/api/folders/${activeFolder.id}`, { method: 'DELETE' })
+                                  const res = await fetch(withBasePath(`/api/folders/${activeFolder.id}`), { method: 'DELETE' })
                                   if (!res.ok) throw new Error(`HTTP ${res.status}`)
                                   toast.success(`Deleted "${activeFolder.name}"`)
                                   // Pop back up to the parent category so the
@@ -1295,7 +1296,7 @@ export function LeftToolbar({
                   onClick={async () => {
                     const next = !selectedGenAsset.recovered
                     try {
-                      const res = await fetch(`/api/assets/${selectedGenAsset.id}`, {
+                      const res = await fetch(withBasePath(`/api/assets/${selectedGenAsset.id}`), {
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ recovered: next }),
@@ -1342,7 +1343,7 @@ export function LeftToolbar({
                         onClick={async () => {
                           const currentIndex = filteredGenAssets.findIndex(a => a.id === selectedGenAsset.id)
                           const nextAsset = filteredGenAssets[currentIndex + 1] ?? filteredGenAssets[currentIndex - 1] ?? null
-                          const res = await fetch(`/api/assets/${selectedGenAsset.id}`, { method: 'DELETE' })
+                          const res = await fetch(withBasePath(`/api/assets/${selectedGenAsset.id}`), { method: 'DELETE' })
                           if (res.ok) {
                             const body = await res.json().catch(() => null) as
                               | { kept?: boolean; reason?: string; removed_from_folders?: number }
@@ -1392,12 +1393,12 @@ export function LeftToolbar({
                     formData.append('file', file)
                     formData.append('filename', file.name)
                     try {
-                      const up = await fetch('/api/r2-upload', { method: 'POST', body: formData })
+                      const up = await fetch(withBasePath('/api/r2-upload'), { method: 'POST', body: formData })
                       const j = await up.json()
                       if (!j.url) throw new Error('upload failed')
                       const r2Key = j.url.split('.r2.dev/')[1]
                       const proxyUrl = r2Key ? `/api/r2-image/${r2Key}` : j.url
-                      await fetch('/api/assets', {
+                      await fetch(withBasePath('/api/assets'), {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -1774,7 +1775,7 @@ export function LeftToolbar({
                   onClick={async () => {
                     const next = !selectedGenAsset.recovered
                     try {
-                      const res = await fetch(`/api/assets/${selectedGenAsset.id}`, {
+                      const res = await fetch(withBasePath(`/api/assets/${selectedGenAsset.id}`), {
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ recovered: next }),
@@ -1820,7 +1821,7 @@ export function LeftToolbar({
                           const currentIndex = filteredGenAssets.findIndex(a => a.id === selectedGenAsset.id)
                           const nextAsset = filteredGenAssets[currentIndex + 1] ?? filteredGenAssets[currentIndex - 1] ?? null
 
-                          const res = await fetch(`/api/assets/${selectedGenAsset.id}`, { method: 'DELETE' })
+                          const res = await fetch(withBasePath(`/api/assets/${selectedGenAsset.id}`), { method: 'DELETE' })
                           const body = res.ok
                             ? (await res.json().catch(() => null)) as
                                 | { kept?: boolean; removed_from_folders?: number }

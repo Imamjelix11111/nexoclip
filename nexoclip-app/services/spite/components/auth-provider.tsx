@@ -1,5 +1,6 @@
 'use client'
 
+import { withBasePath } from '@/lib/base-path'
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 
@@ -30,7 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // httpOnly session cookie is valid.
   useEffect(() => {
     let active = true
-    fetch('/api/auth/check')
+    fetch(withBasePath('/api/auth/check'))
       .then((res) => res.ok)
       .then((ok) => {
         if (active) {
@@ -54,13 +55,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (isLoading) return
     if (pathname === '/login' && isAuthenticated) {
-      router.push('/')
+      router.push(withBasePath('/'))
     }
   }, [isAuthenticated, isLoading, pathname, router])
 
   const login = async (password: string): Promise<boolean> => {
     try {
-      const res = await fetch('/api/auth/verify', {
+      const res = await fetch(withBasePath('/api/auth/verify'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password }),
@@ -69,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (data.success) {
         setIsAuthenticated(true)
-        router.push('/')
+        router.push(withBasePath('/'))
         router.refresh()
         return true
       }
@@ -81,12 +82,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' })
+      await fetch(withBasePath('/api/auth/logout'), { method: 'POST' })
     } catch {
       // ignore network errors — we still clear local state and redirect
     }
     setIsAuthenticated(false)
-    router.push('/login')
+    router.push(withBasePath('/login'))
     router.refresh()
   }
 

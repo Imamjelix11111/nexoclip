@@ -1,5 +1,6 @@
 'use client'
 
+import { withBasePath } from '@/lib/base-path'
 import { useEffect, useState, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -33,7 +34,7 @@ export default function AssetsPage() {
   useEffect(() => {
     const loadAssets = async () => {
       try {
-        const res = await fetch('/api/assets')
+        const res = await fetch(withBasePath('/api/assets'))
         if (res.ok) {
           const data = await res.json()
           setAssets(data)
@@ -82,7 +83,7 @@ export default function AssetsPage() {
   const handleDelete = async (assetId: string) => {
     setDeleting(assetId)
     try {
-      const res = await fetch(`/api/assets/${assetId}`, { method: 'DELETE' })
+      const res = await fetch(withBasePath(`/api/assets/${assetId}`), { method: 'DELETE' })
       if (res.ok) {
         setAssets(assets.filter(a => a.id !== assetId))
         if (selectedAsset?.id === assetId) setSelectedAsset(null)

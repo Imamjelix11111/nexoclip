@@ -1,5 +1,6 @@
 "use client";
 
+import { withBasePath } from "@/lib/base-path";
 import { useEffect, useState } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { FaYoutube, FaInstagram, FaFacebook, FaLinkedin, FaPinterest } from "react-icons/fa";
@@ -128,7 +129,7 @@ export default function IntegrationsPage() {
 
   const fetchAccounts = () => {
     setLoading(true);
-    fetch("/api/social/accounts")
+    fetch(withBasePath("/api/social/accounts"))
       .then((res) => res.json())
       .then((data) => {
         const fetchedAccounts = Array.isArray(data) ? data : [];
@@ -142,7 +143,7 @@ export default function IntegrationsPage() {
             (acc) => acc.platform === 1 && acc.account_name === email
           );
           if (targetAccount) {
-            fetch(`/api/social/accounts/${targetAccount.id}`, {
+            fetch(withBasePath(`/api/social/accounts/${targetAccount.id}`), {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ accountName: pendingYoutubeLabel })
@@ -189,7 +190,7 @@ export default function IntegrationsPage() {
         localStorage.removeItem("pending_youtube_label");
       }
       try {
-        const res = await fetch("/api/social/youtube/connect", {
+        const res = await fetch(withBasePath("/api/social/youtube/connect"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -216,7 +217,7 @@ export default function IntegrationsPage() {
     if (!confirm("Are you sure you want to disconnect this account?")) return;
     setDisconnectingId(id);
     try {
-      const res = await fetch(`/api/social/accounts/${id}`, {
+      const res = await fetch(withBasePath(`/api/social/accounts/${id}`), {
         method: "DELETE"
       });
       if (res.ok) {
@@ -243,7 +244,7 @@ export default function IntegrationsPage() {
     if (!trimmed) return;
     
     try {
-      const res = await fetch(`/api/social/accounts/${id}`, {
+      const res = await fetch(withBasePath(`/api/social/accounts/${id}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ accountName: trimmed })

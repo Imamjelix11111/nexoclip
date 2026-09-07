@@ -1,5 +1,6 @@
 'use client'
 
+import { withBasePath } from '@/lib/base-path'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus } from '@phosphor-icons/react'
@@ -33,7 +34,7 @@ export default function MobileProjects() {
   const [creating, setCreating] = useState(false)
 
   useEffect(() => {
-    fetch('/api/projects')
+    fetch(withBasePath('/api/projects'))
       .then((r) => r.json())
       .then((d) => setProjects(Array.isArray(d) ? d : []))
       .catch(() => {})
@@ -45,7 +46,7 @@ export default function MobileProjects() {
     if (!name) return
     setCreating(true)
     try {
-      const res = await fetch('/api/projects', {
+      const res = await fetch(withBasePath('/api/projects'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, origin: 'flow' }),

@@ -1,5 +1,6 @@
 'use client'
 
+import { withBasePath } from '@/lib/base-path'
 import { Position, NodeProps, Handle, useReactFlow, useUpdateNodeInternals } from '@xyflow/react'
 import { useParams } from 'next/navigation'
 import { Play, CaretDown, SpeakerHigh, SpeakerSlash, TextT, Image as ImageIcon, FilmStrip, CircleNotch, X, Check, ArrowsClockwise, Minus, Plus } from '@phosphor-icons/react'
@@ -408,7 +409,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       return true
     }
     try {
-        const response = await fetch(`/api/generate/status?request_id=${reqId}&model=${encodeURIComponent(falModelId)}&projectId=${projectId}&prompt=${encodeURIComponent(prompt)}`)
+        const response = await fetch(withBasePath(`/api/generate/status?request_id=${reqId}&model=${encodeURIComponent(falModelId)}&projectId=${projectId}&prompt=${encodeURIComponent(prompt)}`))
       const result = await response.json()
 
       // Cancelled while this request was in flight — drop the result.
@@ -792,7 +793,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       const count = Math.max(1, Math.min(12, numVideos))
       const submitOnce = async () => {
         try {
-          const res = await fetch('/api/generate/submit', {
+          const res = await fetch(withBasePath('/api/generate/submit'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body,
@@ -964,7 +965,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     clearPending()
 
     try {
-      await fetch('/api/generate/cancel', {
+      await fetch(withBasePath('/api/generate/cancel'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ request_id: reqId, model: cancelModel }),

@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
+const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? '').replace(/\/$/, '');
+
 const nextConfig = {
-  /* config options here */
+  output: 'standalone',
+  basePath,
 };
 
 export default nextConfig;

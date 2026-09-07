@@ -1,5 +1,6 @@
 "use client";
 
+import { withBasePath } from "@/lib/base-path";
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { useState, useEffect } from "react";
@@ -128,7 +129,7 @@ export default function Navbar() {
                       {session.user.email}
                     </div>
                     <button
-                      onClick={() => signOut({ callbackUrl: "/login" })}
+                      onClick={() => signOut({ callbackUrl: withBasePath("/login") })}
                       className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm font-semibold text-red-500 hover:bg-red-500/10 transition-colors"
                     >
                       <FiLogOut size={14} />
@@ -202,7 +203,7 @@ export default function Navbar() {
               <button
                 onClick={() => {
                   setIsOpen(false);
-                  signOut({ callbackUrl: "/login" });
+                  signOut({ callbackUrl: withBasePath("/login") });
                 }}
                 className="flex w-full items-center justify-center gap-2 rounded bg-red-500/10 text-red-500 py-3 text-sm font-bold hover:bg-red-500/20 transition-all border border-red-500/20 mt-2"
               >

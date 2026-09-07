@@ -1,5 +1,6 @@
 'use client'
 
+import { withBasePath } from '@/lib/base-path'
 import { Position, NodeProps, Handle, useReactFlow, useStore } from '@xyflow/react'
 import { useParams } from 'next/navigation'
 import { ArrowsInSimple, Image as ImageIcon, CircleNotch, CheckCircle, UploadSimple } from '@phosphor-icons/react'
@@ -74,7 +75,7 @@ function CompressNodeImpl({ id, data, selected }: NodeProps) {
   const uploadBlob = useCallback(async (blob: Blob): Promise<string | null> => {
     try {
       const filename = `compressed-${Date.now()}.jpg`
-      const presignRes = await fetch('/api/r2-presign', {
+      const presignRes = await fetch(withBasePath('/api/r2-presign'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filename, contentType: 'image/jpeg' }),
@@ -83,7 +84,7 @@ function CompressNodeImpl({ id, data, selected }: NodeProps) {
       const { presignedUrl, proxyUrl } = await presignRes.json() as { presignedUrl: string; proxyUrl: string }
       const putRes = await fetch(presignedUrl, { method: 'PUT', headers: { 'Content-Type': 'image/jpeg' }, body: blob })
       if (!putRes.ok) return null
-      await fetch('/api/assets', {
+      await fetch(withBasePath('/api/assets'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: proxyUrl, type: 'image', filename, projectId }),

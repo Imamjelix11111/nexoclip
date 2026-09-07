@@ -1,5 +1,6 @@
 'use client'
 
+import { withBasePath } from '@/lib/base-path'
 import { useState, useMemo } from 'react'
 import useSWR from 'swr'
 import { Question } from '@phosphor-icons/react'
@@ -29,7 +30,7 @@ const fetcher = (url: string) => fetch(url).then(r => r.json()).then(data => {
 
 export function ProjectsDashboard() {
   const [search, setSearch] = useState('')
-  const { data: projects = [], mutate } = useSWR<Project[]>('/api/projects', fetcher)
+  const { data: projects = [], mutate } = useSWR<Project[]>(withBasePath('/api/projects'), fetcher)
 
   const filtered = useMemo(() => {
     if (!search.trim()) return projects

@@ -1,5 +1,6 @@
 "use client";
 
+import { withBasePath } from "@/lib/base-path";
 import { useSession } from "next-auth/react";
 import { useState } from "react";
 import Navbar from "@/components/Navbar";
@@ -27,7 +28,7 @@ export default function Pricing() {
 
     setLoadingPlan(planId);
     try {
-      const { data } = await axios.post("/api/checkout", { planId });
+      const { data } = await axios.post(withBasePath("/api/checkout"), { planId });
       if (data.url) {
         window.location.href = data.url;
       } else {

@@ -12,10 +12,15 @@ RUN uv sync --frozen --no-install-project
 
 COPY . .
 
+RUN useradd --create-home --uid 10001 app \
+ && mkdir -p /app/.tenants \
+ && chown -R app:app /app
+
 ENV VIMAX_RUNTIME_HOST=0.0.0.0 \
     VIMAX_RUNTIME_PORT=4173 \
     VIMAX_TENANTS_ROOT=/app/.tenants \
     PATH="/app/.venv/bin:${PATH}"
 
+USER app
 EXPOSE 4173
 CMD ["uv", "run", "uvicorn", "runtime_api.app:app", "--host", "0.0.0.0", "--port", "4173"]
