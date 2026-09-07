@@ -20,6 +20,9 @@ function directConfigured(env, provider) {
 // so a BytePlus job would poll as "running" forever even after it actually finished.
 function normalizeBytePlusStatus(status) {
   if (status?.status === 'succeeded') return { ...status, status: 'completed' };
+  if (status?.error && typeof status.error === 'object') {
+    return { ...status, error: status.error.message || status.error.code || 'BytePlus generation failed', error_code: status.error.code };
+  }
   return status;
 }
 
@@ -58,9 +61,21 @@ export function createProviderRouter({ env = process.env, fetch: fetchImpl = glo
     }
   }
 
+  function run(operation, params, primary) {
+    const mapping = getDirectProvider(params.model);
+    // BytePlus endpoint IDs are deployment-specific and are not valid OpenRouter model IDs.
+    if (mapping?.provider === 'byteplus' && params.model.startsWith('ep-')) {
+      if (!directConfigured(env, 'byteplus')) throw createDirectProviderUnavailableError(params.model, 'byteplus');
+      const adapter = directAdapter(env, 'byteplus', operation, fetchImpl);
+      const directParams = { ...params, model: mapping.model };
+      return operation === 'image' ? adapter.generate(directParams) : adapter.submit(directParams);
+    }
+    return withFallback(operation, params, primary);
+  }
+
   return {
-    generateImage: (params) => withFallback('image', params, () => openrouterImage().generate(params)),
-    submitVideo: (params) => withFallback('video', params, () => openrouterVideo().submit(params)),
+    generateImage: (params) => run('image', params, () => openrouterImage().generate(params)),
+    submitVideo: (params) => run('video', params, () => openrouterVideo().submit(params)),
     pollVideo: async (provider, id) => {
       if (provider === 'openrouter') return openrouterVideo().poll(id);
       const status = await directAdapter(env, provider, 'video', fetchImpl).poll(id);

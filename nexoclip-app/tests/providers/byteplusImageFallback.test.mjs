@@ -32,17 +32,20 @@ test('falls back to BytePlus Seedream when OpenRouter has no route for the model
 
 test('falls back to BytePlus on a 400 even when the OpenRouter error message is unrecognized wording', async () => {
   const calls = [];
+  let bytePlusBody;
   const router = createProviderRouter({
     env: { OPENROUTER_API_KEY: 'or-key', BYTEPLUS_API_KEY: 'bp-key', BYTEPLUS_BASE_URL: 'https://ark.example/api/v3' },
-    fetch: async (url) => {
+    fetch: async (url, options) => {
       calls.push(url);
       if (url.includes('openrouter.ai')) return { ok: false, status: 400, json: async () => ({ error: { message: 'Bad Request' } }) };
+      bytePlusBody = JSON.parse(options.body);
       return { ok: true, status: 200, json: async () => ({ data: [{ b64_json: 'abc', mime_type: 'image/png' }] }) };
     },
   });
 
-  const result = await router.generateImage({ model: 'bytedance-seed/seedream-5-0-pro', prompt: 'a cat' });
+  const result = await router.generateImage({ model: 'bytedance-seed/seedream-4.5', prompt: 'a cat' });
   assert.equal(result.provider, 'byteplus');
+  assert.equal(bytePlusBody.model, 'seedream-4-5-251128');
   assert.equal(calls.length, 2);
 });
 
@@ -76,6 +79,33 @@ test('does not fall back on a 402 for a model with no direct-provider mapping', 
   assert.equal(calls.length, 1);
 });
 
+test('sends a BytePlus deployment endpoint directly with reference images', async () => {
+  const calls = [];
+  let body;
+  const router = createProviderRouter({
+    env: { OPENROUTER_API_KEY: 'or-key', BYTEPLUS_API_KEY: 'bp-key', BYTEPLUS_BASE_URL: 'https://ark.example/api/v3' },
+    fetch: async (url, options) => {
+      calls.push(url);
+      body = JSON.parse(options.body);
+      return { ok: true, status: 200, json: async () => ({ data: [{ url: 'https://cdn.example/out.jpg' }] }) };
+    },
+  });
+
+  const result = await router.generateImage({
+    model: 'ep-20260907150433-zg8fr',
+    prompt: 'a girl and a cow plushie',
+    resolution: '2K',
+    referenceImages: ['https://cdn.example/one.png', 'https://cdn.example/two.png'],
+  });
+
+  assert.equal(result.provider, 'byteplus');
+  assert.equal(calls.length, 1);
+  assert.match(calls[0], /ark\.example\/api\/v3\/images\/generations/);
+  assert.equal(body.model, 'ep-20260907150433-zg8fr');
+  assert.deepEqual(body.image, ['https://cdn.example/one.png', 'https://cdn.example/two.png']);
+  assert.equal(body.size, '2K');
+});
+
 test('BytePlus image adapter never sends an aspect ratio as `size` (BytePlus rejects it with InvalidParameter)', async () => {
   let request;
   const adapter = createBytePlusImageAdapter({
@@ -98,6 +128,18 @@ test('BytePlus image adapter maps resolution presets to `size`', async () => {
   });
 
   await adapter.generate({ model: 'dola-seedream-5-0-pro-260628', prompt: 'a cat', resolution: '2K' });
+
+  assert.equal(JSON.parse(request.options.body).size, '2K');
+});
+
+test('BytePlus Seedream 4.5 deployment upgrades unsupported 1K requests to 2K', async () => {
+  let request;
+  const adapter = createBytePlusImageAdapter({
+    apiKey: 'bp-key', baseUrl: 'https://ark.example/api/v3',
+    fetch: async (url, options) => { request = { url, options }; return { ok: true, status: 200, json: async () => ({ data: [{ url: 'https://cdn.example/out.jpg' }] }) }; },
+  });
+
+  await adapter.generate({ model: 'ep-20260907150312-xx7gf', prompt: 'a cat', resolution: '1K' });
 
   assert.equal(JSON.parse(request.options.body).size, '2K');
 });

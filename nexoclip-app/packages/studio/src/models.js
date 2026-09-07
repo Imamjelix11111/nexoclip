@@ -3288,6 +3288,30 @@ export const t2iModels = [
     "provider_name": "Alibaba"
   },
   {
+    "id": "seedream-4.5-unfiltered",
+    "name": "Seedream 4.5 Unfiltered",
+    "endpoint": "ep-20260907150312-xx7gf",
+    "inputs": {
+      "prompt": { "type": "string", "title": "Prompt", "name": "prompt" },
+      "aspect_ratio": { "enum": ["1:1", "16:9", "9:16", "4:3", "3:4", "2:3", "3:2", "21:9"], "type": "string", "title": "Aspect Ratio", "name": "aspect_ratio", "default": "1:1" },
+      "resolution": { "enum": ["2K", "4K"], "type": "string", "title": "Resolution", "name": "resolution", "default": "2K" }
+    },
+    "provider": "byteplus",
+    "provider_name": "BytePlus"
+  },
+  {
+    "id": "seedream-5.0-lite-unfiltered",
+    "name": "Seedream 5.0 Lite Unfiltered",
+    "endpoint": "ep-20260907150433-zg8fr",
+    "inputs": {
+      "prompt": { "type": "string", "title": "Prompt", "name": "prompt" },
+      "aspect_ratio": { "enum": ["1:1", "16:9", "9:16", "4:3", "3:4", "2:3", "3:2", "21:9"], "type": "string", "title": "Aspect Ratio", "name": "aspect_ratio", "default": "1:1" },
+      "resolution": { "enum": ["1K", "2K", "4K"], "type": "string", "title": "Resolution", "name": "resolution", "default": "2K" }
+    },
+    "provider": "byteplus",
+    "provider_name": "BytePlus"
+  },
+  {
     "id": "qwen3-pro-text-to-image",
     "name": "Qwen 3 Pro Text to Image",
     "endpoint": "qwen3-pro-text-to-image",
@@ -3346,6 +3370,8 @@ export const OPENROUTER_IMAGE_MODEL_MAP = {
   'flux-2-flex': 'black-forest-labs/flux.2-flex',
   'flux-2-max': 'black-forest-labs/flux.2-max',
   'bytedance-seedream-v4.5': 'bytedance-seed/seedream-4.5',
+  'seedream-4.5-unfiltered': 'ep-20260907150312-xx7gf',
+  'seedream-5.0-lite-unfiltered': 'ep-20260907150433-zg8fr',
   'seedream-5.0': 'bytedance-seed/seedream-5-0-pro',
   'qwen-image': 'qwen/qwen-image-3',
   'grok-imagine-text-to-image': 'x-ai/grok-imagine-image-2.0',
@@ -3360,6 +3386,8 @@ export const OPENROUTER_IMAGE_MODEL_MAP = {
   'qwen-image-edit': 'qwen/qwen-image-3',
   'qwen-image-edit-plus': 'qwen/qwen-image-3-pro',
   'bytedance-seedream-v4.5-edit': 'bytedance-seed/seedream-4.5',
+  'seedream-4.5-unfiltered-edit': 'ep-20260907150312-xx7gf',
+  'seedream-5.0-lite-unfiltered-edit': 'ep-20260907150433-zg8fr',
   'seedream-5.0-edit': 'bytedance-seed/seedream-5-0-pro',
 };
 
@@ -3409,6 +3437,8 @@ export const OPENROUTER_VIDEO_MODEL_MAP = {
   'happy-horse-1.1-reference-to-video-720p': 'alibaba/happyhorse-1.1',
   'wan2.6-text-to-video': 'alibaba/wan-2.6',
   'wan2.6-image-to-video': 'alibaba/wan-2.6',
+  'seedance-2.5-unfiltered-text-to-video': 'ep-20260904190604-p8pjl',
+  'seedance-2.5-unfiltered-image-to-video': 'ep-20260904190604-p8pjl',
   'seedance-2.5-text-to-video': 'bytedance/seedance-2.5',
   'seedance-2.5-text-to-video-480p': 'bytedance/seedance-2.5',
   'seedance-2.5-image-to-video': 'bytedance/seedance-2.5',
@@ -7888,6 +7918,22 @@ export const t2vModels = [
     "provider_name": "Minimax"
   },
   {
+    "id": "seedance-2.5-unfiltered-text-to-video",
+    "name": "Seedance 2.5 Unfiltered",
+    "endpoint": "ep-20260904190604-p8pjl",
+    "family": "seedance-2.5-unfiltered",
+    "hasPrompt": true,
+    "inputs": {
+      "prompt": { "type": "string", "title": "Prompt", "name": "prompt", "description": "Text prompt describing the video." },
+      "aspect_ratio": { "enum": ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"], "type": "string", "title": "Aspect Ratio", "name": "aspect_ratio", "default": "16:9" },
+      "resolution": { "enum": ["480p", "720p", "1080p"], "type": "string", "title": "Resolution", "name": "resolution", "default": "720p" },
+      "duration": { "enum": [5, 10, 15], "type": "int", "title": "Duration", "name": "duration", "default": 5 },
+      "generate_audio": { "type": "boolean", "title": "Generate Audio", "name": "generate_audio", "default": true }
+    },
+    "provider": "byteplus",
+    "provider_name": "BytePlus"
+  },
+  {
     "id": "minimax-h3-open-text-to-video",
     "name": "MiniMax H3 Open Text to Video",
     "endpoint": "minimax-h3-open-text-to-video",
@@ -9687,6 +9733,40 @@ export const i2iModels = [
     },
     "provider": "vidu",
     "provider_name": "Vidu"
+  },
+  {
+    "id": "seedream-4.5-unfiltered-edit",
+    "name": "Seedream 4.5 Unfiltered Edit",
+    "endpoint": "ep-20260907150312-xx7gf",
+    "family": "seedream-4.5-unfiltered",
+    "imageField": "images_list",
+    "hasPrompt": true,
+    "maxImages": 10,
+    "inputs": {
+      "prompt": { "type": "string", "title": "Prompt", "name": "prompt", "description": "Describe the image to generate from the references." },
+      "images_list": { "type": "array", "title": "Image URLs", "name": "images_list", "field": "images_list", "items": { "type": "string" }, "maxItems": 10 },
+      "aspect_ratio": { "enum": ["1:1", "16:9", "9:16", "4:3", "3:4", "2:3", "3:2", "21:9"], "type": "string", "title": "Aspect Ratio", "name": "aspect_ratio", "default": "1:1" },
+      "resolution": { "enum": ["2K", "4K"], "type": "string", "title": "Resolution", "name": "resolution", "default": "2K" }
+    },
+    "provider": "byteplus",
+    "provider_name": "BytePlus"
+  },
+  {
+    "id": "seedream-5.0-lite-unfiltered-edit",
+    "name": "Seedream 5.0 Lite Unfiltered Edit",
+    "endpoint": "ep-20260907150433-zg8fr",
+    "family": "seedream-5.0-lite-unfiltered",
+    "imageField": "images_list",
+    "hasPrompt": true,
+    "maxImages": 10,
+    "inputs": {
+      "prompt": { "type": "string", "title": "Prompt", "name": "prompt", "description": "Describe the image to generate from the references." },
+      "images_list": { "type": "array", "title": "Image URLs", "name": "images_list", "field": "images_list", "items": { "type": "string" }, "maxItems": 10 },
+      "aspect_ratio": { "enum": ["1:1", "16:9", "9:16", "4:3", "3:4", "2:3", "3:2", "21:9"], "type": "string", "title": "Aspect Ratio", "name": "aspect_ratio", "default": "1:1" },
+      "resolution": { "enum": ["1K", "2K", "4K"], "type": "string", "title": "Resolution", "name": "resolution", "default": "2K" }
+    },
+    "provider": "byteplus",
+    "provider_name": "BytePlus"
   },
   {
     "id": "bytedance-seedream-v4.5-edit",
@@ -17955,6 +18035,24 @@ export const i2vModels = [
     },
     "provider": "bytedance",
     "provider_name": "ByteDance"
+  },
+  {
+    "id": "seedance-2.5-unfiltered-image-to-video",
+    "name": "Seedance 2.5 Unfiltered",
+    "endpoint": "ep-20260904190604-p8pjl",
+    "family": "seedance-2.5-unfiltered",
+    "imageField": "image_url",
+    "hasPrompt": true,
+    "inputs": {
+      "prompt": { "type": "string", "title": "Prompt", "name": "prompt", "description": "Text prompt describing the video motion and style." },
+      "image_url": { "type": "string", "title": "Image URL", "name": "image_url", "field": "image", "description": "Reference image to animate." },
+      "aspect_ratio": { "enum": ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"], "type": "string", "title": "Aspect Ratio", "name": "aspect_ratio", "default": "16:9" },
+      "resolution": { "enum": ["480p", "720p", "1080p"], "type": "string", "title": "Resolution", "name": "resolution", "default": "720p" },
+      "duration": { "enum": [5, 10, 15], "type": "int", "title": "Duration", "name": "duration", "default": 5 },
+      "generate_audio": { "type": "boolean", "title": "Generate Audio", "name": "generate_audio", "default": true }
+    },
+    "provider": "byteplus",
+    "provider_name": "BytePlus"
   },
   {
     "id": "seedance-2.5-image-to-video",

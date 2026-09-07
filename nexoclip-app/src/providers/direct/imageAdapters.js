@@ -58,8 +58,11 @@ export function createBytePlusImageAdapter({ apiKey, baseUrl, fetch: fetchImpl =
   if (!baseUrl) throw new TypeError('baseUrl is required');
   const root = String(baseUrl).replace(/\/+$/, '');
   return { async generate({ model, prompt, resolution, referenceImages }) {
-    // BytePlus `size` only accepts 'WIDTHxHEIGHT' or a resolution preset ('1K'/'2K'/'4K'),
-    // never an aspect ratio like '16:9' — sending one throws InvalidParameter.
+    // BytePlus `size` only accepts 'WIDTHxHEIGHT' or a supported resolution preset,
+    // never an aspect ratio like '16:9'. The Seedream 4.5 deployment starts at 2K.
+    const size = model === 'ep-20260907150312-xx7gf' && resolution?.toUpperCase() === '1K'
+      ? '2K'
+      : resolution;
     let response;
     try {
       response = await fetchImpl(`${root}/images/generations`, {
@@ -67,7 +70,7 @@ export function createBytePlusImageAdapter({ apiKey, baseUrl, fetch: fetchImpl =
         headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model, prompt, response_format: 'url',
-          ...(resolution ? { size: resolution } : {}),
+          ...(size ? { size } : {}),
           ...(referenceImages?.length ? { image: referenceImages } : {}),
         }),
       });

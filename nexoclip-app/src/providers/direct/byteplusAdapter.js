@@ -25,13 +25,16 @@ export function createBytePlusAdapter({ apiKey, baseUrl, fetch: fetchImpl = glob
   return {
     ...adapter,
     async generate(params) { return { ...(await adapter.generate(params)), provider: 'byteplus' }; },
-    async submit({ model, prompt, duration, resolution, aspectRatio, generateAudio, referenceImages, referenceVideos } = {}) {
+    async submit({ model, prompt, duration, resolution, aspectRatio, generateAudio, frameImages, referenceImages, referenceVideos } = {}) {
       const content = [{ type: 'text', text: prompt }];
       // BytePlus requires an explicit role on image/video content parts — some models
       // (e.g. the mini variant) reject an image_url with no role ("role must be
       // specified for image contents"); others silently accept it without one. Always
       // sending it is the only combination confirmed to work across model variants.
-      for (const image of referenceImages || []) content.push({ type: 'image_url', role: 'reference_image', image_url: { url: image } });
+      const images = referenceImages?.length
+        ? referenceImages
+        : (frameImages || []).map((frame) => frame?.image_url?.url).filter(Boolean);
+      for (const image of images) content.push({ type: 'image_url', role: 'reference_image', image_url: { url: image } });
       for (const video of referenceVideos || []) content.push({ type: 'video_url', role: 'reference_video', video_url: { url: video } });
       // Video generation is async-task based and lives under /tasks — /contents/generations
       // (used for images) silently accepts the request and returns an empty 200 for video models.

@@ -1106,6 +1106,8 @@ export default function ImageStudio({
           'vidu-q2-text-to-image':       'vidu-q2-reference-to-image',
           'bytedance-seedream-v3':       'bytedance-seededit-v3',
           'bytedance-seedream-v4':       'bytedance-seedream-edit-v4',
+          'seedream-4.5-unfiltered':      'seedream-4.5-unfiltered-edit',
+          'seedream-5.0-lite-unfiltered': 'seedream-5.0-lite-unfiltered-edit',
           'ideogram-v3-t2i':             'ideogram-v3-reframe',
         };
 
@@ -1159,6 +1161,8 @@ export default function ImageStudio({
       'vidu-q2-reference-to-image':    'vidu-q2-text-to-image',
       'bytedance-seededit-v3':         'bytedance-seedream-v3',
       'bytedance-seedream-edit-v4':    'bytedance-seedream-v4',
+      'seedream-4.5-unfiltered-edit':   'seedream-4.5-unfiltered',
+      'seedream-5.0-lite-unfiltered-edit': 'seedream-5.0-lite-unfiltered',
       'ideogram-v3-reframe':           'ideogram-v3-t2i',
     };
 

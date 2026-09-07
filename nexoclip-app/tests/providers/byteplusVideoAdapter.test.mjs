@@ -1,10 +1,52 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBytePlusAdapter } from '../../src/providers/direct/byteplusAdapter.js';
+import { createProviderRouter } from '../../src/providers/providerRouter.js';
 
 function jsonResponse(body, { status = 200 } = {}) {
   return { ok: status >= 200 && status < 300, status, headers: { get: () => 'application/json' }, json: async () => body };
 }
+
+test('sends a BytePlus Seedance deployment endpoint directly', async () => {
+  const calls = [];
+  let bytePlusBody;
+  const router = createProviderRouter({
+    env: { OPENROUTER_API_KEY: 'or-key', BYTEPLUS_API_KEY: 'bp-key', BYTEPLUS_BASE_URL: 'https://ark.example/api/v3' },
+    fetch: async (url, options) => {
+      calls.push(url);
+      bytePlusBody = JSON.parse(options.body);
+      return jsonResponse({ id: 'cgt-1', status: 'queued' });
+    },
+  });
+
+  const result = await router.submitVideo({ model: 'ep-20260904190604-p8pjl', prompt: 'a cat running', duration: 10 });
+
+  assert.equal(result.provider, 'byteplus');
+  assert.equal(bytePlusBody.model, 'ep-20260904190604-p8pjl');
+  assert.equal(bytePlusBody.duration, 10);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0], /ark\.example\/api\/v3\/contents\/generations\/tasks/);
+});
+
+test('falls back to BytePlus Seedance 2.5 when OpenRouter returns a generic 400', async () => {
+  const calls = [];
+  let bytePlusBody;
+  const router = createProviderRouter({
+    env: { OPENROUTER_API_KEY: 'or-key', BYTEPLUS_API_KEY: 'bp-key', BYTEPLUS_BASE_URL: 'https://ark.example/api/v3' },
+    fetch: async (url, options) => {
+      calls.push(url);
+      if (url.includes('openrouter.ai')) return jsonResponse({ error: { message: 'Bad Request' } }, { status: 400 });
+      bytePlusBody = JSON.parse(options.body);
+      return jsonResponse({ id: 'cgt-1', status: 'queued' });
+    },
+  });
+
+  const result = await router.submitVideo({ model: 'bytedance/seedance-2.5', prompt: 'a cat running' });
+
+  assert.equal(result.provider, 'byteplus');
+  assert.equal(bytePlusBody.model, 'dreamina-seedance-2-5-260628');
+  assert.equal(calls.length, 2);
+});
 
 test('submit posts to the async /tasks endpoint, not /contents/generations', async () => {
   let request;
@@ -28,6 +70,26 @@ test('submit sends reference videos with the reference_video role BytePlus requi
     body.content.find((part) => part.type === 'video_url'),
     { type: 'video_url', role: 'reference_video', video_url: { url: 'https://cdn.example/in.mp4' } },
   );
+});
+
+test('submit converts frame images to BytePlus reference images', async () => {
+  let request;
+  const adapter = createBytePlusAdapter({
+    apiKey: 'secret', baseUrl: 'https://ark.example/api/v3',
+    fetch: async (url, options) => { request = { url, options }; return jsonResponse({ id: 'cgt-1' }); },
+  });
+  await adapter.submit({
+    model: 'ep-20260904190604-p8pjl',
+    prompt: 'animate this image',
+    duration: 5,
+    frameImages: [{ type: 'image_url', image_url: { url: 'https://cdn.example/start.jpg' }, frame_type: 'first_frame' }],
+  });
+  const body = JSON.parse(request.options.body);
+  assert.deepEqual(
+    body.content.find((part) => part.type === 'image_url'),
+    { type: 'image_url', role: 'reference_image', image_url: { url: 'https://cdn.example/start.jpg' } },
+  );
+  assert.equal(body.duration, 5);
 });
 
 test('submit sends reference images with the reference_image role BytePlus requires', async () => {
