@@ -1,5 +1,6 @@
 "use client";
 
+import { withBasePath } from "@/lib/base-path";
 import { useSession, signIn } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { FaYoutube, FaGlobe, FaLock, FaExclamationTriangle } from "react-icons/fa";
@@ -25,7 +26,7 @@ export default function GalleryPage() {
   const fetchCompletedPosts = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/posts");
+      const res = await fetch(withBasePath("/api/posts"));
       const data = await res.json();
       if (Array.isArray(data)) {
         // We filter for completed posts

@@ -1,6 +1,7 @@
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import GoogleProvider from "next-auth/providers/google";
 import { prisma } from "./prisma";
+import { withBasePath } from "./base-path";
 
 export const authOptions = {
   adapter: PrismaAdapter(prisma),
@@ -21,6 +22,6 @@ export const authOptions = {
   },
   secret: process.env.NEXTAUTH_SECRET,
   pages: {
-    signIn: "/login",
+    signIn: withBasePath("/login"),
   },
 };
