@@ -8,7 +8,7 @@ COPY packages/Vibe-Workflow/packages/workflow-builder/package*.json ./packages/V
 COPY packages/Open-Poe-AI/packages/agents/package*.json ./packages/Open-Poe-AI/packages/agents/
 COPY packages/Open-AI-Design-Agent/packages/design-agent/package*.json ./packages/Open-AI-Design-Agent/packages/design-agent/
 COPY packages/studio/package*.json ./packages/studio/
-RUN npm ci
+RUN ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci
 
 FROM deps AS builder
 ARG NEXT_PUBLIC_SPITE_URL=/spite

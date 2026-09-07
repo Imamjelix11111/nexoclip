@@ -1,0 +1,20 @@
+<h2>Social Scheduler — proposed NexoClip layout</h2>
+<p class="subtitle">A native workspace page added under a new <strong>Social Scheduler</strong> sidebar item.</p>
+
+<div class="mockup">
+  <div class="mockup-header">NexoClip / Workspace</div>
+  <div class="mockup-body" style="padding:0;display:flex;min-height:460px;background:#0d1117;color:#e5e7eb">
+    <aside style="width:175px;padding:18px 12px;border-right:1px solid #28313f;color:#aeb9c8;font-size:13px;line-height:2.4">
+      <strong style="color:#fff">NexoClip</strong><br>Studio<br>Assets<br>Projects<br><span style="background:#25364f;color:#fff;display:block;padding:0 9px;border-radius:7px">◷ Social Scheduler</span><br>Settings
+    </aside>
+    <main style="padding:25px;flex:1">
+      <div style="display:flex;justify-content:space-between;align-items:center"><div><h3 style="margin:0;color:#fff">Social Scheduler</h3><p style="margin:6px 0;color:#9da9b9;font-size:13px">Plan, schedule, and publish workspace videos.</p></div><button class="mock-button">+ Create post</button></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:20px 0"><div style="padding:14px;background:#151d28;border:1px solid #28313f;border-radius:8px"><div class="label">Scheduled</div><strong style="font-size:25px">12</strong></div><div style="padding:14px;background:#151d28;border:1px solid #28313f;border-radius:8px"><div class="label">Published</div><strong style="font-size:25px">48</strong></div><div style="padding:14px;background:#151d28;border:1px solid #28313f;border-radius:8px"><div class="label">Channels</div><strong style="font-size:25px">4</strong></div></div>
+      <div style="padding:15px;background:#151d28;border:1px solid #28313f;border-radius:8px"><strong>Upcoming posts</strong><div style="height:1px;background:#28313f;margin:12px 0"></div><div style="display:grid;grid-template-columns:50px 1fr 130px 100px;gap:10px;align-items:center;font-size:13px"><div class="placeholder" style="height:38px">video</div><div><strong>YouTube short — launch teaser</strong><br><span style="color:#9da9b9">YouTube · NexoClip Studio</span></div><div>Tomorrow, 09:00</div><div style="color:#8fb8ff">Scheduled</div></div></div>
+    </main>
+  </div>
+</div>
+
+<div class="section"><p class="label">Create post flow</p><div class="options"><div class="option" data-choice="flow" onclick="toggleSelect(this)"><div class="letter">1</div><div class="content"><h3>Choose an existing NexoClip asset</h3><p>Video only for the first release; metadata is prefilled where possible.</p></div></div><div class="option" data-choice="flow" onclick="toggleSelect(this)"><div class="letter">2</div><div class="content"><h3>Select YouTube and/or TikTok channels</h3><p>Per-platform captions and publishing settings stay in the same composer.</p></div></div><div class="option" data-choice="flow" onclick="toggleSelect(this)"><div class="letter">3</div><div class="content"><h3>Schedule or publish now</h3><p>A background worker posts and records the result.</p></div></div></div></div>
+
+<p class="subtitle">Click the flow if it matches your expectation, then reply in chat with any change you want.</p>

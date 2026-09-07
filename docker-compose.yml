@@ -50,8 +50,9 @@ services:
     restart: unless-stopped
 
   nexoclip-migrate:
-    build: ./nexoclip-app
-    command: ["npm", "run", "db:migrate"]
+    build:
+      context: ./nexoclip-app
+      target: migrate
     environment:
       NODE_ENV: production
       DATABASE_URL: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
@@ -61,8 +62,9 @@ services:
     restart: "no"
 
   nexoclip-storyboard-worker:
-    build: ./nexoclip-app
-    command: ["npm", "run", "worker:storyboard"]
+    build:
+      context: ./nexoclip-app
+      target: worker
     environment:
       NODE_ENV: production
       DATABASE_URL: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
@@ -84,10 +86,12 @@ services:
     restart: unless-stopped
 
   nexoclip-app:
-    build: ./nexoclip-app
+    build:
+      context: ./nexoclip-app
+      target: web
     container_name: nexoclip-app
     ports:
-      - "3005:3000"
+      - "3000:3000"
     environment:
       NODE_ENV: production
       DATABASE_URL: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
