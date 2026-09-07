@@ -1,5 +1,6 @@
 'use client'
 
+import { withBasePath } from '@/lib/base-path'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { FilmSlate, ClockCounterClockwise, DotsThreeVertical, CopySimple, Trash } from '@phosphor-icons/react'
@@ -55,7 +56,7 @@ export function ProjectCard({ id, name, thumbnail, lastModified, genre, href, on
     setMenuOpen(false)
     setDuplicating(true)
     try {
-      const res = await fetch(`/api/projects/${id}/duplicate`, { method: 'POST' })
+      const res = await fetch(withBasePath(`/api/projects/${id}/duplicate`), { method: 'POST' })
       if (!res.ok) throw new Error(`status ${res.status}`)
       toast.success('Project duplicated')
       onMutate?.()
@@ -71,7 +72,7 @@ export function ProjectCard({ id, name, thumbnail, lastModified, genre, href, on
     if (deleting) return
     setDeleting(true)
     try {
-      const res = await fetch(`/api/projects/${id}`, { method: 'DELETE' })
+      const res = await fetch(withBasePath(`/api/projects/${id}`), { method: 'DELETE' })
       if (!res.ok) throw new Error(`status ${res.status}`)
       toast.success('Project deleted')
       onMutate?.()

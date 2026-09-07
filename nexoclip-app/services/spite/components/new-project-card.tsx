@@ -1,5 +1,6 @@
 'use client'
 
+import { withBasePath } from '@/lib/base-path'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, CircleNotch } from '@phosphor-icons/react'
@@ -25,7 +26,7 @@ export function NewProjectCard({ onCreated, origin = 'canvas', label, sublabel }
     setCreating(true)
 
     try {
-      const res = await fetch('/api/projects', {
+      const res = await fetch(withBasePath('/api/projects'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: 'Untitled Project', origin })

@@ -1,5 +1,6 @@
 'use client'
 
+import { withBasePath } from '@/lib/base-path'
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
@@ -44,7 +45,7 @@ function testVersionFromUrl(): string | null {
 
 function fetchUpdateInfo(): Promise<UpdateInfo | null> {
   const test = testVersionFromUrl()
-  const url = test ? `/api/update/check?as=${test}` : '/api/update/check'
+  const url = withBasePath(test ? `/api/update/check?as=${test}` : '/api/update/check')
   if (test) {
     // Don't cache test lookups into the normal path.
     return fetch(url).then((r) => (r.ok ? r.json() : null)).catch(() => null)
@@ -61,7 +62,7 @@ const DISMISS_KEY = 'spite_update_dismissed'
 async function applyUpdate(info: UpdateInfo) {
   const id = toast.loading('Updating — syncing your repo with the latest release…')
   try {
-    const res = await fetch('/api/update/apply', { method: 'POST' })
+    const res = await fetch(withBasePath('/api/update/apply'), { method: 'POST' })
     const data = await res.json().catch(() => ({}))
     if (res.ok) {
       toast.success('Update started. Your host is redeploying — refresh in a couple of minutes.', { id, duration: 12000 })

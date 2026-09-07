@@ -1,5 +1,6 @@
 'use client'
 
+import { withBasePath } from '@/lib/base-path'
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { toast } from 'sonner'
 import {
@@ -317,7 +318,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
     const loadData = async () => {
       try {
         // Load project details (including name)
-        const projectResponse = await fetch(`/api/projects/${projectId}`)
+        const projectResponse = await fetch(withBasePath(`/api/projects/${projectId}`))
         if (projectResponse.ok) {
           const project = await projectResponse.json()
           if (project.name) {
@@ -331,7 +332,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
         // newly-added scenes vanished after a reload, leaving any
         // nodes tagged with their sceneId orphaned (sceneId pointing
         // to a scene that no longer existed in the list).
-        const canvasResponse = await fetch(`/api/projects/${projectId}/canvas`)
+        const canvasResponse = await fetch(withBasePath(`/api/projects/${projectId}/canvas`))
         if (canvasResponse.ok) {
           const {
             nodes: savedNodes,
@@ -359,7 +360,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
         // before this async load completes), so there's nothing to do here.
 
         // Load assets
-        const assetsResponse = await fetch(`/api/projects/${projectId}/assets`)
+        const assetsResponse = await fetch(withBasePath(`/api/projects/${projectId}/assets`))
         if (assetsResponse.ok) {
           const loadedAssets = await assetsResponse.json()
           setAssets(loadedAssets)
@@ -400,7 +401,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
     }
     saveProjectNameRef.current = setTimeout(async () => {
       try {
-        await fetch(`/api/projects/${projectId}`, {
+        await fetch(withBasePath(`/api/projects/${projectId}`), {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: newName })
@@ -636,7 +637,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
         // Auto-protect every asset we just dropped.
         for (const asset of payload.assets) {
           if (!asset.id) continue
-          fetch(`/api/assets/${asset.id}`, {
+          fetch(withBasePath(`/api/assets/${asset.id}`), {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ used_in_canvas: true }),
@@ -675,7 +676,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
       setNodes((ns: Node[]) => [...ns, newNode] as Node[])
 
       // Mark asset as protected
-      fetch(`/api/assets/${asset.id}`, {
+      fetch(withBasePath(`/api/assets/${asset.id}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ used_in_canvas: true })
@@ -753,7 +754,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
         const assetId = n.data?.assetId as string | undefined
         const thumbnail = n.data?.thumbnail as string | undefined
         if (assetId) {
-          fetch(`/api/assets/${assetId}`, {
+          fetch(withBasePath(`/api/assets/${assetId}`), {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ used_in_canvas: false }),
@@ -762,7 +763,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
           }).catch(() => {})
         } else if (thumbnail) {
           // Fallback: look up by URL then mark as temporary
-          fetch(`/api/assets/by-url`, {
+          fetch(withBasePath(`/api/assets/by-url`), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ url: thumbnail, used_in_canvas: false }),
@@ -846,7 +847,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
         const formData = new FormData()
         formData.append('file', file)
         formData.append('filename', file.name)
-        const uploadRes = await fetch('/api/r2-upload', {
+        const uploadRes = await fetch(withBasePath('/api/r2-upload'), {
           method: 'POST',
           body: formData,
         })
@@ -857,7 +858,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
         const { url } = await uploadRes.json() as { url: string }
         proxyUrl = url
       } else {
-        const presignRes = await fetch('/api/r2-presign', {
+        const presignRes = await fetch(withBasePath('/api/r2-presign'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -891,7 +892,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
       ))
 
       // Record in assets with proxy URL and mark as protected (used in canvas)
-      const assetRes = await fetch('/api/assets', {
+      const assetRes = await fetch(withBasePath('/api/assets'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: proxyUrl, type: mediaType, filename: nodeLabel, projectId }),

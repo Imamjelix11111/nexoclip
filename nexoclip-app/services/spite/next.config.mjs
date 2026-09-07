@@ -5,12 +5,16 @@ const pkg = createRequire(import.meta.url)('./package.json')
 // A readable, always-increasing build stamp (UTC "MMM D HH:mm"). The commit SHA
 // is effectively random to read, so it can't answer "did my refresh pick up the
 // new build?" at a glance — a timestamp can. Computed once at build time.
+const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? '').replace(/\/$/, '')
+
 const BUILD_STAMP = new Date().toLocaleString('en-GB', {
   timeZone: 'UTC', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
 }).replace(',', '')
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
+  basePath,
   typescript: {
     // Type errors fail the build. The codebase is TS-strict and currently
     // type-clean, so this just stops a future type regression from silently

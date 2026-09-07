@@ -1,5 +1,6 @@
 'use client'
 
+import { withBasePath } from '@/lib/base-path'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -113,14 +114,14 @@ export default function FlowThread() {
   }
 
   const loadBalance = () =>
-    fetch('/api/fal/balance').then((r) => r.json())
+    fetch(withBasePath('/api/fal/balance')).then((r) => r.json())
       .then((d) => setBalance(d?.available && typeof d.balance === 'number' ? d.balance : null))
       .catch(() => {})
 
   useEffect(() => {
     if (!projectId) return
-    fetch(`/api/projects/${projectId}`).then((r) => (r.ok ? r.json() : null)).then((p) => { if (p?.name) setProjectName(p.name) }).catch(() => {})
-    fetch(`/api/assets?projectId=${projectId}`).then((r) => r.json())
+    fetch(withBasePath(`/api/projects/${projectId}`)).then((r) => (r.ok ? r.json() : null)).then((p) => { if (p?.name) setProjectName(p.name) }).catch(() => {})
+    fetch(withBasePath(`/api/assets?projectId=${projectId}`)).then((r) => r.json())
       .then((d) => setAssets(Array.isArray(d) ? d : [])).catch(() => {}).finally(() => setLoading(false))
     loadBalance()
   }, [projectId])
@@ -156,7 +157,7 @@ export default function FlowThread() {
     setRefs((prev) => [...prev, { id, previewUrl: URL.createObjectURL(file), proxyUrl: null, uploading: true }])
     ;(async () => {
       try {
-        const presignRes = await fetch('/api/r2-presign', {
+        const presignRes = await fetch(withBasePath('/api/r2-presign'), {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ filename: file.name, contentType: file.type, prefix: 'refs' }),
         })
@@ -177,7 +178,7 @@ export default function FlowThread() {
     try {
       if (i > 0) await new Promise((r) => setTimeout(r, i * 250))
       const m = getModelById(mId)
-      const submitRes = await fetch('/api/generate/submit', {
+      const submitRes = await fetch(withBasePath('/api/generate/submit'), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           modelId: mId, prompt: myPrompt,
@@ -208,7 +209,7 @@ export default function FlowThread() {
       for (let k = 0; k < 120; k++) {
         await new Promise((r) => setTimeout(r, 2000))
         const q = new URLSearchParams({ request_id, model: pollModel, prompt: myPrompt, projectId })
-        const sd = await (await fetch(`/api/generate/status?${q.toString()}`)).json().catch(() => ({}))
+        const sd = await (await fetch(withBasePath(`/api/generate/status?${q.toString()}`))).json().catch(() => ({}))
         if (sd.status === 'COMPLETED') {
           const url = sd.output?.url
           if (url) {
@@ -219,7 +220,7 @@ export default function FlowThread() {
             // Persist the references against this result so Reuse can restore
             // them after a reload too (best-effort; in-memory state covers the
             // current session regardless).
-            if (refUrls.length) fetch('/api/assets', {
+            if (refUrls.length) fetch(withBasePath('/api/assets'), {
               method: 'PATCH', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ url, refs: refUrls, projectId }),
             }).catch(() => {})

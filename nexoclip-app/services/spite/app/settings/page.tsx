@@ -1,5 +1,6 @@
 'use client'
 
+import { withBasePath } from '@/lib/base-path'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Check, X } from '@phosphor-icons/react'
@@ -65,7 +66,7 @@ export default function SettingsPage() {
     let cancelled = false
     ;(async () => {
       try {
-        const res = await fetch('/api/settings/storage')
+        const res = await fetch(withBasePath('/api/settings/storage'))
         if (!res.ok) throw new Error('storage fetch failed')
         const data = await res.json()
         if (!cancelled) { setStorage(data); setStorageState('ready') }
@@ -75,7 +76,7 @@ export default function SettingsPage() {
     })()
     ;(async () => {
       try {
-        const res = await fetch('/api/settings/retention')
+        const res = await fetch(withBasePath('/api/settings/retention'))
         if (!res.ok) return
         const data = await res.json()
         if (!cancelled) {
@@ -107,7 +108,7 @@ export default function SettingsPage() {
     setSavingRetention(true)
     setRetentionSaved(false)
     try {
-      const res = await fetch('/api/settings/retention', {
+      const res = await fetch(withBasePath('/api/settings/retention'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ assetRetentionDays: a, referenceRetentionDays: r }),
@@ -140,7 +141,7 @@ export default function SettingsPage() {
 
   const checkApiKey = async () => {
     try {
-      const res = await fetch('/api/generate/test', { method: 'POST' })
+      const res = await fetch(withBasePath('/api/generate/test'), { method: 'POST' })
       const data = await res.json()
       if (data.connected) {
         setApiKeyStatus('connected')
@@ -177,7 +178,7 @@ export default function SettingsPage() {
 
     setChangingPassword(true)
     try {
-      const res = await fetch('/api/settings/password', {
+      const res = await fetch(withBasePath('/api/settings/password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ currentPassword, newPassword }),
@@ -202,7 +203,7 @@ export default function SettingsPage() {
     if (canvasConfirmText !== CLEAR_CANVAS_PHRASE) return
     setClearing(true)
     try {
-      const res = await fetch('/api/settings/clear-data', {
+      const res = await fetch(withBasePath('/api/settings/clear-data'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'canvas', confirm: canvasConfirmText }),
@@ -223,7 +224,7 @@ export default function SettingsPage() {
     setRecovering(true)
     setRecoveryResult(null)
     try {
-      const res = await fetch('/api/generate/recover', {
+      const res = await fetch(withBasePath('/api/generate/recover'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mode: 'backfill-recent', withinHours: 24 }),
@@ -252,7 +253,7 @@ export default function SettingsPage() {
     setRecovering(true)
     setRecoveryResult(null)
     try {
-      const res = await fetch('/api/generate/recover', {
+      const res = await fetch(withBasePath('/api/generate/recover'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -289,7 +290,7 @@ export default function SettingsPage() {
     if (assetsConfirmText !== CLEAR_ASSETS_PHRASE) return
     setClearing(true)
     try {
-      const res = await fetch('/api/settings/clear-data', {
+      const res = await fetch(withBasePath('/api/settings/clear-data'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'assets', confirm: assetsConfirmText }),

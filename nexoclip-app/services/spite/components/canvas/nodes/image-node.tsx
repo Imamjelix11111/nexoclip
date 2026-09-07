@@ -1,5 +1,6 @@
 'use client'
 
+import { withBasePath } from '@/lib/base-path'
 import { memo, useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useParams } from 'next/navigation'
 import { Handle, Position, NodeProps, useReactFlow, useUpdateNodeInternals } from '@xyflow/react'
@@ -399,7 +400,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
       return true
     }
     try {
-        const response = await fetch(`/api/generate/status?request_id=${reqId}&model=${encodeURIComponent(falModelId)}&projectId=${projectId}&prompt=${encodeURIComponent(prompt)}`)
+        const response = await fetch(withBasePath(`/api/generate/status?request_id=${reqId}&model=${encodeURIComponent(falModelId)}&projectId=${projectId}&prompt=${encodeURIComponent(prompt)}`))
       const result = await response.json()
 
       // Cancelled while this request was in flight — drop the result.
@@ -747,7 +748,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
       // fal afterwards; only these submit calls are spaced out.
       const submitOnce = async () => {
         try {
-          const res = await fetch('/api/generate/submit', {
+          const res = await fetch(withBasePath('/api/generate/submit'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body,
@@ -920,7 +921,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     clearPending()
 
     try {
-      await fetch('/api/generate/cancel', {
+      await fetch(withBasePath('/api/generate/cancel'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ request_id: reqId, model: cancelModel }),
