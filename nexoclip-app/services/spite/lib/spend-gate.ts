@@ -1,0 +1,221 @@
+// Server-side per-hour USD ceiling on fal.ai spend. Defence against a
+// captured cookie being weaponised into a billing attack — the existing
+// client-side $25 confirmation dialog is UX, not a control. This is the
+// control.
+
+import { getDb, type Sql } from './db'
+
+let schemaEnsured = false
+async function ensureSchema(sql: Sql) {
+  if (schemaEnsured) return
+  await sql`
+    CREATE TABLE IF NOT EXISTS spend_ledger (
+      id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      model_id       text NOT NULL,
+      estimated_usd  numeric(10,4) NOT NULL,
+      created_at     timestamptz NOT NULL DEFAULT now()
+    )
+  `
+  await sql`CREATE INDEX IF NOT EXISTS idx_spend_ledger_time ON spend_ledger (created_at)`
+  // fal's request id, stamped on after a successful submit so a job that later
+  // FAILS during polling (e.g. content moderation) can have its reservation
+  // rolled back. Added idempotently for installs that predate this column.
+  await sql`ALTER TABLE spend_ledger ADD COLUMN IF NOT EXISTS request_id text`
+  await sql`CREATE INDEX IF NOT EXISTS idx_spend_ledger_request ON spend_ledger (request_id)`
+  schemaEnsured = true
+}
+
+// Default ceiling. Set SPEND_LIMIT_USD_PER_HOUR to override. $100/hr
+// gives a working AI-filmmaker session real room (Nano Banana batches
+// plus a generous video allowance: roughly 22 Seedance shots/hr) while
+// still capping a runaway loop or compromised cookie at a bounded
+// loss. Raise via env for unusual projects, or set to 0 to disable.
+const DEFAULT_LIMIT_USD = 100
+
+function getLimitUsd(): number {
+  const raw = process.env.SPEND_LIMIT_USD_PER_HOUR
+  if (raw === undefined || raw === '') return DEFAULT_LIMIT_USD
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n < 0) return DEFAULT_LIMIT_USD
+  return n
+}
+
+// Optional hard ceiling on the estimated cost of a SINGLE submission.
+// Defence against a mispriced/under-estimated model (the per-hour gate is
+// only as accurate as lib/fal-cost.ts; flat-rate entries don't scale with
+// resolution/duration) or one absurd batch sailing through because the hour
+// still has headroom. Disabled by default (0 / unset) so it never blocks a
+// legitimate submission unexpectedly — set SPEND_LIMIT_USD_PER_REQUEST to
+// opt in. Returns 0 when disabled.
+export function getPerRequestLimitUsd(): number {
+  const raw = process.env.SPEND_LIMIT_USD_PER_REQUEST
+  if (raw === undefined || raw === '') return 0
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n <= 0) return 0
+  return n
+}
+
+export interface SpendGateResult {
+  allowed: boolean
+  spentLastHourUsd: number
+  limitUsd: number
+  projectedTotalUsd: number
+  ledgerId?: string  // present iff allowed — used to roll back on fal-submit failure
+}
+
+// Atomic check-and-record. Combines the previous checkSpendGate +
+// recordSpend in one SQL statement so two concurrent submits can't
+// both read the same "spent last hour" total and both pass through
+// (TOCTOU). The INSERT only happens if current_spent + cost <= limit;
+// otherwise zero rows are inserted and we return allowed: false.
+//
+// Caller pattern:
+//   const reservation = await reserveSpend(modelId, cost)
+//   if (!reservation.allowed) return 429
+//   try { ...submit to fal... }
+//   catch { await rollbackSpend(reservation.ledgerId) }
+//
+// Rolling back on submit failure keeps the ledger accurate; not
+// rolling back is safe-but-pessimistic (the gate over-counts by
+// failed submits, which expire from the window after 1 hour anyway).
+export async function reserveSpend(
+  modelId: string,
+  costUsd: number,
+): Promise<SpendGateResult> {
+  const limitUsd = getLimitUsd()
+  const sql = getDb()
+  await ensureSchema(sql)
+
+  if (limitUsd === 0) {
+    // Owner opted out — record for visibility, skip the gate.
+    const rows = (await sql`
+      INSERT INTO spend_ledger (model_id, estimated_usd)
+      VALUES (${modelId}, ${costUsd})
+      RETURNING id
+    `) as { id: string }[]
+    return {
+      allowed: true,
+      spentLastHourUsd: 0,
+      limitUsd,
+      projectedTotalUsd: costUsd,
+      ledgerId: rows[0]?.id,
+    }
+  }
+
+  // Atomic check-and-insert. A bare INSERT…SELECT WHERE (SELECT SUM…) is
+  // NOT actually atomic across concurrent callers: under READ COMMITTED
+  // (Neon's default, one autocommit statement per call) each caller's SUM
+  // subquery reads a snapshot taken before any sibling INSERT commits, so
+  // two concurrent submits can both see the same pre-spend total and both
+  // pass — overshooting the ceiling.
+  //
+  // Fix: take a transaction-scoped advisory lock first, then do the
+  // conditional insert in the SAME transaction. The lock serializes all
+  // reserveSpend calls; because the INSERT statement re-snapshots after the
+  // lock is acquired, its SUM now sees every previously-committed
+  // reservation. The lock auto-releases on commit/rollback.
+  const SPEND_GATE_LOCK_KEY = 1893064757 // arbitrary constant namespace
+  const txn = (await sql.transaction([
+    sql`SELECT pg_advisory_xact_lock(${SPEND_GATE_LOCK_KEY}::bigint)`,
+    sql`
+      INSERT INTO spend_ledger (model_id, estimated_usd)
+      SELECT ${modelId}, ${costUsd}
+      WHERE (
+        SELECT COALESCE(SUM(estimated_usd), 0)
+        FROM spend_ledger
+        WHERE created_at > now() - interval '1 hour'
+      ) + ${costUsd} <= ${limitUsd}
+      RETURNING id
+    `,
+  ])) as unknown[]
+  const inserted = (txn[1] ?? []) as { id: string }[]
+
+  if (inserted.length > 0) {
+    // Reserved successfully — also fetch the new current total for the response.
+    const totals = (await sql`
+      SELECT COALESCE(SUM(estimated_usd), 0)::float8 AS spent
+      FROM spend_ledger
+      WHERE created_at > now() - interval '1 hour'
+    `) as { spent: number }[]
+    const spent = Number(totals[0]?.spent ?? 0)
+    return {
+      allowed: true,
+      spentLastHourUsd: spent - costUsd,
+      limitUsd,
+      projectedTotalUsd: spent,
+      ledgerId: inserted[0].id,
+    }
+  }
+
+  // Insert was rejected by the WHERE — gate is closed. Read totals
+  // for a useful error response.
+  const totals = (await sql`
+    SELECT COALESCE(SUM(estimated_usd), 0)::float8 AS spent
+    FROM spend_ledger
+    WHERE created_at > now() - interval '1 hour'
+  `) as { spent: number }[]
+  const spent = Number(totals[0]?.spent ?? 0)
+  return {
+    allowed: false,
+    spentLastHourUsd: spent,
+    limitUsd,
+    projectedTotalUsd: spent + costUsd,
+  }
+}
+
+// Undo a reservation if the subsequent fal submit failed — keeps the
+// ledger from over-counting work fal never queued. Best-effort: a
+// dropped rollback just means the gate is slightly more conservative
+// for the next hour.
+export async function rollbackSpend(ledgerId: string | undefined): Promise<void> {
+  if (!ledgerId) return
+  try {
+    const sql = getDb()
+    await sql`DELETE FROM spend_ledger WHERE id = ${ledgerId}`
+  } catch (err) {
+    console.error('[spend-gate] rollbackSpend failed:', err)
+  }
+}
+
+// Stamp fal's request id onto a reservation right after a successful submit, so
+// the job can be matched back to its ledger row if it later fails during
+// polling. Best-effort — a missed stamp just means that one failure can't be
+// auto-refunded (it still ages out of the hour window).
+export async function tagSpendRequestId(
+  ledgerId: string | undefined,
+  requestId: string | undefined,
+): Promise<void> {
+  if (!ledgerId || !requestId) return
+  try {
+    const sql = getDb()
+    await sql`UPDATE spend_ledger SET request_id = ${requestId} WHERE id = ${ledgerId}`
+  } catch (err) {
+    console.error('[spend-gate] tagSpendRequestId failed:', err)
+  }
+}
+
+// Roll back a reservation for a job that ultimately FAILED during polling (e.g.
+// fal's content-moderation reject that surfaces after the job queued). Keyed by
+// fal's request id. Idempotent: a second FAILED poll finds no row and no-ops,
+// and a COMPLETED job never calls this so its reservation stays counted.
+export async function rollbackSpendByRequestId(requestId: string | undefined): Promise<void> {
+  if (!requestId) return
+  try {
+    const sql = getDb()
+    await ensureSchema(sql)
+    await sql`DELETE FROM spend_ledger WHERE request_id = ${requestId}`
+  } catch (err) {
+    console.error('[spend-gate] rollbackSpendByRequestId failed:', err)
+  }
+}
+
+// Background sweep from the cleanup cron — drop rows beyond the
+// rate-limit window so the table doesn't grow indefinitely.
+export async function purgeOldSpendLedger(): Promise<number> {
+  const sql = getDb()
+  await ensureSchema(sql)
+  const deleted = (await sql`
+    DELETE FROM spend_ledger WHERE created_at < now() - interval '7 days' RETURNING id
+  `) as unknown[]
+  return deleted.length
+}

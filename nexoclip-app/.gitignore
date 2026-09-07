@@ -75,3 +75,4 @@ vendor/
 coverage/
 .cache/
 tmp/
+.neon

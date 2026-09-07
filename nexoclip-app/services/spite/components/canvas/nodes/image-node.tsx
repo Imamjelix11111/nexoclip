@@ -1,0 +1,1209 @@
+'use client'
+
+import { memo, useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useParams } from 'next/navigation'
+import { Handle, Position, NodeProps, useReactFlow, useUpdateNodeInternals } from '@xyflow/react'
+import { Play, CaretDown, Minus, Plus, TextT, Image as ImageIcon, CircleNotch, X, Check, ArrowsClockwise } from '@phosphor-icons/react'
+import { toast } from 'sonner'
+import { NodeActionToolbar } from './node-toolbar'
+import { ShotSelector, type ShotOption } from './shot-selector'
+import { useSceneShots } from './use-scene-shots'
+import { Lightbox } from '../lightbox'
+import { MentionTextarea, type Mention } from '../mention-textarea'
+import { useProjectFolders } from '@/hooks/use-project-folders'
+import { labelFromPrompt, DEFAULT_IMAGE_LABEL } from '@/lib/auto-name'
+import { getImageModels, getModelById, buildModelInput, type ModelConfig } from '@/lib/fal-models'
+import { compileMentionsForModel } from '@/lib/mention-prompt'
+import { estimateGenerationCost, formatUSD, COST_CONFIRM_THRESHOLD_USD } from '@/lib/fal-cost'
+import { resolveNodeMediaUrl } from '@/lib/node-media'
+import { ConnectedInputs } from '../connected-inputs'
+
+const IMAGE_MODELS = getImageModels()
+
+type GenerationStatus = 'idle' | 'submitting' | 'in_queue' | 'in_progress' | 'completed' | 'failed' | 'cancelled'
+
+function ControlSelect({ 
+  value, 
+  options, 
+  onChange,
+  disabled 
+}: { 
+  value: string
+  options: { value: string; label: string }[]
+  onChange: (value: string) => void
+  disabled?: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  return (
+    <div ref={ref} className="relative">
+      <button 
+        onClick={() => !disabled && setOpen(!open)}
+        disabled={disabled}
+        className="flex items-center gap-1 px-2 h-6 rounded-md bg-white/5 hover:bg-white/10 text-[10px] font-mono text-muted-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {value}
+        <CaretDown size={8} weight="bold" />
+      </button>
+      {open && (
+        <div className="absolute bottom-full left-0 mb-1 bg-[#1a1d21] border border-white/10 rounded-lg py-1 z-50 min-w-[120px] shadow-xl max-h-[200px] overflow-y-auto">
+          {options.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => { onChange(opt.value); setOpen(false) }}
+              className={`w-full text-left px-3 py-1.5 text-[10px] font-mono hover:bg-white/10 transition-colors ${opt.value === value ? 'text-accent' : 'text-muted-foreground'}`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function HandleIcon({ icon: Icon, color, position, top, visible = true }: { 
+  icon: React.ElementType
+  color: string
+  position: 'left' | 'right'
+  top: number
+  visible?: boolean 
+}) {
+  if (!visible) return null
+  
+  return (
+    <div
+      className="absolute flex items-center justify-center"
+      style={{
+        width: 24,
+        height: 24,
+        borderRadius: '50%',
+        background: '#111316',
+        border: `1.5px solid ${color}`,
+        top: top,
+        transform: 'translateY(-50%)',
+        [position === 'left' ? 'left' : 'right']: -12,
+        zIndex: 10,
+        pointerEvents: 'none',
+      }}
+    >
+      <Icon size={11} weight="bold" style={{ color }} />
+    </div>
+  )
+}
+
+function StatusBadge({ status, progress }: { status: GenerationStatus; progress?: number }) {
+  if (status === 'idle') return null
+  
+  const statusConfig: Record<GenerationStatus, { label: string; color: string }> = {
+    idle: { label: '', color: '' },
+    submitting: { label: 'Submitting...', color: 'text-blue-400' },
+    in_queue: { label: 'In Queue', color: 'text-yellow-400' },
+    in_progress: { label: progress ? `${Math.round(progress * 100)}%` : 'Generating...', color: 'text-accent' },
+    completed: { label: 'Done', color: 'text-green-400' },
+    failed: { label: 'Failed', color: 'text-red-400' },
+    cancelled: { label: 'Cancelled', color: 'text-gray-400' },
+  }
+
+  const config = statusConfig[status]
+
+  return (
+    <div className={`flex items-center gap-1.5 text-[9px] font-mono ${config.color}`}>
+      {(status === 'submitting' || status === 'in_queue' || status === 'in_progress') && (
+        <CircleNotch size={10} className="animate-spin" />
+      )}
+      {status === 'completed' && <Check size={10} weight="bold" />}
+      {status === 'failed' && <X size={10} weight="bold" />}
+      {config.label}
+    </div>
+  )
+}
+
+function ImageNodeImpl({ id, data, selected }: NodeProps) {
+  const params = useParams()
+  // Route segment is [id], so the param is `id` (not `projectId`).
+  const projectId = params.id as string
+  const [prompt, setPrompt] = useState((data.prompt as string) || '')
+  const [mentions, setMentions] = useState<Mention[]>((data.mentions as Mention[]) || [])
+  const { folders } = useProjectFolders(projectId)
+  const [modelId, setModelId] = useState((data.modelId as string) || 'nano-banana-pro')
+  const [aspectRatio, setAspectRatio] = useState((data.aspectRatio as string) || '')
+  const [resolution, setResolution] = useState((data.resolution as string) || '')
+  // Batch count persists across reloads on image models — the user
+  // commonly works in batches of 6 on Nano Banana / Flux for character
+  // sheets, style sheets, etc., and re-clicking + every session is
+  // friction. The user is protected by (a) the inline cost preview in
+  // the Generate button tooltip, (b) the live fal balance badge in the
+  // toolbar, and (c) the COST_CONFIRM_THRESHOLD on truly extreme
+  // batches. Counter on the video node, in contrast, does NOT persist —
+  // see comment there for the rationale.
+  const [numImages, setNumImages] = useState((data.numImages as number) || 1)
+  
+  const [status, setStatus] = useState<GenerationStatus>('idle')
+  const [progress, setProgress] = useState<number | undefined>()
+  const [error, setError] = useState<string | null>(null)
+  const [outputUrl, setOutputUrl] = useState<string | null>((data.outputUrl as string) || null)
+  const [requestId, setRequestId] = useState<string | null>(null)
+  // Timestamp of the most recent submission. Powers the relative-age
+  // display in the right-side jobs panel.
+  const [submittedAt, setSubmittedAt] = useState<number | undefined>(
+    (data.submittedAt as number) || undefined,
+  )
+  // The exact fal queue path to poll, as told to us by the submit response.
+  const [falEndpoint, setFalEndpoint] = useState<string | null>(null)
+  const [imageAspect, setImageAspect] = useState<number | null>(null) // null = no image yet
+  const [nodeWidth, setNodeWidth] = useState<number>((data.width as number) || 320)
+  const [isResizing, setIsResizing] = useState(false)
+  const [showResizeHandle, setShowResizeHandle] = useState(false)
+  const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [isRenaming, setIsRenaming] = useState(false)
+  const [labelDraft, setLabelDraft] = useState('')
+  
+  const pollingRef = useRef<NodeJS.Timeout | null>(null)
+  // Set true to immediately stop polling (cancel / unmount), so an in-flight
+  // status check can't reschedule itself or apply a late result.
+  const stopRef = useRef(false)
+  const resizeStartRef = useRef<{ x: number; width: number } | null>(null)
+  const { setNodes, getEdges, getNodes } = useReactFlow()
+  const updateNodeInternals = useUpdateNodeInternals()
+  
+  // Check if there are any connected prompt nodes - compute fresh on each render
+  // Accept edges that either have targetHandle='prompt-in' OR no targetHandle (for backward compatibility)
+  let hasConnectedPrompts = false
+  try {
+    const edges = getEdges()
+    const allIncomingEdges = edges.filter(edge => edge.target === id)
+    const incomingPromptEdges = allIncomingEdges.filter(edge => 
+      edge.targetHandle === 'prompt-in' || edge.targetHandle === null || edge.targetHandle === undefined
+    )
+    hasConnectedPrompts = incomingPromptEdges.length > 0
+  } catch (err) {
+    console.log('Error checking connected prompts:', err)
+    hasConnectedPrompts = false
+  }
+
+  // Handle mouse move for resize
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsResizing(true)
+    resizeStartRef.current = { x: e.clientX, width: nodeWidth }
+    
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!resizeStartRef.current) return
+      const delta = moveEvent.clientX - resizeStartRef.current.x
+      const newWidth = Math.max(240, Math.min(800, resizeStartRef.current.width + delta))
+      setNodeWidth(newWidth)
+    }
+    
+    const handleMouseUp = () => {
+      setIsResizing(false)
+      resizeStartRef.current = null
+      // Persist the width change
+      setNodes(ns => ns.map(n => n.id === id ? { 
+        ...n, 
+        data: { ...n.data, width: nodeWidth } 
+      } : n))
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+    
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }, [nodeWidth, id, setNodes])
+
+  // Sync outputUrl from data prop (for loaded canvases)
+  useEffect(() => {
+    if (data.outputUrl && data.outputUrl !== outputUrl) {
+      setOutputUrl(data.outputUrl as string)
+    }
+  }, [data.outputUrl])
+
+  // Resume polling after a page refresh: if the saved data has a pending
+  // request id, pick up the in-flight job. We do NOT clear pendingRequestId
+  // here — the data stays on the node until the generation actually
+  // resolves (success / failure / cancel), so a second refresh resumes too.
+  useEffect(() => {
+    const pending = data.pendingRequestId as string | undefined
+    if (pending && !outputUrl && !requestId) {
+      setFalEndpoint((data.pendingFalEndpoint as string) || null)
+      setRequestId(pending)
+      setStatus('in_queue')
+      // Restore the start-of-generation timestamp (fall back to now if
+      // the page was refreshed before timestamps were tracked). Used by
+      // the 10-minute soft timeout below.
+      const startedAt = (data.pendingStartedAt as number | undefined) ?? Date.now()
+      startTimeRef.current = startedAt
+    }
+    // run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // 10-minute soft timeout — stops polling and marks failed but keeps
+  // request_id on the node so the user can re-check with the button.
+  const TIMEOUT_MS = 10 * 60 * 1000
+  const startTimeRef = useRef<number | null>(null)
+  const [resumeToken, setResumeToken] = useState(0)
+  
+  // Sync outputUrl TO node data when it changes (for connected nodes to read)
+  useEffect(() => {
+    if (outputUrl && outputUrl !== data.outputUrl) {
+      setNodes(nodes => nodes.map(n => 
+        n.id === id ? { ...n, data: { ...n.data, outputUrl } } : n
+      ))
+    }
+  }, [outputUrl, id, setNodes, data.outputUrl])
+
+  // Get current model config
+  const currentModel = useMemo(() => getModelById(modelId), [modelId])
+
+  // Switching models toggles conditional handles (image-in). React Flow
+  // caches handle positions on first measure, so without a nudge a new
+  // handle's position stays stale until something else re-measures
+  // (e.g. page reload) — edges drawn to those handles were saved to
+  // state but their SVG path couldn't resolve and nothing was drawn.
+  useEffect(() => {
+    updateNodeInternals(id)
+  }, [id, updateNodeInternals, currentModel?.id, currentModel?.inputTypes])
+
+  // Reset aspect/resolution when the USER picks a new model. Skip the
+  // initial mount so saved settings on a reloaded or duplicated node aren't
+  // immediately clobbered by model defaults.
+  const prevModelIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!currentModel) return
+    if (prevModelIdRef.current === null) {
+      prevModelIdRef.current = currentModel.id
+      return
+    }
+    if (prevModelIdRef.current !== currentModel.id) {
+      setAspectRatio(currentModel.defaultAspectRatio)
+      setResolution(currentModel.defaultResolution || '')
+      prevModelIdRef.current = currentModel.id
+    }
+  }, [currentModel])
+
+  const selectedShotId = data.shotId as string | undefined
+  // useNodes() would re-render this component on every sibling node change
+  // (prompt keystrokes, generation status updates, etc.). useSceneShots
+  // subscribes only to a string signature of shot-relevant fields.
+  const shots = useSceneShots(id)
+
+  const handleShotSelect = (shotId: string) => {
+    // Empty string from the selector means "unassign from this shot".
+    // Storing undefined keeps the data object clean (no stray empty
+    // strings ending up in exports/snapshots) and matches every other
+    // code path that checks for shotId via truthiness.
+    setNodes(ns => ns.map(n => n.id === id ? {
+      ...n,
+      data: { ...n.data, shotId: shotId || undefined },
+    } : n))
+  }
+
+  // Take a shot over exclusively: assign it here and unassign whatever other
+  // node in the SAME scene currently holds it (shotId or legacy selectedShotId).
+  const handleShotReplace = (shotId: string) => {
+    setNodes(ns => {
+      const self = ns.find(n => n.id === id)
+      const sceneId = (self?.data as any)?.sceneId as string | undefined
+      return ns.map(n => {
+        if (n.id === id) return { ...n, data: { ...n.data, shotId, selectedShotId: undefined } }
+        if (sceneId && (n.data as any)?.sceneId !== sceneId) return n
+        const sid = ((n.data as any)?.shotId || (n.data as any)?.selectedShotId) as string | undefined
+        if (sid === shotId) return { ...n, data: { ...n.data, shotId: undefined, selectedShotId: undefined } }
+        return n
+      })
+    })
+  }
+
+  const handleNewShot = () => {
+    // Always create the NEXT number after the highest existing shot in the
+    // scene — so shots monotonically increase (shot 99 → New Shot creates
+    // shot 100). Gaps between numbers are intentional and shown as empty
+    // placeholders in the timeline.
+    setNodes(ns => {
+      const self = ns.find(n => n.id === id)
+      const sceneId = self?.data?.sceneId
+      let maxNum = 0
+      for (const n of ns) {
+        if (sceneId && n.data?.sceneId !== sceneId) continue
+        const m = String(n.data?.shotId || '').match(/^shot-(\d+)$/)
+        if (m) maxNum = Math.max(maxNum, parseInt(m[1]))
+      }
+      const next = maxNum + 1
+      return ns.map(n => n.id === id ? { ...n, data: { ...n.data, shotId: `shot-${next}` } } : n)
+    })
+  }
+
+  // Persist state changes to node data
+  useEffect(() => {
+    setNodes(ns => ns.map(n => n.id === id ? {
+      ...n,
+      data: { ...n.data, prompt, modelId, aspectRatio, resolution, numImages, outputUrl, mentions, status, error, submittedAt }
+    } : n))
+  }, [prompt, modelId, aspectRatio, resolution, numImages, outputUrl, mentions, status, error, submittedAt, id, setNodes])
+
+  // Auto-name: once a generation completes, replace the default
+  // "Image Generator #N" label with the first few words of the prompt.
+  // User-renamed labels are left alone.
+  useEffect(() => {
+    if (!outputUrl) return
+    const current = (data.label as string) || ''
+    if (current && !DEFAULT_IMAGE_LABEL.test(current)) return
+    const derived = labelFromPrompt(prompt)
+    if (!derived || derived === current) return
+    setNodes(ns => ns.map(n => n.id === id ? { ...n, data: { ...n.data, label: derived } } : n))
+  }, [outputUrl, prompt, data.label, id, setNodes])
+
+  const handleRename = () => {
+    setLabelDraft((data.label as string) || '')
+    setIsRenaming(true)
+  }
+  const commitRename = () => {
+    const next = labelDraft.trim()
+    setIsRenaming(false)
+    if (!next) return
+    setNodes(ns => ns.map(n => n.id === id ? { ...n, data: { ...n.data, label: next } } : n))
+  }
+
+  // Drop the persisted in-flight job marker once a generation resolves
+  // (success / failure / cancel) so a future refresh doesn't try to
+  // resume a completed job.
+  const clearPending = useCallback(() => {
+    setNodes(ns => ns.map(n => n.id === id ? {
+      ...n,
+      data: { ...n.data, pendingRequestId: undefined, pendingFalEndpoint: undefined, pendingStartedAt: undefined },
+    } : n))
+  }, [id, setNodes])
+
+  // Poll for status
+  const pollStatus = useCallback(async (reqId: string, falModelId: string) => {
+    if (stopRef.current) return true
+    // Soft timeout — bail before the next round-trip if we've been
+    // polling for over 10 minutes. Keeps requestId on the node so the
+    // user can re-check via the "Re-check" button.
+    if (startTimeRef.current && Date.now() - startTimeRef.current > TIMEOUT_MS) {
+      setStatus('failed')
+      setError("Generation took over 10 min — fal might still finish. Use 'Re-check result' to look again, or 'Cancel' to give up.")
+      return true
+    }
+    try {
+        const response = await fetch(`/api/generate/status?request_id=${reqId}&model=${encodeURIComponent(falModelId)}&projectId=${projectId}&prompt=${encodeURIComponent(prompt)}`)
+      const result = await response.json()
+
+      // Cancelled while this request was in flight — drop the result.
+      if (stopRef.current) return true
+
+      if (result.error) {
+        setStatus('failed')
+        setError(result.error)
+        clearPending()
+        return true
+      }
+
+      if (result.status === 'COMPLETED') {
+        setStatus('completed')
+        setProgress(undefined)
+        clearPending()
+        // API returns { output: { images: [...], url: '...' } }
+        const images: string[] = (result.output?.images?.length
+          ? result.output.images
+          : (result.output?.url ? [result.output.url] : []))
+        if (images.length) {
+          setOutputUrl(images[0])
+          // For batch generations, drop the extra results as duplicate nodes
+          // laid out in a neat grid next to this one.
+          if (images.length > 1) {
+            const extra = images.slice(1)
+            const self = getNodes().find(n => n.id === id)
+            const baseX = self?.position?.x ?? 0
+            const baseY = self?.position?.y ?? 0
+            const w = (self?.data?.width as number) || nodeWidth || 320
+            const colGap = w + 40
+            const rowGap = 520
+            const cols = 3
+            const stamp = Date.now()
+            const newNodes = extra.map((url, idx) => {
+              const slot = idx + 1 // slot 0 = this original node (grid top-left)
+              const col = slot % cols
+              const row = Math.floor(slot / cols)
+              const { shotId, ...restData } = (self?.data || {}) as Record<string, unknown>
+              return {
+                id: `${id}-v${stamp}-${idx}`,
+                type: 'imageGen',
+                position: { x: baseX + col * colGap, y: baseY + row * rowGap },
+                data: { ...restData, outputUrl: url, width: w },
+              }
+            })
+            setNodes(ns => [...ns, ...(newNodes as any)])
+            // Mirror this node's incoming connections onto each duplicate
+            // (routed through the canvas, which owns the edge state).
+            const incoming = getEdges().filter(e => e.target === id)
+            if (incoming.length) {
+              const newEdges = newNodes.flatMap((nn, ni) =>
+                incoming.map((e, ei) => ({ ...e, id: `${nn.id}-e${ei}-${stamp}-${ni}`, target: nn.id }))
+              )
+              window.dispatchEvent(new CustomEvent('frame-add-edges', { detail: { edges: newEdges } }))
+            }
+          }
+        }
+        return true
+      }
+
+      if (result.status === 'FAILED') {
+        setStatus('failed')
+        setError(result.error || 'Generation failed')
+        clearPending()
+        return true
+      }
+
+      if (result.status === 'IN_PROGRESS') {
+        setStatus('in_progress')
+        if (result.progress !== undefined) {
+          setProgress(result.progress)
+        }
+      } else if (result.status === 'IN_QUEUE') {
+        setStatus('in_queue')
+      }
+
+      return false
+    } catch (err) {
+      console.error('Poll error:', err)
+      return false
+    }
+  }, [clearPending])
+
+  // Start polling when we have a request_id. resumeToken is included as
+  // a dep so a user-initiated re-check restarts the polling loop even
+  // though requestId itself didn't change.
+  useEffect(() => {
+    if (!requestId || !currentModel) return
+    stopRef.current = false
+    const pollModel = falEndpoint || currentModel.falModel
+
+    const poll = async () => {
+      if (stopRef.current) return
+      const shouldStop = await pollStatus(requestId, pollModel)
+      if (!shouldStop && !stopRef.current) {
+        pollingRef.current = setTimeout(poll, 2000)
+      }
+    }
+
+    // Wait 4 seconds before first poll to let job start processing
+    pollingRef.current = setTimeout(poll, 4000)
+
+    return () => {
+      stopRef.current = true
+      if (pollingRef.current) {
+        clearTimeout(pollingRef.current)
+      }
+    }
+  }, [requestId, currentModel, falEndpoint, pollStatus, resumeToken])
+
+  // User-triggered re-check. Fires a single direct status call against
+  // fal so the user sees fal's actual answer immediately — no 4-second
+  // polling wait. Toast-reports the outcome so it's obvious whether the
+  // job is still queued / running / done / failed. If still pending,
+  // resumeToken is bumped to restart background polling for another
+  // 10-minute window.
+  const handleRecheck = async () => {
+    if (!requestId || !currentModel) return
+    const pollModel = falEndpoint || currentModel.falModel
+    const toastId = `recheck-${id}`
+
+    startTimeRef.current = Date.now()
+    setError(null)
+    setStatus('in_queue')
+
+    toast.loading('Checking fal for this job…', { id: toastId })
+
+    try {
+      const response = await fetch(
+        `/api/generate/status?request_id=${requestId}&model=${encodeURIComponent(pollModel)}&projectId=${projectId}&prompt=${encodeURIComponent(prompt)}`,
+      )
+      const result = await response.json()
+
+      if (result.error) {
+        setStatus('failed')
+        setError(result.error)
+        clearPending()
+        toast.error(`fal: ${result.error}`, { id: toastId })
+        return
+      }
+
+      if (result.status === 'COMPLETED') {
+        const imageUrl =
+          result.output?.url ||
+          result.output?.images?.[0] ||
+          result.result?.image?.url
+        if (imageUrl) setOutputUrl(imageUrl)
+        setStatus('completed')
+        setProgress(undefined)
+        clearPending()
+        toast.success('Result is ready — saved to your library.', { id: toastId })
+        return
+      }
+
+      if (result.status === 'FAILED') {
+        setStatus('failed')
+        setError(result.error || 'Generation failed')
+        clearPending()
+        toast.error(`fal: ${result.error || 'Generation failed'}`, { id: toastId })
+        return
+      }
+
+      // Still IN_QUEUE or IN_PROGRESS — keep polling.
+      if (result.status === 'IN_PROGRESS') {
+        setStatus('in_progress')
+        if (result.progress !== undefined) setProgress(result.progress)
+        const pct = typeof result.progress === 'number' ? ` (${Math.round(result.progress * 100)}%)` : ''
+        toast.info(`fal is generating this now${pct}. Polling resumed.`, { id: toastId })
+      } else {
+        setStatus('in_queue')
+        const posLabel = typeof result.position === 'number' ? ` (queue position ${result.position})` : ''
+        toast.info(`Still in fal's queue${posLabel}. Polling resumed for 10 more minutes.`, { id: toastId })
+      }
+      setResumeToken(t => t + 1)
+    } catch (err) {
+      console.error('[recheck] error:', err)
+      toast.error("Couldn't reach fal — check connection and try again.", { id: toastId })
+    }
+  }
+
+  const handleGenerate = async () => {
+    // Compile prompts from connected nodes and this node's prompt
+    let compiledPrompt = ''
+    let connectedImageUrl: string | null = null
+    const connectedImageUrls: string[] = []
+    let deadImageEdges = 0
+
+    try {
+      const edges = getEdges()
+      const nodes = getNodes()
+      
+      // Get all edges where target is this node's "prompt-in" handle
+      // Accept edges without targetHandle for backward compatibility (old connections)
+      const incomingPromptEdges = edges.filter(
+        edge => edge.target === id && (edge.targetHandle === 'prompt-in' || !edge.targetHandle)
+      )
+      
+      // Get connected image input (from image-in handle on THIS node)
+      const incomingImageEdges = edges.filter(
+        edge => edge.target === id && edge.targetHandle === 'image-in'
+      )
+      
+      // Get image URL from connected image source node. Resolve through the
+      // shared helper so every field a node might store media under is covered
+      // (outputUrl / assetUrl / thumbnail / ...). Track any edge that resolves
+      // to nothing: the cord is attached but would contribute no reference, and
+      // silently generating without it wastes a paid call and returns the wrong
+      // image. We refuse to submit in that case (see the guard below).
+      if (incomingImageEdges.length > 0) {
+        for (const imageEdge of incomingImageEdges) {
+          const sourceNode = nodes.find(n => n.id === imageEdge.source)
+          const sourceImageUrl = resolveNodeMediaUrl(sourceNode?.data as Record<string, unknown>)
+          if (sourceImageUrl) {
+            // Keep EVERY connected image, not just the first. The extras ride
+            // along as reference groups below so wiring 3 images in actually
+            // sends 3 (previously only the first was ever submitted).
+            if (!connectedImageUrls.includes(sourceImageUrl)) connectedImageUrls.push(sourceImageUrl)
+          } else {
+            deadImageEdges++
+          }
+        }
+        connectedImageUrl = connectedImageUrls[0] ?? null
+      }
+      
+      // Sort by the order edges were created (which is their index in the array)
+      // This preserves connection order
+      incomingPromptEdges.forEach((edge, index) => {
+        const sourceNode = nodes.find(n => n.id === edge.source)
+        // For PromptNode, text is stored in data.text; for other nodes, use data.prompt
+        const sourcePrompt = (sourceNode?.data?.text || sourceNode?.data?.prompt) as string | undefined
+        if (sourcePrompt && typeof sourcePrompt === 'string') {
+          if (index > 0) compiledPrompt += ' '
+          compiledPrompt += sourcePrompt.trim()
+        }
+      })
+      
+      // Add this node's prompt at the end
+      if (prompt.trim()) {
+        if (compiledPrompt) compiledPrompt += ' '
+        compiledPrompt += prompt.trim()
+      }
+    } catch (error) {
+      console.error('Error compiling prompts:', error)
+      compiledPrompt = prompt.trim()
+    }
+
+    // Failsafe: an image cord is attached but its source has no image yet, so
+    // the reference would be silently dropped. Refuse rather than burn a paid
+    // generation that ignores it.
+    if (deadImageEdges > 0) {
+      setError(
+        deadImageEdges === 1
+          ? 'A connected image node has no image yet — generate or upload it first (the reference would be ignored).'
+          : `${deadImageEdges} connected image nodes have no image yet — generate or upload them first (those references would be ignored).`,
+      )
+      return
+    }
+
+    if (!compiledPrompt && !currentModel?.optionalPrompt) {
+      setError('Please enter a prompt')
+      return
+    }
+
+    if (!currentModel) {
+      setError('Please select a model')
+      return
+    }
+
+    setSubmittedAt(Date.now())
+    setStatus('submitting')
+    setError(null)
+    setOutputUrl(null)
+    setProgress(undefined)
+
+    // Folder-mention refs: every selected asset URL across all local
+    // @mentions, plus any @Folder tokens appearing in the compiled prompt
+    // (forwarded from a connected prompt-node — those use the folder's
+    // full asset list since the prompt-node has no per-asset picker).
+    //
+    // compileMentionsForModel returns ordered reference *groups* (one per
+    // mention) AND a prompt with each @FolderTag rewritten to the binding
+    // form the target model understands. For unsupported models the
+    // rewrite degrades to the plain folder name and no URLs are sent —
+    // tagging still works in the UI but only models with real reference
+    // support attach the images.
+    //
+    // For image_urls-style image models (Nano Banana etc.) the first slot
+    // is reserved for the connected primary frame, so mentions start at
+    // slot 1 when connectedImageUrl is present.
+    // How many image slots the connected cords already occupy. Models whose
+    // image input is a LIST (image_urls) can carry every connected image;
+    // single-slot (image_url) models can only take the first, and anything
+    // extra has to ride in a dedicated referenceParam if the model has one.
+    const takesMultipleImages =
+      currentModel?.imageParam === 'image_urls' || !!currentModel?.referenceParam
+    const extraConnected = takesMultipleImages ? connectedImageUrls.slice(1) : []
+    const usedSlots =
+      currentModel?.imageParam === 'image_urls'
+        ? (connectedImageUrl ? 1 : 0) + extraConnected.length
+        : connectedImageUrl ? 1 : 0
+    const compiled = compileMentionsForModel(
+      compiledPrompt,
+      mentions,
+      folders,
+      currentModel,
+      usedSlots,
+    )
+
+    // Extra connected images go ahead of folder-mention refs (they're the more
+    // explicit intent), then the mention groups keep their order.
+    const allRefGroups = [
+      ...extraConnected.map((u) => ({ urls: [u] })),
+      ...compiled.refGroups,
+    ]
+
+    // If the model physically can't take the extras, say so instead of dropping
+    // them silently — that's the exact failure this whole pass is about.
+    const droppedExtras = connectedImageUrls.length - 1 - extraConnected.length
+    if (droppedExtras > 0) {
+      toast.warning(
+        `${currentModel?.name || 'This model'} accepts one input image — ${droppedExtras} extra connected ${droppedExtras === 1 ? 'image was' : 'images were'} not sent.`,
+        { duration: 7000 },
+      )
+    }
+
+    try {
+      // Fan out one fal job per requested image, mirroring how video-node
+      // handles batch counts. This lets us blow past fal's per-request
+      // num_images cap (typically 4) — `numImages` now goes up to 12.
+      const body = JSON.stringify({
+        modelId,
+        prompt: compiled.prompt,
+        referenceImageUrl: connectedImageUrl,
+        referenceGroups: allRefGroups.length > 0 ? allRefGroups : undefined,
+        settings: { aspectRatio, resolution, numImages: 1 },
+      })
+      const count = Math.max(1, Math.min(12, numImages))
+      // Submit the N jobs ONE AT A TIME — never overlapping. Firing them in
+      // parallel (even staggered by a couple hundred ms) lets the POSTs overlap
+      // in flight, and the host edge rejects an "anomalous burst" with a 403
+      // (our own API never returns 403 — it uses 429). Serialising the enqueue
+      // calls, plus a single retry on a transient 403 / network blip, makes them
+      // read as discrete user actions. The generations still run in parallel on
+      // fal afterwards; only these submit calls are spaced out.
+      const submitOnce = async () => {
+        try {
+          const res = await fetch('/api/generate/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body,
+          })
+          const json = await res.json().catch(() => ({}))
+          return { ...json, _httpStatus: res.status }
+        } catch {
+          return { _httpStatus: 0 }
+        }
+      }
+      const results: Array<Awaited<ReturnType<typeof submitOnce>>> = []
+      for (let i = 0; i < count; i++) {
+        if (i > 0) await new Promise<void>(r => setTimeout(r, 300))
+        let r = await submitOnce()
+        if (!r.request_id && (r._httpStatus === 403 || r._httpStatus === 0)) {
+          await new Promise<void>(res => setTimeout(res, 700))
+          r = await submitOnce() // one retry for a transient edge rejection
+        }
+        results.push(r)
+      }
+
+      const ok = results.filter(r => r.request_id)
+      const failedCount = count - ok.length
+      if (ok.length === 0) {
+        const firstFail = results[0]
+        const status = firstFail?._httpStatus
+        // ALWAYS prefer the real message. /api/generate/submit forwards fal's
+        // status AND its error text verbatim, so a 401/403 here is usually fal
+        // (bad key / exhausted balance / model access), not our host. Guessing a
+        // cause and discarding fal's text hid the real reason for ages — don't.
+        const falMsg = typeof firstFail?.error === 'string' ? firstFail.error.slice(0, 300) : ''
+        // A 401 has TWO very different sources: our own middleware rejecting an
+        // expired session (body is exactly "Unauthorized"), or fal rejecting the
+        // key. Blaming the key for a lapsed session sends you off debugging the
+        // wrong system entirely — tell them apart before saying anything.
+        const sessionExpired = status === 401 && /^unauthorized$/i.test(falMsg.trim())
+        const hint =
+          sessionExpired ? 'your session expired — reload the page and log in again (your API key is fine)'
+          : status === 401 ? 'fal rejected the key (invalid or rotated FAL_KEY)'
+          : status === 403 ? 'fal refused the request — usually an exhausted balance or billing hold. Check fal.ai billing.'
+          : status === 503 ? 'generation disabled (GENERATION_DISABLED env var)'
+          : `HTTP ${status || 'error'}`
+        const reason = sessionExpired ? hint : falMsg ? `${hint} — ${falMsg}` : hint
+        setStatus('failed')
+        setError(`Failed to submit job — ${reason}`)
+        return
+      }
+      // Partial success — let the user know they got fewer outputs than
+      // they asked for, so they can retry the missing N without thinking
+      // it silently disappeared. Charges incurred = ok.length only.
+      if (failedCount > 0) {
+        toast.warning(
+          `Only ${ok.length} of ${count} submissions accepted — ${failedCount} rejected (likely rate-limit). You were billed for ${ok.length}.`,
+          { duration: 8000 },
+        )
+      }
+
+      // This node tracks the first job.
+      const firstEndpoint = ok[0].model || currentModel.falModel
+      const startedAt = Date.now()
+      setFalEndpoint(firstEndpoint)
+      setRequestId(ok[0].request_id)
+      setStatus('in_queue')
+      startTimeRef.current = startedAt
+
+      setNodes(ns => ns.map(n => n.id === id ? {
+        ...n,
+        data: {
+          ...n.data,
+          pendingRequestId: ok[0].request_id,
+          pendingFalEndpoint: firstEndpoint,
+          pendingStartedAt: startedAt,
+        },
+      } : n))
+
+      // Extra jobs spawn duplicate image nodes in a 3-column grid that each
+      // poll their own request and fill in when done.
+      if (ok.length > 1) {
+        const extra = ok.slice(1)
+        const self = getNodes().find(nd => nd.id === id)
+        const baseX = self?.position?.x ?? 0
+        const baseY = self?.position?.y ?? 0
+        const w = (self?.data?.width as number) || nodeWidth || 320
+        const colGap = w + 40
+        const rowGap = 520
+        const cols = 3
+        const stamp = Date.now()
+        const { shotId, outputUrl: _drop, ...restData } = (self?.data || {}) as Record<string, unknown>
+        const newNodes = extra.map((res, idx) => {
+          const slot = idx + 1
+          const col = slot % cols
+          const row = Math.floor(slot / cols)
+          return {
+            id: `${id}-v${stamp}-${idx}`,
+            type: 'imageGen',
+            position: { x: baseX + col * colGap, y: baseY + row * rowGap },
+            data: {
+              ...restData,
+              // Duplicates carry this node's LOCAL prompt only — the
+              // upstream chain is preserved by mirroring incoming edges
+              // below, so the next generation merges upstream + local
+              // again exactly like the original. Storing the merged
+              // compiledPrompt here would double-apply the upstream
+              // (upstream + (upstream + local) + …) and the text would
+              // grow every cycle.
+              prompt,
+              pendingRequestId: res.request_id,
+              pendingFalEndpoint: res.model || currentModel.falModel,
+              pendingStartedAt: stamp,
+            },
+          }
+        })
+        setNodes(ns => [...ns, ...(newNodes as any)])
+        // Mirror this node's incoming connections onto the duplicates.
+        const incoming = getEdges().filter(e => e.target === id)
+        if (incoming.length) {
+          const newEdges = newNodes.flatMap((nn, ni) =>
+            incoming.map((e, ei) => ({ ...e, id: `${nn.id}-e${ei}-${stamp}-${ni}`, target: nn.id }))
+          )
+          window.dispatchEvent(new CustomEvent('frame-add-edges', { detail: { edges: newEdges } }))
+        }
+      }
+    } catch (err: any) {
+      setStatus('failed')
+      setError(err.message || 'Failed to submit job')
+    }
+  }
+
+  // Cost-aware generate wrapper. Estimates the fal charge for the
+  // current model × batch count, shows it in the button tooltip, and
+  // gates handleGenerate behind a native window.confirm() when the
+  // estimate crosses COST_CONFIRM_THRESHOLD_USD. Native confirm is
+  // intentionally blocking + unmissable — this is a money-loss safety
+  // gate, not a delight feature.
+  const costEstimate = useMemo(
+    () => estimateGenerationCost(currentModel, { count: numImages }),
+    [currentModel, numImages],
+  )
+  const generateTooltip = useMemo(() => {
+    if (!currentModel) return 'Generate image'
+    const label = `Generate ${numImages} image${numImages === 1 ? '' : 's'}`
+    if (!costEstimate.isKnown) return `${label}\n(price not estimated for this model)`
+    return `${label}\nEstimated cost: ~${formatUSD(costEstimate.total)} (${formatUSD(costEstimate.perUnit)} each).\nReal cost depends on resolution and model load.`
+  }, [currentModel, numImages, costEstimate])
+  const requestGenerate = () => {
+    if (costEstimate.isKnown && costEstimate.total >= COST_CONFIRM_THRESHOLD_USD) {
+      const msg =
+        `You're about to submit ${numImages} ${currentModel?.name || 'image'} generation${numImages === 1 ? '' : 's'} ` +
+        `to fal.ai.\n\n` +
+        `Estimated cost: ~${formatUSD(costEstimate.total)} (${formatUSD(costEstimate.perUnit)} each).\n` +
+        `Real cost depends on resolution and model load.\n\n` +
+        `Press OK to confirm and spend this, or Cancel to back out.`
+      if (!window.confirm(msg)) return
+    }
+    handleGenerate()
+  }
+
+  const handleCancel = async () => {
+    if (!requestId || !currentModel) return
+
+    // Stop polling immediately and locally, regardless of whether fal can
+    // still cancel the job — so the UI reliably unsticks on click.
+    stopRef.current = true
+    if (pollingRef.current) clearTimeout(pollingRef.current)
+    setStatus('cancelled')
+    toast.warning('Generation cancelled', { description: currentModel.name })
+    const reqId = requestId
+    const cancelModel = falEndpoint || currentModel.falModel
+    setRequestId(null)
+    clearPending()
+
+    try {
+      await fetch('/api/generate/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ request_id: reqId, model: cancelModel }),
+      })
+    } catch (err) {
+      console.error('Cancel error:', err)
+    }
+  }
+
+  const isGenerating = status === 'submitting' || status === 'in_queue' || status === 'in_progress'
+  const isTaggedToShot = !!selectedShotId
+
+  // Build options from current model's config
+  const modelOptions = IMAGE_MODELS.map(m => ({ value: m.id, label: m.name }))
+  const aspectOptions = currentModel?.aspectRatios.map(a => ({ value: a, label: a })) || []
+  const resolutionOptions = currentModel?.resolutions?.map(r => ({ value: r, label: r })) || []
+
+  return (
+    <div 
+      className="relative group" 
+      style={{ width: nodeWidth }}
+      onMouseEnter={() => setShowResizeHandle(true)}
+      onMouseLeave={() => !isResizing && setShowResizeHandle(false)}
+    >
+      <NodeActionToolbar
+        nodeId={id}
+        selected={selected}
+        nodeLabel={(data.label as string) || 'Image Generator'}
+        assetUrl={outputUrl || undefined}
+        assetType="image"
+        onRename={handleRename}
+        onViewFullscreen={outputUrl ? () => setLightboxOpen(true) : undefined}
+      />
+
+      <Lightbox
+        open={lightboxOpen}
+        url={outputUrl}
+        type="image"
+        onClose={() => setLightboxOpen(false)}
+      />
+
+      {/* Shot selector badge */}
+      <div className="absolute -top-8 left-0 flex items-center gap-2 z-10">
+        <ShotSelector
+          selectedShotId={selectedShotId}
+          shots={shots}
+          onSelect={handleShotSelect}
+          onNewShot={handleNewShot}
+          onReplace={handleShotReplace}
+        />
+        {isRenaming ? (
+          <input
+            autoFocus
+            value={labelDraft}
+            onChange={e => setLabelDraft(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={e => {
+              if (e.key === 'Enter') commitRename()
+              else if (e.key === 'Escape') setIsRenaming(false)
+            }}
+            className="text-[10px] font-mono text-foreground bg-transparent border-b border-accent/60 outline-none min-w-[140px]"
+          />
+        ) : (
+          <span
+            onDoubleClick={handleRename}
+            className="text-[10px] font-mono text-muted-foreground/60 whitespace-nowrap cursor-text hover:text-foreground transition-colors"
+            title="Double-click to rename"
+          >
+            {(data.label as string) || 'Image Generator #1'}
+          </span>
+        )}
+      </div>
+
+      {/* Handles - dynamic based on model inputTypes */}
+      
+      {/* Text input - always shown.
+          zIndex:5 puts every Handle above the card content; without it,
+          drops that landed on the prompt textarea (which sits at the
+          same y-coordinate as some handles) were silently rejected
+          because React Flow's drop detection found the textarea before
+          the handle. */}
+      <Handle type="target" id="prompt-in" position={Position.Left} style={{ top: 80, left: -12, opacity: 0, width: 24, height: 24, zIndex: 5 }} />
+      <HandleIcon icon={TextT} color="rgba(107,143,168,0.8)" position="left" top={80} visible />
+
+      {/* Image input - only if model supports image input */}
+      {currentModel?.inputTypes.includes('image') && (
+        <>
+          <Handle type="target" id="image-in" position={Position.Left} style={{ top: 180, left: -12, opacity: 0, width: 24, height: 24, zIndex: 5 }} />
+          <HandleIcon icon={ImageIcon} color="rgba(96,165,250,0.8)" position="left" top={180} visible />
+          <ConnectedInputs nodeId={id} handleId="image-in" side="left" top={180} label="Images" />
+        </>
+      )}
+
+      {/* Image output - always shown */}
+      <Handle type="source" id="image-out" position={Position.Right} style={{ top: 130, right: -12, opacity: 0, width: 24, height: 24, zIndex: 5 }} />
+      <HandleIcon icon={ImageIcon} color="rgba(96,165,250,0.8)" position="right" top={130} visible />
+
+      {/* Card content */}
+      <div
+        className="flex flex-col rounded-xl overflow-hidden transition-all duration-200"
+        style={{
+          background: '#0D0F12',
+          border: isTaggedToShot 
+            ? '1.5px solid rgba(251,191,36,0.7)' 
+            : selected 
+              ? '1.5px solid rgba(107,143,168,0.85)' 
+              : '1.5px solid rgba(107,143,168,0.25)',
+          boxShadow: isTaggedToShot
+            ? '0 0 0 1px rgba(251,191,36,0.2), 0 0 20px rgba(251,191,36,0.25), 0 0 40px rgba(251,191,36,0.1)'
+            : selected 
+              ? '0 0 0 1px rgba(107,143,168,0.2), 0 0 24px rgba(107,143,168,0.15)' 
+              : 'none',
+        }}
+      >
+        {/* Preview area - image displays at natural aspect ratio */}
+        <div
+          className="bg-[#0a0c0f] relative overflow-hidden"
+          onDoubleClick={() => { if (outputUrl) setLightboxOpen(true) }}
+        >
+          {outputUrl ? (
+            <img
+              src={outputUrl}
+              alt="Generated"
+              loading="lazy"
+              decoding="async"
+              className="w-full h-auto cursor-zoom-in"
+              onLoad={(e) => {
+                const img = e.target as HTMLImageElement
+                setImageAspect(img.naturalWidth / img.naturalHeight)
+              }}
+              onError={() => {
+                // Image failed to load - could be stale URL
+              }}
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center gap-2 min-h-[220px]">
+              {isGenerating ? (
+                <>
+                  <CircleNotch size={24} className="animate-spin text-accent/60" />
+                  <StatusBadge status={status} progress={progress} />
+                </>
+              ) : (
+                <span className="text-[11px] font-mono text-muted-foreground/30">No output yet</span>
+              )}
+            </div>
+          )}
+          
+          {error && (
+            <div className="absolute bottom-2 left-2 right-2 bg-red-500/20 border border-red-500/30 rounded px-2 py-1">
+              <span className="text-[9px] font-mono text-red-400">{error}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Prompt input. @-mention any folder (Character/Prop/Location/General)
+            to attach its assets as references at generate time. */}
+        <div className="px-3 pt-3 pb-2">
+          <MentionTextarea
+            value={prompt}
+            mentions={mentions}
+            onChange={(text, ms) => { setPrompt(text); setMentions(ms) }}
+            folders={folders}
+            placeholder="Describe the image — type @ to reference a folder…"
+            disabled={isGenerating}
+            className="nodrag w-full bg-transparent resize-none outline-none text-[12px] text-foreground/90 placeholder:text-muted-foreground/40 leading-relaxed disabled:opacity-50 cursor-text"
+            rows={2}
+          />
+        </div>
+
+        {/* Controls - Dynamic based on model */}
+        <div className="flex items-center justify-between px-3 pb-3 gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {/* Num images counter */}
+            <div className="flex items-center gap-0.5 px-1.5 h-6 rounded-md bg-white/5 text-[10px] font-mono text-muted-foreground">
+              <button 
+                onClick={() => setNumImages(n => Math.max(1, n - 1))}
+                disabled={isGenerating || numImages <= 1}
+                className="w-4 h-4 flex items-center justify-center hover:text-foreground disabled:opacity-30"
+              >
+                <Minus size={8} weight="bold" />
+              </button>
+              <span className="w-6 text-center">x{numImages}</span>
+              <button
+                onClick={() => setNumImages(n => Math.min(12, n + 1))}
+                disabled={isGenerating || numImages >= 12}
+                className="w-4 h-4 flex items-center justify-center hover:text-foreground disabled:opacity-30"
+              >
+                <Plus size={8} weight="bold" />
+              </button>
+            </div>
+
+            {/* Model selector */}
+            <ControlSelect 
+              value={currentModel?.name || modelId} 
+              options={modelOptions}
+              onChange={setModelId}
+              disabled={isGenerating}
+            />
+            
+            {/* Aspect ratio - dynamic based on model */}
+            {aspectOptions.length > 0 && (
+              <ControlSelect 
+                value={aspectRatio || currentModel?.defaultAspectRatio || ''} 
+                options={aspectOptions}
+                onChange={setAspectRatio}
+                disabled={isGenerating}
+              />
+            )}
+            
+            {/* Resolution - only if model supports it */}
+            {resolutionOptions.length > 0 && (
+              <ControlSelect 
+                value={resolution || currentModel?.defaultResolution || ''} 
+                options={resolutionOptions}
+                onChange={setResolution}
+                disabled={isGenerating}
+              />
+            )}
+          </div>
+          
+          {/* Generate / Cancel / Re-check button. After a 10-min soft
+              timeout the node sits in status='failed' but still holds the
+              fal request_id — Re-check polls fal one more time in case
+              the job finished after the timeout window (fal keeps results
+              ~24h, so slow generations aren't lost). */}
+          {isGenerating ? (
+            <button
+              onClick={handleCancel}
+              className="w-6 h-6 rounded-full bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white flex items-center justify-center transition-colors"
+              title="Cancel generation"
+            >
+              <X size={10} weight="bold" />
+            </button>
+          ) : status === 'failed' && requestId ? (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={handleRecheck}
+                className="px-2 h-6 rounded-full bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-white flex items-center justify-center transition-colors text-[9px] font-mono"
+                title="Try fetching the result from fal again — generations that took longer than the timeout window may still be available."
+              >
+                Re-check
+              </button>
+              <button
+                onClick={handleCancel}
+                className="w-6 h-6 rounded-full bg-white/5 hover:bg-red-500 text-muted-foreground hover:text-white flex items-center justify-center transition-colors"
+                title="Give up and clear this request from the node"
+              >
+                <X size={10} weight="bold" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={requestGenerate}
+              disabled={isGenerating || (!prompt.trim() && !hasConnectedPrompts && !currentModel?.optionalPrompt)}
+              className="w-6 h-6 rounded-full bg-accent/20 hover:bg-accent text-accent hover:text-accent-foreground flex items-center justify-center transition-colors accent-glow disabled:opacity-50 disabled:cursor-not-allowed"
+              title={generateTooltip}
+            >
+              <Play size={10} weight="fill" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Resize handle - quarter circle arc hugging the corner */}
+      <div
+        className={`nodrag absolute transition-opacity duration-200 cursor-se-resize ${
+          showResizeHandle || isResizing ? 'opacity-100' : 'opacity-0'
+        }`}
+        style={{ bottom: -10, right: -10 }}
+        onMouseDown={handleResizeStart}
+      >
+        <svg width="28" height="28" viewBox="0 0 28 28">
+          <path
+            d="M 0 28 A 28 28 0 0 0 28 0"
+            fill="none"
+            stroke="rgba(255,255,255,0.5)"
+            strokeWidth="2"
+          />
+        </svg>
+      </div>
+    </div>
+  )
+}
+
+export const ImageNode = memo(ImageNodeImpl)
+ImageNode.displayName = 'ImageNode'

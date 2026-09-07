@@ -1,0 +1,193 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/* Dark-theme scrollbars. The browser default is a pale grey track that
+   reads as white on our near-black surfaces; this overrides it. Applies
+   to every scrollable surface in the app — there is no other scrollbar
+   styling so this is the single source of truth.
+
+   `.scrollbar-hide` actually hides the scrollbar (the class was used
+   in scene-timeline before but had no definition, leaving the default
+   pale scrollbar visible). */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(107, 143, 168, 0.35) rgba(255, 255, 255, 0.03);
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.03);
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(107, 143, 168, 0.35);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 143, 168, 0.55);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+  20%, 40%, 60%, 80% { transform: translateX(4px); }
+}
+
+/* Slow breathing glow for the login Unlock button — anticipation, not urgency. */
+@keyframes spite-anticipation {
+  0%, 100% {
+    box-shadow:
+      0 0 18px rgba(107, 143, 168, 0.18),
+      0 0 36px rgba(107, 143, 168, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+  50% {
+    box-shadow:
+      0 0 32px rgba(107, 143, 168, 0.32),
+      0 0 64px rgba(107, 143, 168, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  }
+}
+
+/* Ozone-layer base — deep near-black with a faint frost-blue curve
+   glowing up from below the viewport edge. Used on full-page surfaces
+   that benefit from the horizon-line atmosphere (login, dashboard). */
+.spite-ozone-bg {
+  background:
+    radial-gradient(ellipse 80% 55% at 50% 112%, rgba(107, 143, 168, 0.22) 0%, rgba(107, 143, 168, 0.06) 35%, transparent 70%),
+    #050608;
+}
+
+/* Film grain overlay — brand guide §18 calls for fine grain in
+   surrounding space, never on the logo. Apply as a fixed full-screen
+   layer behind interactive content with pointer-events: none. */
+.spite-grain {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.055;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 240 240' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  z-index: 0;
+}
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* SPITE — cold, restrained, cinematic dark theme */
+  --background: #080A0C;
+  --canvas: #0D0F12;
+  --foreground: #F0EDE6;
+  --muted-foreground: #6B7280;
+  --accent: #6B8FA8;
+  --accent-foreground: #F0EDE6;
+  --accent-hover: #A8B0B8;
+
+  --card: rgba(255, 255, 255, 0.04);
+  --card-foreground: #F0EDE6;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-bright: rgba(255, 255, 255, 0.12);
+  --input: rgba(255, 255, 255, 0.06);
+  --ring: #6B8FA8;
+
+  --glass-bg: rgba(255, 255, 255, 0.04);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-shine: rgba(255, 255, 255, 0.10);
+
+  --radius: 0.75rem;
+}
+
+@theme inline {
+  /* Inter everywhere for body/UI; Montserrat reserved for the wordmark
+     and display headlines. `font-mono` is intentionally remapped to Inter
+     too so the existing `font-mono` usages adopt the new look without a
+     sweeping rename. */
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-inter);
+  --font-display: var(--font-montserrat);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    box-sizing: border-box;
+  }
+
+  html {
+    background-color: #080A0C;
+  }
+
+  body {
+    background-color: #080A0C;
+    color: #F0EDE6;
+    font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+}
+
+/* Dot grid for canvas areas */
+.dot-grid {
+  background-image: radial-gradient(circle, #1a1d21 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Liquid glass material — dark, mostly-opaque panel material used by the
+   left toolbar, asset panel, top toolbar, and history dropdown. The
+   underlying canvas should be readable through it but not distracting. */
+.glass {
+  background: rgba(10, 12, 16, 0.88);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.glass-hover {
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.glass-hover:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* Frost blue glow for accent elements */
+.accent-glow {
+  box-shadow: 0 0 20px rgba(107, 143, 168, 0.35), 0 0 40px rgba(107, 143, 168, 0.12);
+}
+
+/* Shake animation for login errors */
+.animate-shake {
+  animation: shake 0.6s ease-in-out;
+}
