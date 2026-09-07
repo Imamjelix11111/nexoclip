@@ -10,6 +10,7 @@
 # ── GSD baseline (auto-generated) ──
 .gsd
 .gsd-worktrees/
+.worktrees/
 .gsd-backups/
 .gsd-id
 .mcp.json
