@@ -30,6 +30,8 @@ const MarketingStudio = studioLazy('MarketingStudio');
 const WorkflowStudio = studioLazy('WorkflowStudio');
 const AiInfluencerStudio = studioLazy('AiInfluencerStudio');
 
+const SPITE_URL = process.env.NEXT_PUBLIC_SPITE_URL || 'http://localhost:3005';
+
 const TABS = [
   {
     id: 'image',
@@ -137,7 +139,7 @@ const TABS = [
   },
   {
     id: 'workflows',
-    label: 'AI Canvas Mode',
+    label: 'SPITE',
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="3" width="6" height="6" rx="1"/>
@@ -743,7 +745,23 @@ export default function StandaloneShell({ initialTab, children }) {
                       </a>
                       {(() => {
                         const canvasTab = TABS.find((item) => item.id === 'workflows');
-                        return canvasTab ? renderStudioItem(canvasTab) : null;
+                        if (!canvasTab) return null;
+                        return (
+                          <a
+                            href={SPITE_URL}
+                            aria-label={canvasTab.label}
+                            title={isCollapsed ? canvasTab.label : undefined}
+                            className={`
+                              group relative flex items-center rounded-lg text-white/55 transition-colors duration-150 hover:bg-white/[0.04] hover:text-white
+                              ${isCollapsed ? 'h-10 w-10 justify-center mx-auto' : 'gap-3 px-2.5 py-2 text-[13px] font-medium'}
+                            `}
+                          >
+                            <span className="flex-shrink-0 text-white/45 group-hover:text-white/80">
+                              {canvasTab.icon}
+                            </span>
+                            {!isCollapsed && <span className="truncate">{canvasTab.label}</span>}
+                          </a>
+                        );
                       })()}
                     </div>
 
