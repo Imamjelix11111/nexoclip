@@ -1,5 +1,6 @@
 import { getModelById, getVideoModelById, getI2IModelById, getI2VModelById, getV2VModelById, getRecastModelById, getLipSyncModelById, getAudioModelById, OPENROUTER_IMAGE_MODEL_MAP, OPENROUTER_VIDEO_MODEL_MAP, OPENROUTER_V2V_MODEL_MAP, OPENROUTER_MULTI_REFERENCE_MODELS } from './models.js';
 import { rememberActiveJob, forgetActiveJob } from '../../../src/lib/jobs/durableJobStore.js';
+import { isTransientPollFailure } from '../../../src/lib/jobs/jobStatus.js';
 
 // In an http(s) browser we route through the host app's proxy (Next.js routes
 // under /api/* re-issue the call server-side) so api.muapi.ai CORS is bypassed.
@@ -149,7 +150,10 @@ async function generateVideoOpenRouter(model, params) {
             ? `/api/openrouter/videos/${jobId}?job_id=${encodeURIComponent(durableJobId)}`
             : `/api/openrouter/videos/${jobId}`;
         const pollRes = await fetch(pollUrl, { headers: workspaceHeaders });
-        if (!pollRes.ok) throw new Error(`OpenRouter video poll failed: ${pollRes.status}`);
+        if (!pollRes.ok) {
+            if (isTransientPollFailure(pollRes.status)) continue;
+            throw new Error(`OpenRouter video poll failed: ${pollRes.status}`);
+        }
         const pollData = await pollRes.json();
         if (pollData.status === 'completed') {
             forgetJob();
@@ -278,7 +282,10 @@ async function processV2VOpenRouter(model, params) {
             ? `/api/openrouter/videos/${jobId}?job_id=${encodeURIComponent(durableJobId)}`
             : `/api/openrouter/videos/${jobId}`;
         const pollRes = await fetch(pollUrl, { headers: workspaceHeaders });
-        if (!pollRes.ok) throw new Error(`OpenRouter video poll failed: ${pollRes.status}`);
+        if (!pollRes.ok) {
+            if (isTransientPollFailure(pollRes.status)) continue;
+            throw new Error(`OpenRouter video poll failed: ${pollRes.status}`);
+        }
         const pollData = await pollRes.json();
         if (pollData.status === 'completed') {
             forgetJob();

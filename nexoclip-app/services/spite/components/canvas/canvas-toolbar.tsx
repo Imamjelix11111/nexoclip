@@ -6,7 +6,6 @@ import { useReactFlow } from '@xyflow/react'
 import { useState } from 'react'
 import { useAuth } from '@/components/auth-provider'
 import { startTour } from '@/lib/onboarding'
-import { FalBalanceBadge } from './fal-balance-badge'
 import { VersionBadge } from '@/components/version-badge'
 
 interface CanvasToolbarProps {
@@ -35,11 +34,18 @@ export function CanvasToolbar({ projectName, onProjectNameChange, saveStatus, pr
     <div className="glass flex items-center justify-between px-4 h-12 shrink-0 relative z-10">
       {/* Left */}
       <div className="flex items-center gap-3">
-        <Link
-          href="/"
-          className="flex items-center justify-center w-7 h-7 rounded-lg glass-hover text-muted-foreground hover:text-foreground transition-colors"
+        <a
+          href={process.env.NEXT_PUBLIC_STUDIO_URL || 'http://localhost:3000/studio'}
+          className="flex items-center gap-2 px-2 h-7 rounded-lg glass-hover text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft size={14} weight="thin" />
+          Kembali ke Studio
+        </a>
+        <Link
+          href="/"
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          Projects
         </Link>
         <div className="w-px h-4 bg-border" />
         {editing ? (
@@ -127,8 +133,6 @@ export function CanvasToolbar({ projectName, onProjectNameChange, saveStatus, pr
         )}
 
         <VersionBadge className="mr-1" />
-
-        <FalBalanceBadge />
 
         <button
           onClick={() => startTour('canvas')}

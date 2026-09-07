@@ -1,6 +1,7 @@
 import { PutObjectCommand } from '@aws-sdk/client-s3'
 import { NextRequest, NextResponse } from 'next/server'
 import { getR2Client } from '@/lib/r2-upload'
+import { withBasePath } from '@/lib/base-path'
 
 export async function POST(req: NextRequest) {
   console.log('[R2 Upload] Starting upload...')
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest) {
     // Return the authenticated proxy path — never a direct r2.dev /
     // r2.cloudflarestorage.com URL. Those bypass our HMAC gate and the
     // bucket would have to be world-readable for them to work.
-    const url = `/api/r2-image/${key}`
+    const url = withBasePath(`/api/r2-image/${key}`)
 
     console.log('[R2 Upload] Success - URL:', url)
     return NextResponse.json({ url, key }, { status: 200 })

@@ -825,64 +825,22 @@ function CanvasInner({ projectId }: { projectId: string }) {
     n.data = { ...n.data, thumbnail: tempUrl, isUploading: true, mediaType }
     setNodes(ns => [...ns, n])
     
-    // Upload to R2 in background. Two paths:
-    //
-    //   - Audio files: route through /api/r2-upload (server-side
-    //     PutObject). Audio is always small enough for Vercel's body
-    //     limit and the server-side path avoids a CORS preflight on
-    //     audio/* content types that R2 was historically picky about.
-    //
-    //   - Everything else (image, video): presigned PUT direct to R2.
-    //     Bypasses Vercel's 4.5 MB body limit. CORS is kept current
-    //     by ensureBucketCorsForRequest in /api/r2-presign — the
-    //     bucket's allow-origin list now ACCUMULATES across deploys
-    //     instead of getting clobbered every time a new preview ships
-    //     (the underlying "Failed to fetch" root cause).
-    //
-    // The catch surfaces a toast — no silent blob URLs persisted to
-    // DB ever again, regardless of which path failed.
+    // Proxy every browser upload through the authenticated application route.
+    // Browsers never contact R2 directly, so bucket CORS is irrelevant.
     try {
-      let proxyUrl: string
-      if (isAudioFile) {
-        const formData = new FormData()
-        formData.append('file', file)
-        formData.append('filename', file.name)
-        const uploadRes = await fetch(withBasePath('/api/r2-upload'), {
-          method: 'POST',
-          body: formData,
-        })
-        if (!uploadRes.ok) {
-          const detail = await uploadRes.text().catch(() => '')
-          throw new Error(`upload failed: ${uploadRes.status} ${detail}`)
-        }
-        const { url } = await uploadRes.json() as { url: string }
-        proxyUrl = url
-      } else {
-        const presignRes = await fetch(withBasePath('/api/r2-presign'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            filename: file.name,
-            contentType: file.type || 'application/octet-stream',
-          }),
-        })
-        if (!presignRes.ok) {
-          const detail = await presignRes.text().catch(() => '')
-          throw new Error(`presign failed: ${presignRes.status} ${detail}`)
-        }
-        const { presignedUrl, proxyUrl: signedProxyUrl } = await presignRes.json() as { presignedUrl: string; proxyUrl: string }
-
-        const putRes = await fetch(presignedUrl, {
-          method: 'PUT',
-          headers: { 'Content-Type': file.type || 'application/octet-stream' },
-          body: file,
-        })
-        if (!putRes.ok) {
-          const detail = await putRes.text().catch(() => '')
-          throw new Error(`R2 PUT failed: ${putRes.status} ${detail}`)
-        }
-        proxyUrl = signedProxyUrl
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('filename', file.name)
+      const uploadRes = await fetch(withBasePath('/api/r2-upload'), {
+        method: 'POST',
+        body: formData,
+      })
+      if (!uploadRes.ok) {
+        const detail = await uploadRes.text().catch(() => '')
+        throw new Error(`upload failed: ${uploadRes.status} ${detail}`)
       }
+      const { url } = await uploadRes.json() as { url: string }
+      const proxyUrl = withBasePath(url)
 
       // Update node with proxy URL
       setNodes(ns => ns.map(node =>
@@ -1230,13 +1188,9 @@ function CanvasInner({ projectId }: { projectId: string }) {
                        activeTool === 'comment' ? 'copy' : 'default'
               }}
               proOptions={{ hideAttribution: true }}
-              // Cull off-screen nodes. React Flow renders EVERY node by default
-              // regardless of zoom/pan, so a full canvas keeps every image/video
-              // node (and its <img>/<video>) mounted even when only a handful are
-              // visible — the cause of the slowdown on a filling canvas. With
-              // this on, only nodes intersecting the viewport are mounted; the
-              // per-node React.memo handles re-renders, this handles mount count.
-              onlyRenderVisibleElements
+              // Keep nodes mounted while they are off-screen. Generator polling,
+              // upload completion, and mention-editor state live in the node
+              // components; viewport culling unmounted them and lost those tasks.
               edgeTypes={EDGE_TYPES}
               defaultEdgeOptions={{
                 type: 'scissors',

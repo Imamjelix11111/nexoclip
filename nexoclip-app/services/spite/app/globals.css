@@ -90,8 +90,8 @@
 
 :root {
   /* SPITE — cold, restrained, cinematic dark theme */
-  --background: #080A0C;
-  --canvas: #0D0F12;
+  --background: #11151a;
+  --canvas: #1a2027;
   --foreground: #F0EDE6;
   --muted-foreground: #6B7280;
   --accent: #6B8FA8;
@@ -145,11 +145,11 @@
   }
 
   html {
-    background-color: #080A0C;
+    background-color: #11151a;
   }
 
   body {
-    background-color: #080A0C;
+    background-color: #11151a;
     color: #F0EDE6;
     font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
@@ -157,7 +157,8 @@
 
 /* Dot grid for canvas areas */
 .dot-grid {
-  background-image: radial-gradient(circle, #1a1d21 1px, transparent 1px);
+  background-color: var(--canvas);
+  background-image: radial-gradient(circle, #3a424c 1px, transparent 1px);
   background-size: 24px 24px;
 }
 

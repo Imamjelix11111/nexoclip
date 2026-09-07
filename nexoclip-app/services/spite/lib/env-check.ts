@@ -7,7 +7,9 @@
 const REQUIRED_ENV_VARS = [
   'DATABASE_URL',
   'APP_PASSWORD',
-  'FAL_KEY',
+  'GEMINI_API_KEY',
+  'OPENAI_API_KEY',
+  'BYTEPLUS_API_KEY',
   'R2_ACCOUNT_ID',
   'R2_ACCESS_KEY_ID',
   'R2_SECRET_ACCESS_KEY',
@@ -34,7 +36,9 @@ export function checkRequiredEnv(): EnvCheckResult {
 export const ENV_VAR_HINTS: Record<RequiredEnvVar, string> = {
   DATABASE_URL: 'Neon Postgres connection string — neon.tech → your project → Connection string',
   APP_PASSWORD: 'The password you\'ll type at the SPITE login screen. Choose anything strong.',
-  FAL_KEY: 'fal.ai API key — fal.ai → Dashboard → Keys',
+  GEMINI_API_KEY: 'Google Gemini API key for Nano Banana models',
+  OPENAI_API_KEY: 'OpenAI API key for GPT Image models',
+  BYTEPLUS_API_KEY: 'BytePlus Ark API key for Seedream and Seedance models',
   R2_ACCOUNT_ID: 'Cloudflare R2 account ID — visible in the right sidebar of any R2 page',
   R2_ACCESS_KEY_ID: 'Cloudflare R2 access key — Cloudflare dashboard → R2 → Manage API tokens',
   R2_SECRET_ACCESS_KEY: 'Cloudflare R2 secret key — issued alongside the access key above',

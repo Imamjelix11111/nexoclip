@@ -3,7 +3,7 @@
 import { withBasePath } from '@/lib/base-path'
 import { useState, useMemo } from 'react'
 import useSWR from 'swr'
-import { Question } from '@phosphor-icons/react'
+import { ArrowLeft, Question } from '@phosphor-icons/react'
 import { ProjectCard } from './project-card'
 import { NewProjectCard } from './new-project-card'
 import { SearchBar } from './search-bar'
@@ -83,15 +83,13 @@ export function ProjectsDashboard() {
         <header className="sticky top-0 z-50">
           <div className="glass border-b border-white/5 px-6 md:px-10 py-4">
             <div className="max-w-6xl mx-auto flex items-center justify-between gap-6">
-              {/* Wordmark */}
-              <div className="shrink-0">
-                <img
-                  src="/brand/icon-text/SPITE_text+icon_FLAT_WHITE.svg"
-                  alt="SPITE"
-                  className="h-8 w-auto select-none"
-                  draggable={false}
-                />
-              </div>
+              <a
+                href={process.env.NEXT_PUBLIC_STUDIO_URL || 'http://localhost:3000/studio'}
+                className="shrink-0 flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ArrowLeft size={15} />
+                Kembali ke Studio
+              </a>
 
               {/* Search */}
               <div className="flex-1 max-w-md" data-tour="search">

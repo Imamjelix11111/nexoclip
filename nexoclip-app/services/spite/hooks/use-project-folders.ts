@@ -3,9 +3,10 @@
 import { useEffect } from 'react'
 import useSWR from 'swr'
 import type { MentionFolder } from '@/components/canvas/mention-textarea'
+import { withBasePath } from '@/lib/base-path'
 
 const fetcher = (url: string) =>
-  fetch(url)
+  fetch(withBasePath(url))
     .then((r) => r.json())
     .then((d) => (Array.isArray(d) ? (d as MentionFolder[]) : []))
 

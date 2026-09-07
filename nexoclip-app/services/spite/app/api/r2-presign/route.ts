@@ -2,6 +2,7 @@ import { PutObjectCommand } from '@aws-sdk/client-s3'
 import { getR2Client } from '@/lib/r2-upload'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { NextRequest, NextResponse } from 'next/server'
+import { withBasePath } from '@/lib/base-path'
 
 // Hand the browser a short-lived presigned URL that lets it PUT a file
 // directly into our R2 bucket without round-tripping the bytes through
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest) {
       presignedUrl,
       key,
       // Cookie-auth'd proxy path the rest of the app uses for r2 reads.
-      proxyUrl: `/api/r2-image/${key}`,
+      proxyUrl: withBasePath(`/api/r2-image/${key}`),
     })
   } catch (err: any) {
     console.error('[r2-presign] error', err)

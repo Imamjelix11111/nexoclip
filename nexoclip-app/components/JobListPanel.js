@@ -24,9 +24,10 @@ export default function JobListPanel() {
         if (!cancelled) setItems((jobs || []).map(toJobListItem));
       } catch { /* transient — keep last state */ }
     }
-    // When open, show recent (all). Otherwise track only active jobs.
-    poll(open ? '' : '?status=active');
-    const timer = window.setInterval(() => poll(open ? '' : '?status=active'), 3000);
+    // Keep recent jobs loaded even while the panel is closed. Fetching only
+    // active jobs made completed/failed rows disappear after refresh.
+    poll('');
+    const timer = window.setInterval(() => poll(''), 3000);
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [open]);
 
@@ -68,7 +69,8 @@ export default function JobListPanel() {
         }
         pollUrl = `/api/ai-clip/jobs/${pythonJobId}?job_id=${encodeURIComponent(durableId)}`;
       } else {
-        forgetActiveJob(workspaceId, durableId, window.localStorage);
+        // Other job kinds are advanced by their server workers. Keep them in
+        // the durable store until /api/jobs reports a terminal status.
         return;
       }
 

@@ -6,6 +6,7 @@ import { resolveTenantContext } from '../../../../../src/services/tenantContext.
 import { persistUploadedAsset } from '../../../../../src/services/uploadedAssetService.js';
 import { getPool } from '../../../../../src/db/pool.js';
 import { updateJobStatus } from '../../../../../src/services/jobService.js';
+import { isTransientPollFailure } from '../../../../../src/lib/jobs/jobStatus.js';
 
 async function markJobStatus({ workspaceId, jobId, status, result, error }) {
   if (!jobId) return;
@@ -70,13 +71,17 @@ export async function GET(request, { params }) {
     });
     return NextResponse.json({ status: 'completed', id, url: asset.url });
   } catch (error) {
-    await markJobStatus({
-      workspaceId: tenant.workspace.id,
-      jobId,
-      status: 'failed',
-      error: { message: error?.message || 'OpenRouter request failed' },
-    });
     const statusCode = Number.isInteger(error?.status) ? error.status : 502;
-    return NextResponse.json({ error: error?.message || 'OpenRouter request failed', code: error?.code }, { status: statusCode });
+    // Network/rate-limit/provider outages do not prove the remote job failed.
+    // Keep it running so a refresh can reattach and poll again later.
+    if (!isTransientPollFailure(statusCode)) {
+      await markJobStatus({
+        workspaceId: tenant.workspace.id,
+        jobId,
+        status: 'failed',
+        error: { message: error?.message || 'OpenRouter request failed' },
+      });
+    }
+    return NextResponse.json({ error: error?.message || 'OpenRouter request failed', code: error?.code, retryable: isTransientPollFailure(statusCode) }, { status: statusCode });
   }
 }

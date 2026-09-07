@@ -8,10 +8,13 @@
 // model, so you paid for a generation that ignored your reference. Every
 // consumer must resolve through here so that can't drift again.
 
+import { withBasePath } from './base-path'
+
 type NodeData = Record<string, unknown> | undefined | null
 
 function str(v: unknown): string | undefined {
-  return typeof v === 'string' && v.trim() !== '' ? v : undefined
+  if (typeof v !== 'string' || v.trim() === '') return undefined
+  return v.startsWith('/api/') ? withBasePath(v) : v
 }
 
 /**

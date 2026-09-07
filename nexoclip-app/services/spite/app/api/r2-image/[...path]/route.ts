@@ -99,7 +99,7 @@ export async function GET(
       'Cache-Control': 'public, max-age=3600',
       'Access-Control-Allow-Origin': '*',
     }
-    return new NextResponse(buffer, { headers })
+    return new NextResponse(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer, { headers })
   } catch (error) {
     console.error('[R2 Image Proxy] Error:', error)
     // Generic error to client (no leaking S3 error details, no caching

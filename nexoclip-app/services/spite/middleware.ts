@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { checkRequiredEnv } from '@/lib/env-check'
 import { SESSION_COOKIE_NAME, isSessionValid } from '@/lib/sessions'
+import { withBasePath } from '@/lib/base-path'
 
 // Paths that must stay reachable without a login cookie.
 // - /login: the login page itself
@@ -20,6 +21,10 @@ const PUBLIC_PATHS = [
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+  const basePath = (process.env.NEXT_PUBLIC_BASE_PATH || '').replace(/\/$/, '')
+  const appPath = basePath && (pathname === basePath || pathname.startsWith(`${basePath}/`))
+    ? pathname.slice(basePath.length) || '/'
+    : pathname
 
   // First gate: refuse to boot if required env vars are missing. Sends
   // every request to /setup until the install is configured, so a
@@ -28,16 +33,16 @@ export async function middleware(request: NextRequest) {
   // requests, are allowed through so the page can render.
   const envCheck = checkRequiredEnv()
   if (!envCheck.ok) {
-    if (pathname === '/setup' || pathname.startsWith('/_next/')) {
+    if (appPath === '/setup' || appPath.startsWith('/_next/')) {
       return NextResponse.next()
     }
-    if (pathname.startsWith('/api/')) {
+    if (appPath.startsWith('/api/')) {
       return NextResponse.json(
         { error: 'Setup required', missing: envCheck.missing },
         { status: 503 },
       )
     }
-    return NextResponse.redirect(new URL('/setup', request.url))
+    return NextResponse.redirect(new URL(withBasePath('/setup', basePath), request.url))
   }
 
   // Second gate: validate the session token against the sessions table.
@@ -48,13 +53,13 @@ export async function middleware(request: NextRequest) {
   const isAuthenticated = await isSessionValid(token)
 
   const isPublic = PUBLIC_PATHS.some(
-    (p) => pathname === p || pathname.startsWith(p + '/'),
+    (p) => appPath === p || appPath.startsWith(p + '/'),
   )
 
   if (isAuthenticated) {
     // Already logged in: bounce away from the login/setup pages.
-    if (pathname === '/login' || pathname === '/setup') {
-      return NextResponse.redirect(new URL('/', request.url))
+    if (appPath === '/login' || appPath === '/setup') {
+      return NextResponse.redirect(new URL(withBasePath('/', basePath), request.url))
     }
     return NextResponse.next()
   }
@@ -65,16 +70,17 @@ export async function middleware(request: NextRequest) {
   }
 
   // Block API routes with a clear 401 (no HTML redirect for data calls).
-  if (pathname.startsWith('/api/')) {
+  if (appPath.startsWith('/api/')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   // Block pages by sending them to the login screen.
-  return NextResponse.redirect(new URL('/login', request.url))
+  return NextResponse.redirect(new URL(withBasePath('/login', basePath), request.url))
 }
 
 export const config = {
   matcher: [
+    '/',
     // Run on everything except Next.js internals and static asset files.
     // The image-extension exemption is anchored to `$` — paths like
     // `/api/r2-image/foo.png/extra` still go through middleware because

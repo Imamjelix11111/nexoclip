@@ -58,9 +58,13 @@ export async function POST(request: Request) {
   // attempt log so the rate limit doesn't punish a slow typist.
   const token = await createSession()
   const cookieStore = await cookies()
+  const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim()
+  const isHttps = forwardedProto ? forwardedProto === 'https' : new URL(request.url).protocol === 'https:'
   cookieStore.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    // NODE_ENV is production inside Docker even when served over local HTTP.
+    // A Secure cookie is silently discarded by browsers on localhost HTTP.
+    secure: isHttps,
     sameSite: 'lax',
     maxAge: SESSION_DURATION_DAYS * 24 * 60 * 60,
     path: '/',

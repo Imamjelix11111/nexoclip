@@ -2,6 +2,7 @@ import { PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { getR2Client } from '@/lib/r2-upload'
 import { getDb } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { withBasePath } from '@/lib/base-path'
 
 export async function POST(
   req: NextRequest,
@@ -36,7 +37,7 @@ export async function POST(
 
     // Route reads through the authenticated proxy. The raw
     // r2.cloudflarestorage.com URL would bypass the HMAC gate entirely.
-    const url = `/api/r2-image/${filename}`
+    const url = withBasePath(`/api/r2-image/${filename}`)
 
     // Save metadata to database
     const result = await sql`

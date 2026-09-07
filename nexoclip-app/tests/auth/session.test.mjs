@@ -35,3 +35,13 @@ test('returns secure session cookie options in production', () => {
 
   process.env.NODE_ENV = previous;
 });
+
+test('allows session cookies over local HTTP even in a production Docker build', () => {
+  const previous = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'production';
+
+  assert.equal(sessionCookieOptions({ url: 'http://localhost:3000/api/auth/login', headers: new Headers() }).secure, false);
+  assert.equal(sessionCookieOptions({ url: 'http://localhost:3000/api/auth/login', headers: new Headers({ 'x-forwarded-proto': 'https' }) }).secure, true);
+
+  process.env.NODE_ENV = previous;
+});

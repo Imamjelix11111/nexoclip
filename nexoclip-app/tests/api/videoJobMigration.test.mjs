@@ -47,6 +47,19 @@ test('extracts a video_url input_reference into referenceVideos for video-to-vid
   assert.deepEqual(submittedParams.referenceImages, []);
 });
 
+test('stores provider polling metadata and marks the durable video job running', async () => {
+  let createdParams; let updated;
+  const handler = createVideoSubmitHandler({
+    resolveTenant: async () => ({ workspace: { id: 'ws-1' } }),
+    submitVideo: async () => ({ id: 'provider-1', provider: 'byteplus', polling_url: 'p' }),
+    createJob: async ({ params }) => { createdParams = params; return { id: 'job-1' }; },
+    updateJobStatus: async (args) => { updated = args; },
+  });
+  await handler(postReq({ model: 'seedance', prompt: 'a cat' }));
+  assert.deepEqual(createdParams, { providerId: 'provider-1', provider: 'byteplus', model: 'seedance', prompt: 'a cat' });
+  assert.equal(updated.status, 'running');
+});
+
 test('missing model/prompt is 400 before any job is created', async () => {
   let calls = 0;
   const handler = createVideoSubmitHandler({

@@ -72,13 +72,14 @@ function extFromContentType(contentType: string, fallbackUrl: string): string {
 // server into a fetch primitive: point at 169.254.169.254 / localhost /
 // internal Vercel endpoints and have the response stored in R2.
 const REHOST_ALLOWED_HOSTS = [
-  /^([a-z0-9-]+\.)?fal\.media$/i,
-  /^([a-z0-9-]+\.)?fal\.ai$/i,
-  /^([a-z0-9-]+\.)?fal\.run$/i,
-  /^v[0-9]+\.fal\.media$/i,
+  /^(?:[a-z0-9-]+\.)*googleusercontent\.com$/i,
+  /^(?:[a-z0-9-]+\.)*openai\.com$/i,
+  /^(?:[a-z0-9-]+\.)*oaistatic\.com$/i,
+  /^(?:[a-z0-9-]+\.)*volces\.com$/i,
+  /^(?:[a-z0-9-]+\.)*bytepluses\.com$/i,
 ]
 
-function isAllowedRehostSource(rawUrl: string): boolean {
+export function isAllowedRehostSource(rawUrl: string): boolean {
   try {
     const u = new URL(rawUrl)
     if (u.protocol !== 'https:') return false
@@ -120,10 +121,16 @@ async function fetchAllowedFollowingRedirects(
 }
 
 export async function rehostToR2(sourceUrl: string): Promise<string> {
-  if (!isAllowedRehostSource(sourceUrl)) {
+  // Google returns generated images inline rather than from a remote host.
+  // This is already the final provider payload, so decode it locally instead
+  // of applying the remote-URL SSRF allowlist.
+  const isInlineImage = sourceUrl.startsWith('data:image/')
+  if (!isInlineImage && !isAllowedRehostSource(sourceUrl)) {
     throw new Error('rehostToR2: source host not allowed')
   }
-  const res = await fetchAllowedFollowingRedirects(sourceUrl)
+  const res = isInlineImage
+    ? await fetch(sourceUrl)
+    : await fetchAllowedFollowingRedirects(sourceUrl)
   if (!res.ok) {
     throw new Error(`Failed to fetch source for re-host: ${res.status}`)
   }
@@ -142,8 +149,10 @@ export async function rehostToR2(sourceUrl: string): Promise<string> {
     })
   )
 
-  // Served privately through the existing R2 proxy route.
-  return `/api/r2-image/${key}`
+  // Served privately through the existing R2 proxy route. Include the
+  // configured base path so browser media requests stay inside /spite.
+  const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? '').replace(/\/$/, '')
+  return `${basePath}/api/r2-image/${key}`
 }
 
 // Signed, time-limited access to the /api/r2-image proxy so an external
@@ -245,6 +254,31 @@ export async function recordAsset(
   `
 
   return id
+}
+
+export async function attachGeneratedMediaToNode(
+  projectId: string | undefined,
+  nodeId: string | undefined,
+  url: string,
+) {
+  if (!projectId || !nodeId) return
+  const sql = getDb()
+  await sql`
+    UPDATE canvas_nodes
+    SET data = (
+      COALESCE(data, '{}'::jsonb)
+      - 'pendingRequestId'
+      - 'pendingProvider'
+      - 'pendingProviderModel'
+      - 'pendingFalEndpoint'
+      - 'pendingStartedAt'
+    ) || jsonb_build_object(
+      'outputUrl', ${url}::text,
+      'status', 'completed'::text,
+      'error', NULL::text
+    )
+    WHERE projectId = ${projectId}::text AND nodeId = ${nodeId}
+  `
 }
 
 export async function markAssetUsedInCanvas(assetId: string) {
