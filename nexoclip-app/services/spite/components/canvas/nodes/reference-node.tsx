@@ -8,6 +8,7 @@ import { NodeActionToolbar } from './node-toolbar'
 import { ShotSelector } from './shot-selector'
 import { useSceneShots } from './use-scene-shots'
 import { AddToFolderModal } from '../add-to-folder-modal'
+import { resolveNodeMediaUrl } from '@/lib/node-media'
 import { Lightbox } from '../lightbox'
 
 function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
@@ -15,7 +16,7 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
   const projectId = (params?.id as string) || ''
   const { setNodes } = useReactFlow()
   const [imageWidth, setImageWidth] = useState<number>((data.width as number) || 320)
-  const [thumbnail, setThumbnail] = useState<string | null>((data.thumbnail as string) || null)
+  const [thumbnail, setThumbnail] = useState<string | null>(resolveNodeMediaUrl({ thumbnail: data.thumbnail }) || null)
   const widthRef = useRef(imageWidth)
   const [folderModalOpen, setFolderModalOpen] = useState(false)
   const [folderType, setFolderType] = useState<'character' | 'prop' | 'location'>('character')
@@ -28,9 +29,8 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
 
   // Sync thumbnail from data prop
   useEffect(() => {
-    if (data.thumbnail && data.thumbnail !== thumbnail) {
-      setThumbnail(data.thumbnail as string)
-    }
+    const nextThumbnail = resolveNodeMediaUrl({ thumbnail: data.thumbnail }) || null
+    if (nextThumbnail && nextThumbnail !== thumbnail) setThumbnail(nextThumbnail)
   }, [data.thumbnail, thumbnail])
 
   // Reference nodes used to read/write `selectedShotId` while image and

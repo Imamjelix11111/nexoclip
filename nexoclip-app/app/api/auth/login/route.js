@@ -10,7 +10,7 @@ export async function POST(request) {
     const result = await loginUser(await request.json());
     const response = NextResponse.json({ user: result.user });
     response.cookies.set(SESSION_COOKIE, result.token, {
-      ...sessionCookieOptions(),
+      ...sessionCookieOptions(request),
       maxAge: Math.floor((result.expiresAt.getTime() - Date.now()) / 1000),
     });
     return response;

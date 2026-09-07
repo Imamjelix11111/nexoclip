@@ -2,13 +2,14 @@ import { createProviderRouter } from '../../../../src/providers/providerRouter.j
 import { SESSION_COOKIE } from '../../../../src/lib/auth/session.js';
 import { resolveTenantContext } from '../../../../src/services/tenantContext.js';
 import { getPool } from '../../../../src/db/pool.js';
-import { createJob as createJobService } from '../../../../src/services/jobService.js';
+import { createJob as createJobService, updateJobStatus as updateJobStatusService } from '../../../../src/services/jobService.js';
 
 export function createVideoSubmitHandler({
   resolveTenant = resolveTenantContext,
   env = process.env,
   submitVideo = (params) => createProviderRouter({ env }).submitVideo(params),
   createJob = createJobService,
+  updateJobStatus = updateJobStatusService,
   pool,
 } = {}) {
   return async function POST(request) {
@@ -49,6 +50,16 @@ export function createVideoSubmitHandler({
         kind: 'video',
         params: { providerId: result.id, provider: result.provider || 'openrouter', model: body.model, prompt: body.prompt },
       });
+      try {
+        await updateJobStatus({
+          get pool() { return pool ?? getPool(); },
+          workspaceId: tenant.workspace.id,
+          id: job.id,
+          status: 'running',
+        });
+      } catch {
+        // Job tracking is best-effort; submission already succeeded.
+      }
 
       return Response.json(
         { id: result.id, job_id: job.id, status: 'queued', polling_url: result.polling_url },

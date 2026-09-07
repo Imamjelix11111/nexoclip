@@ -1,5 +1,6 @@
 import { useCallback, useRef, useEffect, useState, useMemo } from 'react'
 import type { Node, Edge } from '@xyflow/react'
+import { withBasePath } from '@/lib/base-path'
 
 // Minimal shape of what we persist per scene. Shots are derived from
 // nodes by canvas-workspace's scenesWithShots memo and don't belong
@@ -63,7 +64,7 @@ export function useCanvasAutoSave(
     setSaveStatus('saving')
 
     try {
-      const response = await fetch(`/api/projects/${projectId}/canvas`, {
+      const response = await fetch(withBasePath(`/api/projects/${projectId}/canvas`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nodes, edges, scenes: persistedScenes, activeSceneId }),
@@ -146,7 +147,7 @@ export function useCanvasAutoSave(
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
       if (projectId && nodes.length > 0) {
         navigator.sendBeacon?.(
-          `/api/projects/${projectId}/canvas`,
+          withBasePath(`/api/projects/${projectId}/canvas`),
           JSON.stringify({ nodes, edges, scenes: persistedScenes, activeSceneId }),
         )
       }

@@ -31,6 +31,32 @@ test('a successful image generation creates a succeeded image job with the displ
   assert.equal(updated.result.outputUrl, 'https://assets/x.png');
 });
 
+test('creates the durable image job before generation starts', async () => {
+  const calls = [];
+  const handler = createImageHandler({
+    resolveTenant: async () => ({ workspace: { id: 'ws-1' } }),
+    generate: async () => { calls.push('generate'); return { outputs: [{ url: 'data:image/png;base64,AAAA', mimeType: 'image/png' }] }; },
+    persist: async () => ({ id: 'asset-1', url: 'https://assets/x.png' }),
+    createJob: async () => { calls.push('create'); return { id: 'job-1' }; },
+    updateJobStatus: async ({ status }) => { calls.push(status); },
+  });
+  await handler(postReq({ model: 'nano-banana', prompt: 'a cat' }));
+  assert.deepEqual(calls, ['create', 'running', 'generate', 'succeeded']);
+});
+
+test('records an image provider failure on the durable job', async () => {
+  const statuses = [];
+  const handler = createImageHandler({
+    resolveTenant: async () => ({ workspace: { id: 'ws-1' } }),
+    generate: async () => { throw Object.assign(new Error('provider rejected'), { status: 502 }); },
+    createJob: async () => ({ id: 'job-1' }),
+    updateJobStatus: async ({ status }) => { statuses.push(status); },
+  });
+  const res = await handler(postReq({ model: 'nano-banana', prompt: 'a cat' }));
+  assert.equal(res.status, 502);
+  assert.deepEqual(statuses, ['running', 'failed']);
+});
+
 test('missing model/prompt is 400 before any job is created', async () => {
   let calls = 0;
   const handler = createImageHandler({

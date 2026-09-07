@@ -1,5 +1,6 @@
 allowBuilds:
-  sharp: set this to true or false
+  esbuild: true
+  sharp: false
 onlyBuiltDependencies:
   - sharp
 verifyDepsBeforeRun: false

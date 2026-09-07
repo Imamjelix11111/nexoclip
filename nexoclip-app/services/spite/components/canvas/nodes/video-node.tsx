@@ -17,6 +17,7 @@ import { getVideoModels, getModelById, buildModelInput, type ModelConfig } from 
 import { compileMentionsForModel } from '@/lib/mention-prompt'
 import { estimateGenerationCost, formatUSD, COST_CONFIRM_THRESHOLD_USD } from '@/lib/fal-cost'
 import { resolveNodeMediaUrl } from '@/lib/node-media'
+import { completeGenerationNode } from '@/lib/generation-node'
 import { ConnectedInputs } from '../connected-inputs'
 import { captureVideoThumbnail } from '@/lib/video-thumbnail'
 
@@ -171,7 +172,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   const [status, setStatus] = useState<GenerationStatus>('idle')
   const [progress, setProgress] = useState<number | undefined>()
   const [error, setError] = useState<string | null>(null)
-  const [outputUrl, setOutputUrl] = useState<string | null>((data.outputUrl as string) || null)
+  const [outputUrl, setOutputUrl] = useState<string | null>(resolveNodeMediaUrl({ outputUrl: data.outputUrl }) || null)
   const [requestId, setRequestId] = useState<string | null>(null)
   // Timestamp of the most recent submission. Powers the relative-age
   // display in the right-side jobs panel.
@@ -179,7 +180,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     (data.submittedAt as number) || undefined,
   )
   // The exact fal queue path to poll, as told to us by the submit response.
-  const [falEndpoint, setFalEndpoint] = useState<string | null>(null)
+  const [providerModel, setProviderModel] = useState<string | null>(null)
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [isRenaming, setIsRenaming] = useState(false)
   const [labelDraft, setLabelDraft] = useState('')
@@ -366,7 +367,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   useEffect(() => {
     const pending = data.pendingRequestId as string | undefined
     if (pending && !outputUrl && !requestId) {
-      setFalEndpoint((data.pendingFalEndpoint as string) || null)
+      setProviderModel((data.pendingProviderModel as string) || null)
       setRequestId(pending)
       setStatus('in_queue')
       // Restore the start-of-generation timestamp (or assume now if the
@@ -383,7 +384,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   const clearPending = useCallback(() => {
     setNodes(ns => ns.map(n => n.id === id ? {
       ...n,
-      data: { ...n.data, pendingRequestId: undefined, pendingFalEndpoint: undefined, pendingStartedAt: undefined },
+      data: { ...n.data, pendingRequestId: undefined, pendingProvider: undefined, pendingProviderModel: undefined, pendingFalEndpoint: undefined, pendingStartedAt: undefined },
     } : n))
   }, [id, setNodes])
 
@@ -398,18 +399,18 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   const [resumeToken, setResumeToken] = useState(0)
 
   // Poll for status
-  const pollStatus = useCallback(async (reqId: string, falModelId: string) => {
+  const pollStatus = useCallback(async (reqId: string, providerId: string) => {
     if (stopRef.current) return true
     // Soft timeout check — bail BEFORE the next round-trip so we don't
     // continue hammering fal indefinitely. The request_id stays in node
     // data so the user can manually re-check.
     if (startTimeRef.current && Date.now() - startTimeRef.current > TIMEOUT_MS) {
       setStatus('failed')
-      setError("Generation took over 10 min — fal might still finish. Use 'Re-check result' to look again, or 'Cancel' to give up.")
+      setError("Generation took over 10 min — the provider might still finish. Use 'Re-check result' to look again, or 'Cancel' to give up.")
       return true
     }
     try {
-        const response = await fetch(withBasePath(`/api/generate/status?request_id=${reqId}&model=${encodeURIComponent(falModelId)}&projectId=${projectId}&prompt=${encodeURIComponent(prompt)}`))
+        const response = await fetch(withBasePath(`/api/generate/status?request_id=${reqId}&provider=${encodeURIComponent((data.pendingProvider as string) || currentModel?.provider || 'byteplus')}&model=${encodeURIComponent(providerId)}&projectId=${projectId}&nodeId=${encodeURIComponent(id)}&prompt=${encodeURIComponent(prompt)}`))
       const result = await response.json()
 
       // Cancelled while this request was in flight — drop the result.
@@ -423,13 +424,23 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       }
 
       if (result.status === 'COMPLETED') {
-        setStatus('completed')
         setProgress(undefined)
-        clearPending()
         // API returns { output: { videos: [...], url: '...' } }
         const videoUrl = result.output?.url || result.output?.videos?.[0] || result.result?.video?.url || result.result?.video_url
         if (videoUrl) {
-          setOutputUrl(videoUrl)
+          const completedUrl = withBasePath(videoUrl)
+          setOutputUrl(completedUrl)
+          setStatus('completed')
+          setRequestId(null)
+          setNodes(ns => ns.map(n => n.id === id ? {
+            ...n,
+            data: completeGenerationNode(n.data as Record<string, unknown>, completedUrl),
+          } : n))
+          clearPending()
+        } else {
+          setStatus('failed')
+          setError('Provider completed without a video URL')
+          clearPending()
         }
         return true
       }
@@ -463,11 +474,11 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   useEffect(() => {
     if (!requestId || !currentModel) return
     stopRef.current = false
-    const pollModel = falEndpoint || currentModel.falModel
+    const pollProvider = providerModel || currentModel.providerModel
 
     const poll = async () => {
       if (stopRef.current) return
-      const shouldStop = await pollStatus(requestId, pollModel)
+      const shouldStop = await pollStatus(requestId, pollProvider)
       if (!shouldStop && !stopRef.current) {
         pollingRef.current = setTimeout(poll, 2000)
       }
@@ -482,7 +493,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
         clearTimeout(pollingRef.current)
       }
     }
-  }, [requestId, currentModel, falEndpoint, pollStatus, resumeToken])
+  }, [requestId, currentModel, providerModel, pollStatus, resumeToken])
 
   // User-triggered re-check of a request that timed out (or that the
   // user wants to poll again for any reason). Fires a SINGLE direct
@@ -494,18 +505,18 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   // polling loop for another 10-minute window.
   const handleRecheck = async () => {
     if (!requestId || !currentModel) return
-    const pollModel = falEndpoint || currentModel.falModel
+    const pollProvider = providerModel || currentModel.providerModel
     const toastId = `recheck-${id}`
 
     startTimeRef.current = Date.now()
     setError(null)
     setStatus('in_queue')
 
-    toast.loading('Checking fal for this job…', { id: toastId })
+    toast.loading('Checking the provider for this job…', { id: toastId })
 
     try {
       const response = await fetch(
-        `/api/generate/status?request_id=${requestId}&model=${encodeURIComponent(pollModel)}&projectId=${projectId}&prompt=${encodeURIComponent(prompt)}`,
+        withBasePath(`/api/generate/status?request_id=${requestId}&provider=${encodeURIComponent((data.pendingProvider as string) || currentModel.provider)}&model=${encodeURIComponent(pollProvider)}&projectId=${projectId}&nodeId=${encodeURIComponent(id)}&prompt=${encodeURIComponent(prompt)}`),
       )
       const result = await response.json()
 
@@ -513,7 +524,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
         setStatus('failed')
         setError(result.error)
         clearPending()
-        toast.error(`fal: ${result.error}`, { id: toastId })
+        toast.error(`Provider: ${result.error}`, { id: toastId })
         return
       }
 
@@ -523,9 +534,22 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           result.output?.videos?.[0] ||
           result.result?.video?.url ||
           result.result?.video_url
-        if (videoUrl) setOutputUrl(videoUrl)
+        if (!videoUrl) {
+          setStatus('failed')
+          setError('Provider completed without a video URL')
+          clearPending()
+          toast.error('Provider completed without a video URL', { id: toastId })
+          return
+        }
+        const completedUrl = withBasePath(videoUrl)
+        setOutputUrl(completedUrl)
         setStatus('completed')
+        setRequestId(null)
         setProgress(undefined)
+        setNodes(ns => ns.map(n => n.id === id ? {
+          ...n,
+          data: completeGenerationNode(n.data as Record<string, unknown>, completedUrl),
+        } : n))
         clearPending()
         toast.success('Result is ready — saved to your library.', { id: toastId })
         return
@@ -535,7 +559,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
         setStatus('failed')
         setError(result.error || 'Generation failed')
         clearPending()
-        toast.error(`fal: ${result.error || 'Generation failed'}`, { id: toastId })
+        toast.error(`Provider: ${result.error || 'Generation failed'}`, { id: toastId })
         return
       }
 
@@ -761,6 +785,8 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       // Send RAW settings; the server builds the model-specific payload.
       const body = JSON.stringify({
         modelId,
+        projectId,
+        nodeId: id,
         prompt: submitPrompt,
         referenceImageUrl: connectedImageUrl,
         endImageUrl: connectedEndImageUrl,
@@ -830,8 +856,8 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
         const sessionExpired = status === 401 && /^unauthorized$/i.test(falMsg.trim())
         const hint =
           sessionExpired ? 'your session expired — reload the page and log in again (your API key is fine)'
-          : status === 401 ? 'fal rejected the key (invalid or rotated FAL_KEY)'
-          : status === 403 ? 'fal refused the request — usually an exhausted balance or billing hold. Check fal.ai billing.'
+          : status === 401 ? 'the provider rejected its key (invalid or rotated FAL_KEY)'
+          : status === 403 ? 'the provider refused the request — usually an exhausted balance or billing hold. Check provider billing.'
           : status === 503 ? 'generation disabled (GENERATION_DISABLED env var)'
           : `HTTP ${status || 'error'}`
         const reason = sessionExpired ? hint : falMsg ? `${hint} — ${falMsg}` : hint
@@ -847,9 +873,9 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       }
 
       // This node tracks the first job.
-      const firstEndpoint = ok[0].model || currentModel.falModel
+      const firstEndpoint = ok[0].model || currentModel.providerModel
       const startedAt = Date.now()
-      setFalEndpoint(firstEndpoint)
+      setProviderModel(firstEndpoint)
       setRequestId(ok[0].request_id)
       setStatus('in_queue')
       startTimeRef.current = startedAt
@@ -861,7 +887,8 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
         data: {
           ...n.data,
           pendingRequestId: ok[0].request_id,
-          pendingFalEndpoint: firstEndpoint,
+          pendingProvider: ok[0].provider || currentModel.provider,
+          pendingProviderModel: firstEndpoint,
           pendingStartedAt: startedAt,
         },
       } : n))
@@ -894,7 +921,8 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
               // the upstream every cycle and the text would grow.
               prompt,
               pendingRequestId: res.request_id,
-              pendingFalEndpoint: res.model || currentModel.falModel,
+              pendingProvider: res.provider || currentModel.provider,
+              pendingProviderModel: res.model || currentModel.providerModel,
               pendingStartedAt: stamp,
             },
           }
@@ -942,7 +970,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     if (costEstimate.isKnown && costEstimate.total >= COST_CONFIRM_THRESHOLD_USD) {
       const msg =
         `You're about to submit ${numVideos} ${currentModel?.name || 'video'} generation${numVideos === 1 ? '' : 's'} ` +
-        `to fal.ai.\n\n` +
+        `to the provider.\n\n` +
         `Estimated cost: ~${formatUSD(costEstimate.total)} (${formatUSD(costEstimate.perUnit)} each).\n` +
         `Real cost depends on resolution, duration and model load.\n\n` +
         `Press OK to confirm and spend this, or Cancel to back out.`
@@ -960,7 +988,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     setStatus('cancelled')
     toast.warning('Generation cancelled', { description: currentModel.name })
     const reqId = requestId
-    const cancelModel = falEndpoint || currentModel.falModel
+    const cancelModel = providerModel || currentModel.providerModel
     setRequestId(null)
     clearPending()
 
@@ -968,7 +996,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       await fetch(withBasePath('/api/generate/cancel'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ request_id: reqId, model: cancelModel }),
+        body: JSON.stringify({ request_id: reqId, provider: currentModel.provider, model: cancelModel }),
       })
     } catch (err) {
       console.error('Cancel error:', err)

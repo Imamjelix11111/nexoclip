@@ -28,7 +28,25 @@ export function createImageHandler({
     } catch (error) {
       return Response.json({ error: error.message }, { status: error.message === 'Authentication required' ? 401 : 403 });
     }
+    let job = null;
     try {
+      try {
+        job = await createJob({
+          get pool() { return pool ?? getPool(); },
+          workspaceId: tenant.workspace.id,
+          kind: 'image',
+          params: { model: body.model, prompt: body.prompt },
+        });
+        await updateJobStatus({
+          get pool() { return pool ?? getPool(); },
+          workspaceId: tenant.workspace.id,
+          id: job.id,
+          status: 'running',
+        });
+      } catch {
+        // Job tracking is best-effort; generation can still proceed.
+      }
+
       const result = await generate({
         model: body.model,
         prompt: body.prompt,
@@ -43,17 +61,8 @@ export function createImageHandler({
         mimeType: output.mimeType,
       })));
 
-      let job = null;
       try {
-        job = await createJob({
-          // Lazily resolved: only touched by consumers that actually read it, so
-          // an injected createJob (tests) never forces a real DB pool to exist.
-          get pool() { return pool ?? getPool(); },
-          workspaceId: tenant.workspace.id,
-          kind: 'image',
-          params: { model: body.model, prompt: body.prompt },
-        });
-        await updateJobStatus({
+        if (job) await updateJobStatus({
           get pool() { return pool ?? getPool(); },
           workspaceId: tenant.workspace.id,
           id: job.id,
@@ -71,6 +80,17 @@ export function createImageHandler({
 
       return Response.json({ ...result, outputs, job_id: job?.id ?? null });
     } catch (error) {
+      if (job) {
+        try {
+          await updateJobStatus({
+            get pool() { return pool ?? getPool(); },
+            workspaceId: tenant.workspace.id,
+            id: job.id,
+            status: 'failed',
+            error: { message: error?.message || 'Image generation failed' },
+          });
+        } catch { /* job tracking is best-effort */ }
+      }
       const status = Number.isInteger(error?.status) ? error.status : 502;
       return Response.json({ error: error?.message || 'Image generation failed', code: error?.code, model: body?.model, provider: error?.provider }, { status });
     }

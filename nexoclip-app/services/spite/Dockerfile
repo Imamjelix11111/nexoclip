@@ -9,7 +9,9 @@ RUN pnpm install --frozen-lockfile
 
 FROM deps AS builder
 ARG NEXT_PUBLIC_BASE_PATH=/spite
+ARG NEXT_PUBLIC_STUDIO_URL=http://localhost:3000/studio
 ENV NEXT_PUBLIC_BASE_PATH=$NEXT_PUBLIC_BASE_PATH
+ENV NEXT_PUBLIC_STUDIO_URL=$NEXT_PUBLIC_STUDIO_URL
 COPY . .
 RUN pnpm build
 

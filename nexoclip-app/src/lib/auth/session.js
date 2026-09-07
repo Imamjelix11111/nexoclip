@@ -10,10 +10,12 @@ export function hashSessionToken(token) {
   return createHash('sha256').update(token).digest();
 }
 
-export function sessionCookieOptions() {
+export function sessionCookieOptions(request) {
+  const forwardedProto = request?.headers?.get?.('x-forwarded-proto')?.split(',')[0]?.trim();
+  const protocol = request?.url ? new URL(request.url).protocol : null;
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: forwardedProto ? forwardedProto === 'https' : protocol ? protocol === 'https:' : process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
   };

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createSessionToken } from '../../../../src/lib/auth/session.js';
+import { createSessionToken, sessionCookieOptions } from '../../../../src/lib/auth/session.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -31,10 +31,7 @@ export async function GET(request) {
   const response = NextResponse.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
   // CSRF guard — verified in the callback. Lax so it survives Google's redirect back.
   response.cookies.set('g_oauth_state', state, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
+    ...sessionCookieOptions(request),
     maxAge: 600,
   });
   return response;

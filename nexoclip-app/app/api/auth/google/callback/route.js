@@ -53,7 +53,7 @@ export async function GET(request) {
     const { token, expiresAt } = await loginWithGoogle({ email, displayName });
 
     const response = NextResponse.redirect(new URL('/studio', url.origin));
-    response.cookies.set(SESSION_COOKIE, token, { ...sessionCookieOptions(), expires: new Date(expiresAt) });
+    response.cookies.set(SESSION_COOKIE, token, { ...sessionCookieOptions(request), expires: new Date(expiresAt) });
     response.cookies.set('g_oauth_state', '', { path: '/', maxAge: 0 });
     return response;
   } catch {
