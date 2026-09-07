@@ -38,3 +38,31 @@ test('Docker context excludes secrets', () => {
   assert.match(ignore, /^!\.env\.example$/m);
   assert.match(ignore, /^!\.env\.production\.example$/m);
 });
+
+test('deploy script validates the host and runs migrations before startup', () => {
+  const script = read('scripts/deploy.sh');
+  assert.match(script, /^#!\/usr\/bin\/env bash\nset -Eeuo pipefail/);
+  assert.match(script, /uname -m/);
+  assert.match(script, /x86_64\/AMD64/);
+  assert.match(script, /stat -c '%a' \.env\.production/);
+  assert.match(script, /config --quiet/);
+  assert.ok(script.indexOf('"${compose[@]}" build') < script.indexOf('run --rm nexoclip-migrate'));
+  assert.ok(script.indexOf('run --rm nexoclip-migrate') < script.indexOf('up -d --remove-orphans'));
+  assert.ok(script.indexOf('run --rm scheduler-migrate') < script.indexOf('up -d --remove-orphans'));
+  assert.match(script, /"\$\{compose\[@\]\}" ps/);
+});
+
+test('Compose protects stateful services and separates databases', () => {
+  const compose = read('docker-compose.prod.yml');
+  assert.match(serviceBlock(compose, 'caddy', 'redis'), /\$\{HTTP_PORT:-80\}:80/);
+  assert.match(serviceBlock(compose, 'redis', 'nexoclip-migrate'), /--requirepass/);
+  assert.match(serviceBlock(compose, 'redis', 'nexoclip-migrate'), /redis-cli -a/);
+  assert.match(serviceBlock(compose, 'nexoclip-migrate', 'scheduler-migrate'), /DATABASE_URL_NEXOCLIP/);
+  assert.match(serviceBlock(compose, 'scheduler-migrate', 'vimax'), /DATABASE_URL_SCHEDULER/);
+  assert.match(serviceBlock(compose, 'spite', 'scheduler'), /DATABASE_URL_SPITE/);
+  assert.match(serviceBlock(compose, 'ai-clip', 'nexoclip'), /\/healthz/);
+  assert.match(serviceBlock(compose, 'vimax', 'ai-clip'), /\/healthz/);
+  for (const volume of ['redis-data', 'vimax-tenants', 'ai-clip-output', 'caddy-data', 'caddy-config']) {
+    assert.match(compose, new RegExp(`^  ${volume}:`, 'm'));
+  }
+});

@@ -1,0 +1,214 @@
+name: nexoclip
+
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    platform: linux/amd64
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      nexoclip: { condition: service_healthy }
+      spite: { condition: service_healthy }
+      scheduler: { condition: service_healthy }
+      ai-clip: { condition: service_healthy }
+
+  redis:
+    image: redis:7.4-bookworm
+    platform: linux/amd64
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+  nexoclip-migrate:
+    platform: linux/amd64
+    build:
+      context: .
+      target: migrate
+    restart: "no"
+    environment:
+      DATABASE_URL: ${DATABASE_URL_NEXOCLIP}
+
+  scheduler-migrate:
+    platform: linux/amd64
+    build:
+      context: services/free-ai-social-media-scheduler
+      target: migrate
+    restart: "no"
+    environment:
+      DATABASE_URL: ${DATABASE_URL_SCHEDULER}
+      DIRECT_URL: ${DIRECT_URL_SCHEDULER}
+
+  vimax:
+    platform: linux/amd64
+    build:
+      context: services/vimax
+    restart: unless-stopped
+    environment:
+      VIMAX_RUNTIME_TOKEN: ${VIMAX_RUNTIME_TOKEN}
+      VIMAX_TENANTS_ROOT: /app/.tenants
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      BYTEPLUS_API_KEY: ${BYTEPLUS_API_KEY}
+      BYTEPLUS_BASE_URL: ${BYTEPLUS_BASE_URL}
+    volumes:
+      - vimax-tenants:/app/.tenants
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4173/healthz', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
+  ai-clip:
+    platform: linux/amd64
+    build:
+      context: services/ai-clip
+    restart: unless-stopped
+    environment:
+      AI_CLIP_RUNTIME_TOKEN: ${AI_CLIP_RUNTIME_TOKEN}
+      LOCAL_WHISPER_DEVICE: cpu
+      LOCAL_OUTPUT_DIR: /data/output
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
+      R2_BUCKET: ${R2_BUCKET_NAME}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL}
+    volumes:
+      - ai-clip-output:/data/output
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4175/healthz', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
+  nexoclip:
+    platform: linux/amd64
+    build:
+      context: .
+      target: web
+      args:
+        NEXT_PUBLIC_SPITE_URL: /spite
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL_NEXOCLIP}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      LOCAL_OBJECT_STORAGE_SECRET: ${LOCAL_OBJECT_STORAGE_SECRET}
+      MUAPI_API_KEY: ${MUAPI_API_KEY}
+      MUAPI_BASE_URL: ${MUAPI_BASE_URL}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      BYTEPLUS_API_KEY: ${BYTEPLUS_API_KEY}
+      BYTEPLUS_BASE_URL: ${BYTEPLUS_BASE_URL}
+      AI_CLIP_RUNTIME_URL: http://ai-clip:4175
+      AI_CLIP_RUNTIME_TOKEN: ${AI_CLIP_RUNTIME_TOKEN}
+      VIMAX_RUNTIME_URL: http://vimax:4173
+      VIMAX_RUNTIME_TOKEN: ${VIMAX_RUNTIME_TOKEN}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL}
+    depends_on:
+      redis: { condition: service_healthy }
+      nexoclip-migrate: { condition: service_completed_successfully }
+      ai-clip: { condition: service_healthy }
+      vimax: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>{if(r.status>=500)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
+  spite:
+    platform: linux/amd64
+    build:
+      context: services/spite
+      args:
+        NEXT_PUBLIC_BASE_PATH: /spite
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL_SPITE}
+      APP_PASSWORD: ${SPITE_APP_PASSWORD}
+      CRON_SECRET: ${SPITE_CRON_SECRET}
+      FAL_KEY: ${FAL_KEY}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
+      R2_BUCKET_NAME: ${R2_BUCKET_NAME}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL}
+      R2_PROXY_SIGNING_SECRET: ${R2_PROXY_SIGNING_SECRET}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3005/spite/login').then(r=>{if(r.status>=500)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
+  scheduler:
+    platform: linux/amd64
+    build:
+      context: services/free-ai-social-media-scheduler
+      target: web
+      args:
+        NEXT_PUBLIC_BASE_PATH: /scheduler
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL_SCHEDULER}
+      DIRECT_URL: ${DIRECT_URL_SCHEDULER}
+      NEXTAUTH_URL: ${SCHEDULER_NEXTAUTH_URL}
+      NEXTAUTH_SECRET: ${SCHEDULER_NEXTAUTH_SECRET}
+      GOOGLE_CLIENT_ID: ${SCHEDULER_GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${SCHEDULER_GOOGLE_CLIENT_SECRET}
+      MUAPIAPP_API_KEY: ${SCHEDULER_MUAPIAPP_API_KEY}
+      WEBHOOK_URL: ${SCHEDULER_WEBHOOK_URL}
+      STRIPE_SECRET_KEY: ${SCHEDULER_STRIPE_SECRET_KEY}
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${SCHEDULER_STRIPE_PUBLISHABLE_KEY}
+      STRIPE_WEBHOOK_SECRET: ${SCHEDULER_STRIPE_WEBHOOK_SECRET}
+    depends_on:
+      scheduler-migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3006/scheduler/login').then(r=>{if(r.status>=500)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
+  storyboard-worker:
+    platform: linux/amd64
+    build:
+      context: .
+      target: worker
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL_NEXOCLIP}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      VIMAX_RUNTIME_URL: http://vimax:4173
+      VIMAX_RUNTIME_TOKEN: ${VIMAX_RUNTIME_TOKEN}
+      VIMAX_PROGRESS_TOKEN: ${VIMAX_PROGRESS_TOKEN}
+      VIMAX_PROGRESS_CALLBACK_URL: http://storyboard-worker:4180/internal/progress
+      STORYBOARD_WORKER_CONCURRENCY: ${STORYBOARD_WORKER_CONCURRENCY:-1}
+    depends_on:
+      redis: { condition: service_healthy }
+      vimax: { condition: service_healthy }
+      nexoclip-migrate: { condition: service_completed_successfully }
+
+volumes:
+  redis-data:
+  vimax-tenants:
+  ai-clip-output:
+  caddy-data:
+  caddy-config:
