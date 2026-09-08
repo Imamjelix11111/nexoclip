@@ -2,9 +2,11 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  createLocalPresenceSnapshot,
   createPresenceController,
   getOrCreateParticipantHint,
   getPresenceColor,
+  presenceSnapshotNeedsPublish,
   projectRemotePresence,
 } from './presence'
 
@@ -115,6 +117,45 @@ test('getPresenceColor is deterministic for the same participant and varied acro
   assert.notDeepEqual(alphaFirst, beta)
   assert.match(alphaFirst.cursor, /^hsl\(/)
   assert.match(alphaFirst.selection, /^color-mix\(/)
+})
+
+test('createLocalPresenceSnapshot derives editing from the active text editor node', () => {
+  const snapshot = createLocalPresenceSnapshot(['node-1', 'node-1'], {
+    tagName: 'TEXTAREA',
+    closest: (selector: string) => selector === '.react-flow__node'
+      ? { getAttribute: (name: string) => (name === 'data-id' ? 'node-9' : null) }
+      : null,
+  })
+
+  assert.deepEqual(snapshot, {
+    selection: { nodeIds: ['node-1'] },
+    editing: { nodeId: 'node-9' },
+  })
+})
+
+test('presenceSnapshotNeedsPublish detects recreated awareness missing selection and editing', () => {
+  const snapshot = createLocalPresenceSnapshot(['node-1'], {
+    tagName: 'INPUT',
+    closest: (selector: string) => selector === '.react-flow__node'
+      ? { getAttribute: (name: string) => (name === 'data-id' ? 'node-3' : null) }
+      : null,
+  })
+
+  assert.equal(
+    presenceSnapshotNeedsPublish({ participantId: 'participant-alpha' }, snapshot),
+    true,
+  )
+  assert.equal(
+    presenceSnapshotNeedsPublish(
+      {
+        participantId: 'participant-alpha',
+        selection: { nodeIds: ['node-1'] },
+        editing: { nodeId: 'node-3' },
+      },
+      snapshot,
+    ),
+    false,
+  )
 })
 
 test('createPresenceController throttles cursor writes and flushes the latest point', () => {

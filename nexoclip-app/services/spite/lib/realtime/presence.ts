@@ -28,6 +28,19 @@ export type PresenceLock = {
   expiresAt?: number
 }
 
+export type LocalPresenceSnapshot = {
+  selection: PresenceSelection
+  editing: PresenceEditing | null
+}
+
+type PresenceElementLike = {
+  tagName?: string
+  isContentEditable?: boolean
+  closest?: (selector: string) => {
+    getAttribute?: (name: string) => string | null | undefined
+  } | null
+}
+
 export type PresenceColors = {
   cursor: string
   cursorMuted: string
@@ -131,6 +144,38 @@ export function projectRemotePresence(
 
 export function createPresenceController(options: PresenceControllerOptions) {
   return new PresenceController(options)
+}
+
+export function createLocalPresenceSnapshot(
+  nodeIds: string[],
+  activeElement: unknown,
+): LocalPresenceSnapshot {
+  return {
+    selection: {
+      nodeIds: uniqueNodeIds(nodeIds),
+    },
+    editing: readEditingNodeIdFromTarget(activeElement),
+  }
+}
+
+export function presenceSnapshotNeedsPublish(
+  localState: Record<string, unknown> | null | undefined,
+  snapshot: LocalPresenceSnapshot,
+): boolean {
+  const selection = readSelection(localState?.selection)
+  const editing = readEditing(localState?.editing) ?? null
+
+  if (selection.nodeIds.length !== snapshot.selection.nodeIds.length) {
+    return true
+  }
+
+  for (let index = 0; index < selection.nodeIds.length; index += 1) {
+    if (selection.nodeIds[index] !== snapshot.selection.nodeIds[index]) {
+      return true
+    }
+  }
+
+  return (editing?.nodeId ?? null) !== (snapshot.editing?.nodeId ?? null)
 }
 
 class PresenceController {
@@ -317,6 +362,22 @@ function readPoint(value: unknown): PresencePoint | undefined {
   }
 
   return { x, y }
+}
+
+function readEditingNodeIdFromTarget(target: unknown): PresenceEditing | null {
+  const el = target as PresenceElementLike | null
+  const tagName = el?.tagName?.toUpperCase()
+  const isTextTarget = tagName === 'INPUT' || tagName === 'TEXTAREA' || el?.isContentEditable || !!el?.closest?.('[contenteditable="true"]')
+  if (!isTextTarget) {
+    return null
+  }
+
+  const nodeId = el?.closest?.('.react-flow__node')?.getAttribute?.('data-id') ?? null
+  if (typeof nodeId !== 'string' || nodeId.length === 0) {
+    return null
+  }
+
+  return { nodeId }
 }
 
 function readSelection(value: unknown): PresenceSelection {

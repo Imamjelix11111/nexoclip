@@ -1,14 +1,12 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import type { Node } from '@xyflow/react'
 
 import {
-  projectRemotePresence,
   type PresencePoint,
   type RemotePresencePeer,
 } from '@/lib/realtime/presence'
-import type { RealtimeAwarenessPeer } from '@/hooks/use-realtime-canvas'
 
 type ViewportLike = {
   x: number
@@ -17,7 +15,7 @@ type ViewportLike = {
 }
 
 type RealtimePresenceProps = {
-  peers: RealtimeAwarenessPeer[]
+  peers: RemotePresencePeer[]
   nodes: Node[]
   viewport: ViewportLike
 }
@@ -26,23 +24,6 @@ const FALLBACK_NODE_WIDTH = 240
 const FALLBACK_NODE_HEIGHT = 120
 
 export function RealtimePresenceOverlay({ peers, nodes, viewport }: RealtimePresenceProps) {
-  const [now, setNow] = useState(() => Date.now())
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setNow(Date.now())
-    }, 1_000)
-
-    return () => {
-      window.clearInterval(timer)
-    }
-  }, [])
-
-  const presencePeers = useMemo(
-    () => projectRemotePresence(peers, { now }),
-    [peers, now],
-  )
-
   const nodeById = useMemo(
     () => new Map(nodes.map((node) => [node.id, node])),
     [nodes],
@@ -50,7 +31,7 @@ export function RealtimePresenceOverlay({ peers, nodes, viewport }: RealtimePres
 
   return (
     <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden">
-      {presencePeers.map((peer) => (
+      {peers.map((peer) => (
         <PresencePeerLayer key={peer.clientId} peer={peer} nodeById={nodeById} viewport={viewport} />
       ))}
     </div>

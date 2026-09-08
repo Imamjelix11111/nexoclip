@@ -32,8 +32,10 @@ import '@xyflow/react/dist/style.css'
 import { useCanvasAutoSave } from '@/hooks/use-canvas-auto-save'
 import { useRealtimeCanvas } from '@/hooks/use-realtime-canvas'
 import {
+  createLocalPresenceSnapshot,
   createPresenceController,
   getOrCreateParticipantHint,
+  presenceSnapshotNeedsPublish,
   projectRemotePresence,
 } from '@/lib/realtime/presence'
 import { CanvasToolbar } from './canvas-toolbar'
@@ -266,26 +268,13 @@ function StickerGhost({ containerRef }: { containerRef: React.RefObject<HTMLDivE
   )
 }
 
-function isTextEditingTarget(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null
-  if (!el || !el.tagName) return false
-  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return true
-  if (el.isContentEditable) return true
-  if (el.closest?.('[contenteditable="true"]')) return true
-  return false
-}
-
-function findClosestFlowNodeId(target: EventTarget | null): string | null {
-  const el = target as HTMLElement | null
-  return el?.closest?.('.react-flow__node')?.getAttribute('data-id') ?? null
-}
-
 function CanvasInner({ projectId }: { projectId: string }) {
   const [projectName, setProjectName] = useState('Untitled Project')
   const [nodes, setNodes, onNodesChange] = useNodesState([] as Node[])
   const [edges, setEdges, onEdgesChange] = useEdgesState([] as Edge[])
   const { peers: realtimePeers, awareness } = useRealtimeCanvas(projectId)
   const presenceControllerRef = useRef<ReturnType<typeof createPresenceController> | null>(null)
+  const selectedSceneNodeIdsRef = useRef<string[]>([])
   const [presenceNow, setPresenceNow] = useState(() => Date.now())
   // Connector-animation preference (Settings → Performance). Read on mount and
   // kept live via the broadcast event so toggling it reflects without reload.
@@ -357,8 +346,27 @@ function CanvasInner({ projectId }: { projectId: string }) {
       participantId: getOrCreateParticipantHint(),
     })
 
+    const syncPresenceSnapshot = () => {
+      const snapshot = createLocalPresenceSnapshot(
+        selectedSceneNodeIdsRef.current,
+        document.activeElement,
+      )
+      if (!presenceSnapshotNeedsPublish(awareness.getLocalState?.(), snapshot)) {
+        return
+      }
+
+      controller.publishSelection(snapshot.selection.nodeIds)
+      controller.publishEditing(snapshot.editing?.nodeId ?? null)
+    }
+
     presenceControllerRef.current = controller
+    awareness.on?.('change', syncPresenceSnapshot)
+    awareness.on?.('update', syncPresenceSnapshot)
+    syncPresenceSnapshot()
+
     return () => {
+      awareness.off?.('change', syncPresenceSnapshot)
+      awareness.off?.('update', syncPresenceSnapshot)
       controller.publishCursor(null)
       controller.publishEditing(null)
       controller.publishSelection([])
@@ -1071,15 +1079,19 @@ function CanvasInner({ projectId }: { projectId: string }) {
     () => projectRemotePresence(realtimePeers, { now: presenceNow }),
     [realtimePeers, presenceNow],
   )
-  const lockedNodeIds = useMemo(() => {
+  const lockedNodeMembershipKey = useMemo(() => {
     const locks = new Set<string>()
     for (const peer of remotePresence) {
       if (peer.lock?.nodeId) {
         locks.add(peer.lock.nodeId)
       }
     }
-    return locks
+    return Array.from(locks).sort().join('\u0000')
   }, [remotePresence])
+  const lockedNodeIds = useMemo(
+    () => new Set(lockedNodeMembershipKey ? lockedNodeMembershipKey.split('\u0000') : []),
+    [lockedNodeMembershipKey],
+  )
 
   const onNodeDrag = useCallback((_event: any, node: Node) => {
     const others = (nodes as Node[]).filter(n => n.id !== node.id)
@@ -1140,6 +1152,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
     () => sceneNodes.filter(node => node.selected).map(node => node.id),
     [sceneNodes],
   )
+  selectedSceneNodeIdsRef.current = selectedSceneNodeIds
 
   useEffect(() => {
     presenceControllerRef.current?.publishSelection(selectedSceneNodeIds)
@@ -1147,12 +1160,8 @@ function CanvasInner({ projectId }: { projectId: string }) {
 
   useEffect(() => {
     const syncEditingPresence = (target: EventTarget | null) => {
-      if (!isTextEditingTarget(target)) {
-        presenceControllerRef.current?.publishEditing(null)
-        return
-      }
-
-      presenceControllerRef.current?.publishEditing(findClosestFlowNodeId(target))
+      const snapshot = createLocalPresenceSnapshot(selectedSceneNodeIdsRef.current, target)
+      presenceControllerRef.current?.publishEditing(snapshot.editing?.nodeId ?? null)
     }
 
     const handleFocusIn = (event: FocusEvent) => {
@@ -1377,7 +1386,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
         })()}
 
         <RealtimePresenceOverlay
-          peers={realtimePeers}
+          peers={remotePresence}
           nodes={sceneNodes}
           viewport={viewport}
         />
