@@ -46,7 +46,7 @@ export async function listWorkspaceAssets(workspaceId) {
   );
   return result.rows.map((asset) => ({
     ...asset,
-    url: process.env.R2_PUBLIC_URL ? `${process.env.R2_PUBLIC_URL.replace(/\/+$/, '')}/${asset.storage_key.split('/').map(encodeURIComponent).join('/')}` : null,
+    url: `/api/assets/${encodeURIComponent(asset.id)}/download?workspace_id=${encodeURIComponent(workspaceId)}`,
   }));
 }
 
