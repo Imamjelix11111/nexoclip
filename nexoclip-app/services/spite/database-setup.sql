@@ -173,6 +173,35 @@ CREATE TABLE IF NOT EXISTS voice_id_cache (
     created_at  timestamptz NOT NULL DEFAULT now()
 );
 
+-- Durable Yjs snapshots and ordered update log for realtime canvas state.
+-- project_id references the local projects table only (no cross-database FK).
+CREATE TABLE IF NOT EXISTS canvas_yjs_documents (
+    project_id      uuid PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+    snapshot        bytea,
+    snapshot_seq    bigint NOT NULL DEFAULT 0,
+    durable_seq     bigint NOT NULL DEFAULT 0,
+    projected_seq   bigint NOT NULL DEFAULT 0,
+    schema_version  integer NOT NULL DEFAULT 1,
+    updated_at      timestamptz NOT NULL DEFAULT now(),
+    CHECK (snapshot_seq <= durable_seq),
+    CHECK (projected_seq <= durable_seq)
+);
+
+CREATE TABLE IF NOT EXISTS canvas_yjs_updates (
+    project_id   uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    seq          bigint NOT NULL,
+    update_data  bytea NOT NULL,
+    created_at   timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (project_id, seq)
+);
+
+-- Replay-protection nonces for private internal auth checks.
+CREATE TABLE IF NOT EXISTS canvas_auth_nonces (
+    nonce       text PRIMARY KEY,
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    expires_at  timestamptz NOT NULL
+);
+
 -- Helpful indexes for the most common lookups.
 CREATE INDEX IF NOT EXISTS idx_generation_history_project ON generation_history (project_id);
 CREATE INDEX IF NOT EXISTS idx_assets_project           ON assets (projectid);
@@ -185,3 +214,4 @@ CREATE INDEX IF NOT EXISTS idx_auth_attempts_ip_time    ON auth_attempts (ip, at
 CREATE INDEX IF NOT EXISTS idx_spend_ledger_time        ON spend_ledger (created_at);
 CREATE INDEX IF NOT EXISTS idx_spend_ledger_request     ON spend_ledger (request_id);
 CREATE INDEX IF NOT EXISTS idx_genhistory_project_created ON generation_history (project_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_canvas_auth_nonces_expires_at ON canvas_auth_nonces (expires_at);
