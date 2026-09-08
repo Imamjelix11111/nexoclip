@@ -60,8 +60,9 @@ export class LocalObjectStorage {
 
   async put(url, body, contentType) {
     const { key } = this.#authorize(url, 'upload');
-    const target = path.join(this.root, key);
-    if (!target.startsWith(`${path.resolve(this.root)}${path.sep}`)) throw new Error('Invalid storage key');
+    const root = path.resolve(this.root);
+    const target = path.resolve(root, key);
+    if (!target.startsWith(`${root}${path.sep}`)) throw new Error('Invalid storage key');
     await mkdir(path.dirname(target), { recursive: true });
     await writeFile(target, body);
     await writeFile(`${target}.metadata`, JSON.stringify({ contentType }));
@@ -69,7 +70,9 @@ export class LocalObjectStorage {
 
   async get(url) {
     const { key } = this.#authorize(url, 'download');
-    const target = path.join(this.root, key);
+    const root = path.resolve(this.root);
+    const target = path.resolve(root, key);
+    if (!target.startsWith(`${root}${path.sep}`)) throw new Error('Invalid storage key');
     return {
       body: await readFile(target),
       contentType: JSON.parse(await readFile(`${target}.metadata`, 'utf8')).contentType,
