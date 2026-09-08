@@ -10,7 +10,11 @@ import {
   verifyCanvasAuthorization,
   type CanvasAuthorizationPayload,
 } from './internal-auth'
-import { ProjectRuntime } from './project-runtime'
+import {
+  ProjectRuntime,
+  type ProjectRuntimeClock,
+  type ProjectRuntimeState,
+} from './project-runtime'
 import { YjsRepository } from './yjs-repository'
 
 type RealtimeEnvironment = {
@@ -27,13 +31,15 @@ type RealtimeRepository = Pick<
   'ownsProject' | 'loadOrImport' | 'appendUpdate' | 'compact' | 'close'
 >
 
-type RealtimeRuntime = Pick<ProjectRuntime, 'enqueue'>
+type RealtimeRuntime = Pick<ProjectRuntime, 'enqueue'> &
+  Partial<Pick<ProjectRuntime, 'canAcceptMutation' | 'flush' | 'compact' | 'shutdown'>>
 
 type RuntimeFactory = (options: {
   projectId: string
   doc: Y.Doc
   repository: RealtimeRepository
   loaded: LoadedProjectDocument
+  onStateChange?: (state: ProjectRuntimeState) => void
 }) => RealtimeRuntime
 
 type ConnectionContext = {
@@ -41,11 +47,38 @@ type ConnectionContext = {
   userId: string
 }
 
+type RealtimeConnection = {
+  socketId: string
+  readOnly: boolean
+  sendStateless(payload: string): void
+}
+
+type RealtimeDocument = Y.Doc & {
+  awareness: {
+    states: Map<number, Record<string, unknown>>
+    meta: Map<number, { clock: number; lastUpdated: number }>
+    getStates(): Map<number, Record<string, unknown>>
+    emit(event: 'change' | 'update', payload: unknown): void
+  }
+  getConnections(): RealtimeConnection[]
+  broadcastStateless(payload: string, filter?: (connection: RealtimeConnection) => boolean): void
+}
+
 type RoomState = {
   projectId: string
-  doc: Y.Doc
+  doc: RealtimeDocument
   runtime: RealtimeRuntime
+  status: ProjectRuntimeState
+  guestNumbers: Map<string, number>
+  participantRefCounts: Map<string, number>
+  socketParticipants: Map<string, Set<string>>
+  participantClientIds: Map<string, Set<number>>
+  lockTimers: Map<string, ProjectRuntimeTimer>
 }
+
+type RoomLifecycleClock = ProjectRuntimeClock
+
+type ProjectRuntimeTimer = ReturnType<typeof setTimeout> | number
 
 export type RealtimeServerEvent = {
   type:
@@ -56,11 +89,18 @@ export type RealtimeServerEvent = {
     | 'ws:load-document'
     | 'ws:before-sync'
     | 'ws:change'
+    | 'ws:enqueue'
+    | 'ws:status'
+    | 'ws:ack'
     | 'ws:disconnect'
+    | 'server:shutdown:start'
+    | 'server:shutdown:complete'
   projectId?: string
   userId?: string
   connectionId?: string
   socketId?: string
+  status?: ProjectRuntimeState
+  seq?: number
 }
 
 export type RealtimeServerOptions = {
@@ -74,6 +114,8 @@ export type RealtimeServerOptions = {
   verifyCanvasRequest?: typeof verifyCanvasAuthorization
   createRuntime?: RuntimeFactory
   onEvent?: (event: RealtimeServerEvent) => void
+  clock?: RoomLifecycleClock
+  awarenessLockTtlMs?: number
 }
 
 export type RealtimeServerHandle = {
@@ -86,7 +128,9 @@ export type RealtimeServerHandle = {
 
 const DEFAULT_ADDRESS = '127.0.0.1'
 const NONCE_TTL_SECONDS = 60
+const DEFAULT_AWARENESS_LOCK_TTL_MS = 15_000
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8' }
+const SIGNALS = ['SIGINT', 'SIGTERM'] as const
 
 export function createRealtimeServer(options: RealtimeServerOptions = {}): RealtimeServerHandle {
   const env: RealtimeEnvironment = {
@@ -100,8 +144,18 @@ export function createRealtimeServer(options: RealtimeServerOptions = {}): Realt
   const verifyToken = options.verifyToken ?? verifyRealtimeToken
   const verifyCanvasRequest = options.verifyCanvasRequest ?? verifyCanvasAuthorization
   const emit = options.onEvent ?? (() => {})
+  const clock = options.clock ?? createRoomLifecycleClock()
+  const awarenessLockTtlMs = options.awarenessLockTtlMs ?? DEFAULT_AWARENESS_LOCK_TTL_MS
   const connectionContexts = new Map<string, ConnectionContext>()
   const rooms = new Map<string, RoomState>()
+
+  let shuttingDown = false
+  let destroyPromise: Promise<void> | null = null
+  let signalHandlersRegistered = false
+
+  const signalHandler = () => {
+    void handle.destroy()
+  }
 
   const hocuspocusServer = new Server<ConnectionContext>({
     address: options.address ?? env.HOST ?? DEFAULT_ADDRESS,
@@ -119,6 +173,8 @@ export function createRealtimeServer(options: RealtimeServerOptions = {}): Realt
         repository,
         verifyToken,
         emit,
+        rooms,
+        isShuttingDown: () => shuttingDown,
       })
       connectionContexts.set(payload.socketId, context)
       emit({
@@ -146,23 +202,67 @@ export function createRealtimeServer(options: RealtimeServerOptions = {}): Realt
       }
 
       const loaded = await repository.loadOrImport(context.projectId)
+      const document = payload.document as RealtimeDocument
+      Y.applyUpdate(document, Y.encodeStateAsUpdate(loaded.doc))
+
+      let room!: RoomState
       const runtime = (options.createRuntime ?? createProjectRuntime)({
         projectId: context.projectId,
-        doc: loaded.doc,
+        doc: document,
         repository,
         loaded,
+        onStateChange: (state) => {
+          handleRuntimeStateChange(room, state, { emit, isShuttingDown: () => shuttingDown })
+        },
       })
 
-      rooms.set(context.projectId, {
+      room = {
         projectId: context.projectId,
-        doc: loaded.doc,
+        doc: document,
         runtime,
-      })
+        status: runtimeCanAcceptMutation(runtime) ? 'SYNCED' : 'READ_ONLY',
+        guestNumbers: new Map(),
+        participantRefCounts: new Map(),
+        socketParticipants: new Map(),
+        participantClientIds: new Map(),
+        lockTimers: new Map(),
+      }
 
-      return loaded.doc
+      rooms.set(context.projectId, room)
+      applyRoomReadOnly(room, shuttingDown || !runtimeCanAcceptMutation(runtime))
+
+      return room.doc
+    },
+    beforeHandleAwareness: async (payload) => {
+      const context = requireDocumentContext(payload.documentName, payload.context)
+      const room = rooms.get(context.projectId)
+      if (!room) {
+        throw new Error(`Missing realtime room for ${context.projectId}`)
+      }
+
+      sanitizeAwarenessStates(payload, room, {
+        clock,
+        awarenessLockTtlMs,
+        userId: context.userId,
+      })
+    },
+    connected: async (payload) => {
+      const context = requireDocumentContext(payload.documentName, payload.context)
+      const room = rooms.get(context.projectId)
+      if (!room) {
+        return
+      }
+
+      payload.connection.readOnly = shuttingDown || !runtimeCanAcceptMutation(room.runtime)
+      sendStatusToConnection(payload.connection as RealtimeConnection, room.projectId, room.status, emit)
     },
     beforeSync: async (payload) => {
       const context = requireDocumentContext(payload.documentName, payload.context)
+      const room = rooms.get(context.projectId)
+      if (room) {
+        payload.connection.readOnly = shuttingDown || !runtimeCanAcceptMutation(room.runtime)
+      }
+
       emit({
         type: 'ws:before-sync',
         projectId: context.projectId,
@@ -186,11 +286,19 @@ export function createRealtimeServer(options: RealtimeServerOptions = {}): Realt
         socketId: payload.socketId,
       })
 
-      await room.runtime.enqueue(new Uint8Array(payload.update))
+      void persistRoomChange({
+        payload,
+        room,
+        context,
+        emit,
+      })
     },
     onDisconnect: async (payload) => {
       const context = connectionContexts.get(payload.socketId)
       connectionContexts.delete(payload.socketId)
+      if (context) {
+        releaseSocketParticipants(rooms.get(context.projectId), payload.socketId, clock)
+      }
       emit({
         type: 'ws:disconnect',
         projectId: context?.projectId,
@@ -202,6 +310,10 @@ export function createRealtimeServer(options: RealtimeServerOptions = {}): Realt
     afterUnloadDocument: async ({ documentName }) => {
       try {
         const projectId = parseProjectDocumentName(documentName)
+        const room = rooms.get(projectId)
+        if (room) {
+          clearRoomTimers(room, clock)
+        }
         rooms.delete(projectId)
       } catch {
         // Ignore malformed names after Hocuspocus teardown.
@@ -209,19 +321,19 @@ export function createRealtimeServer(options: RealtimeServerOptions = {}): Realt
     },
   })
 
-  return {
+  const handle: RealtimeServerHandle = {
     async listen(port?: number): Promise<void> {
       await hocuspocusServer.listen(port ?? options.port ?? readPort(env.PORT))
+      registerSignalHandlers()
     },
 
     async destroy(): Promise<void> {
-      await hocuspocusServer.destroy()
-
-      if (ownsRepository) {
-        await repository.close()
-      } else if (ownsDatabase) {
-        await database.close()
+      if (destroyPromise) {
+        return destroyPromise
       }
+
+      destroyPromise = shutdownServer()
+      return destroyPromise
     },
 
     get httpUrl(): string {
@@ -236,13 +348,85 @@ export function createRealtimeServer(options: RealtimeServerOptions = {}): Realt
       return connectionContexts.size
     },
   }
+
+  return handle
+
+  function registerSignalHandlers(): void {
+    if (signalHandlersRegistered) {
+      return
+    }
+
+    for (const signal of SIGNALS) {
+      process.on(signal, signalHandler)
+    }
+    signalHandlersRegistered = true
+  }
+
+  function unregisterSignalHandlers(): void {
+    if (!signalHandlersRegistered) {
+      return
+    }
+
+    for (const signal of SIGNALS) {
+      process.off(signal, signalHandler)
+    }
+    signalHandlersRegistered = false
+  }
+
+  async function shutdownServer(): Promise<void> {
+    shuttingDown = true
+    emit({ type: 'server:shutdown:start' })
+
+    try {
+      const shutdownRooms = [...rooms.values()]
+      for (const room of shutdownRooms) {
+        applyRoomReadOnly(room, true)
+        broadcastRoomStatus(room, 'READ_ONLY', emit)
+      }
+
+      await Promise.all(shutdownRooms.map((room) => shutdownRoom(room)))
+      await hocuspocusServer.destroy()
+
+      if (ownsRepository) {
+        await repository.close()
+      } else if (ownsDatabase) {
+        await database.close()
+      }
+    } finally {
+      unregisterSignalHandlers()
+      emit({ type: 'server:shutdown:complete' })
+    }
+  }
+
+  async function shutdownRoom(room: RoomState): Promise<void> {
+    clearRoomTimers(room, clock)
+
+    if (typeof room.runtime.shutdown === 'function') {
+      await room.runtime.shutdown()
+      return
+    }
+
+    if (typeof room.runtime.flush === 'function') {
+      await room.runtime.flush()
+    }
+
+    if (typeof room.runtime.compact === 'function') {
+      await room.runtime.compact()
+    }
+  }
 }
 
-function createProjectRuntime({ projectId, doc, repository }: Parameters<RuntimeFactory>[0]): RealtimeRuntime {
+function createProjectRuntime({
+  projectId,
+  doc,
+  repository,
+  onStateChange,
+}: Parameters<RuntimeFactory>[0]): RealtimeRuntime {
   return new ProjectRuntime({
     projectId,
     doc,
     repository,
+    onStateChange,
   })
 }
 
@@ -337,15 +521,24 @@ async function authenticateConnection(
     env,
     repository,
     verifyToken,
-    emit,
+    emit: _emit,
+    rooms,
+    isShuttingDown,
   }: {
     env: RealtimeEnvironment
     repository: RealtimeRepository
     verifyToken: typeof verifyRealtimeToken
     emit: (event: RealtimeServerEvent) => void
+    rooms: Map<string, RoomState>
+    isShuttingDown: () => boolean
   },
 ): Promise<ConnectionContext> {
   const projectId = parseProjectDocumentName(payload.documentName)
+
+  if (isShuttingDown()) {
+    throw forbidden('server shutting down')
+  }
+
   const claims = await verifyToken(payload.token, projectId, env.REALTIME_TOKEN_SECRET ?? '')
 
   if (!claims) {
@@ -356,6 +549,9 @@ async function authenticateConnection(
   if (!ownsProject) {
     throw forbidden('project access denied')
   }
+
+  const room = rooms.get(projectId)
+  payload.connectionConfig.readOnly = !!room && !runtimeCanAcceptMutation(room.runtime)
 
   return {
     projectId,
@@ -393,6 +589,352 @@ async function authorizeCanvasRequest({
     }
     throw error
   }
+}
+
+async function persistRoomChange({
+  payload,
+  room,
+  context,
+  emit,
+}: {
+  payload: { update: Uint8Array; connection?: RealtimeConnection; socketId: string }
+  room: RoomState
+  context: ConnectionContext
+  emit: (event: RealtimeServerEvent) => void
+}): Promise<void> {
+  emit({
+    type: 'ws:enqueue',
+    projectId: context.projectId,
+    userId: context.userId,
+    connectionId: payload.socketId,
+    socketId: payload.socketId,
+  })
+
+  try {
+    const seq = await room.runtime.enqueue(new Uint8Array(payload.update))
+    if (payload.connection) {
+      sendAck(payload.connection, room.projectId, seq, emit)
+    }
+  } catch {
+    // Runtime state transitions are broadcast separately. No premature ACK.
+  }
+}
+
+function handleRuntimeStateChange(
+  room: RoomState,
+  state: ProjectRuntimeState,
+  {
+    emit,
+    isShuttingDown,
+  }: {
+    emit: (event: RealtimeServerEvent) => void
+    isShuttingDown: () => boolean
+  },
+): void {
+  applyRoomReadOnly(room, isShuttingDown() || !runtimeCanAcceptMutation(room.runtime))
+  broadcastRoomStatus(room, state, emit)
+}
+
+function sanitizeAwarenessStates(
+  payload: {
+    states: Map<number, Record<string, unknown>>
+    socketId: string
+  },
+  room: RoomState,
+  {
+    clock,
+    awarenessLockTtlMs,
+    userId,
+  }: {
+    clock: RoomLifecycleClock
+    awarenessLockTtlMs: number
+    userId: string
+  },
+): void {
+  for (const [clientId, state] of payload.states) {
+    const participantId = normalizeParticipantId(state.participantId)
+    const sanitized: Record<string, unknown> = {
+      ...state,
+      userId,
+    }
+
+    if (participantId) {
+      const guestName = allocateGuestName(room, participantId)
+      rememberSocketParticipant(room, payload.socketId, participantId)
+      rememberParticipantClientId(room, participantId, clientId)
+      sanitized.participantId = participantId
+      sanitized.name = guestName
+    } else {
+      delete sanitized.participantId
+      delete sanitized.name
+    }
+
+    const lock = sanitizeLock(state.lock, awarenessLockTtlMs, clock)
+    if (lock) {
+      sanitized.lock = lock
+      if (participantId) {
+        scheduleParticipantLockExpiry(room, participantId, clock, awarenessLockTtlMs)
+      }
+    } else {
+      delete sanitized.lock
+      if (participantId) {
+        clearParticipantLockTimer(room, participantId, clock)
+      }
+    }
+
+    payload.states.set(clientId, sanitized)
+  }
+}
+
+function sanitizeLock(
+  value: unknown,
+  awarenessLockTtlMs: number,
+  clock: RoomLifecycleClock,
+): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+
+  const nodeId = stringOrUndefined((value as { nodeId?: unknown }).nodeId)
+  if (!nodeId) {
+    return null
+  }
+
+  const now = readClockNow(clock)
+  return {
+    ...(value as Record<string, unknown>),
+    nodeId,
+    observedAt: now,
+    expiresAt: now + awarenessLockTtlMs,
+  }
+}
+
+function scheduleParticipantLockExpiry(
+  room: RoomState,
+  participantId: string,
+  clock: RoomLifecycleClock,
+  awarenessLockTtlMs: number,
+): void {
+  clearParticipantLockTimer(room, participantId, clock)
+  room.lockTimers.set(
+    participantId,
+    clock.setTimeout(() => {
+      room.lockTimers.delete(participantId)
+      expireParticipantLock(room, participantId, clock)
+    }, awarenessLockTtlMs),
+  )
+}
+
+function expireParticipantLock(room: RoomState, participantId: string, clock: RoomLifecycleClock): void {
+  const clientIds = room.participantClientIds.get(participantId)
+  if (!clientIds || clientIds.size === 0) {
+    return
+  }
+
+  for (const clientId of clientIds) {
+    const state = room.doc.awareness.states.get(clientId)
+    if (!state || state.participantId !== participantId || !state.lock) {
+      continue
+    }
+
+    const nextState = { ...state }
+    delete nextState.lock
+    replaceAwarenessState(room.doc, clientId, nextState, {
+      source: 'local',
+      reason: 'lock-expired',
+      observedAt: readClockNow(clock),
+    })
+  }
+}
+
+function replaceAwarenessState(
+  doc: RealtimeDocument,
+  clientId: number,
+  nextState: Record<string, unknown> | null,
+  origin: unknown,
+): void {
+  const previousState = doc.awareness.states.get(clientId)
+  const meta = doc.awareness.meta.get(clientId)
+  if (!meta) {
+    return
+  }
+
+  const clock = meta.clock + 1
+  if (nextState === null) {
+    doc.awareness.states.delete(clientId)
+  } else {
+    doc.awareness.states.set(clientId, nextState)
+  }
+
+  doc.awareness.meta.set(clientId, {
+    clock,
+    lastUpdated: Date.now(),
+  })
+
+  const added: number[] = []
+  const updated: number[] = []
+  const changed: number[] = []
+  const removed: number[] = []
+
+  if (nextState === null) {
+    removed.push(clientId)
+  } else if (previousState == null) {
+    added.push(clientId)
+  } else {
+    updated.push(clientId)
+    if (JSON.stringify(previousState) !== JSON.stringify(nextState)) {
+      changed.push(clientId)
+    }
+  }
+
+  if (added.length > 0 || changed.length > 0 || removed.length > 0) {
+    doc.awareness.emit('change', [{ added, updated: changed, removed }, origin])
+  }
+  if (added.length > 0 || updated.length > 0 || removed.length > 0) {
+    doc.awareness.emit('update', [{ added, updated, removed }, origin])
+  }
+}
+
+function allocateGuestName(room: RoomState, participantId: string): string {
+  const existing = room.guestNumbers.get(participantId)
+  if (existing) {
+    return guestName(existing)
+  }
+
+  const used = new Set(room.guestNumbers.values())
+  let nextNumber = 1
+  while (used.has(nextNumber)) {
+    nextNumber += 1
+  }
+
+  room.guestNumbers.set(participantId, nextNumber)
+  return guestName(nextNumber)
+}
+
+function rememberSocketParticipant(room: RoomState, socketId: string, participantId: string): void {
+  const participants = room.socketParticipants.get(socketId) ?? new Set<string>()
+  if (!participants.has(participantId)) {
+    participants.add(participantId)
+    room.socketParticipants.set(socketId, participants)
+    room.participantRefCounts.set(participantId, (room.participantRefCounts.get(participantId) ?? 0) + 1)
+  }
+}
+
+function rememberParticipantClientId(room: RoomState, participantId: string, clientId: number): void {
+  const clientIds = room.participantClientIds.get(participantId) ?? new Set<number>()
+  clientIds.add(clientId)
+  room.participantClientIds.set(participantId, clientIds)
+}
+
+function releaseSocketParticipants(
+  room: RoomState | undefined,
+  socketId: string,
+  clock: RoomLifecycleClock,
+): void {
+  if (!room) {
+    return
+  }
+
+  const participants = room.socketParticipants.get(socketId)
+  if (!participants) {
+    return
+  }
+
+  room.socketParticipants.delete(socketId)
+  for (const participantId of participants) {
+    const remainingRefs = (room.participantRefCounts.get(participantId) ?? 1) - 1
+    if (remainingRefs > 0) {
+      room.participantRefCounts.set(participantId, remainingRefs)
+      continue
+    }
+
+    room.participantRefCounts.delete(participantId)
+    room.guestNumbers.delete(participantId)
+    room.participantClientIds.delete(participantId)
+    clearParticipantLockTimer(room, participantId, clock)
+  }
+}
+
+function clearParticipantLockTimer(room: RoomState, participantId: string, clock: RoomLifecycleClock): void {
+  const timer = room.lockTimers.get(participantId)
+  if (timer) {
+    room.lockTimers.delete(participantId)
+    clock.clearTimeout(timer)
+  }
+}
+
+function clearRoomTimers(room: RoomState, clock: RoomLifecycleClock): void {
+  for (const participantId of room.lockTimers.keys()) {
+    clearParticipantLockTimer(room, participantId, clock)
+  }
+}
+
+function applyRoomReadOnly(room: RoomState, readOnly: boolean): void {
+  for (const connection of room.doc.getConnections()) {
+    connection.readOnly = readOnly
+  }
+}
+
+function broadcastRoomStatus(
+  room: RoomState,
+  status: ProjectRuntimeState,
+  emit: (event: RealtimeServerEvent) => void,
+): void {
+  if (room.status === status && status !== 'PERSISTED') {
+    return
+  }
+
+  room.status = status
+  const payload = serializeStatusMessage(room.projectId, status)
+  room.doc.broadcastStateless(payload)
+  emit({ type: 'ws:status', projectId: room.projectId, status })
+}
+
+function sendStatusToConnection(
+  connection: RealtimeConnection,
+  projectId: string,
+  status: ProjectRuntimeState,
+  emit: (event: RealtimeServerEvent) => void,
+): void {
+  connection.sendStateless(serializeStatusMessage(projectId, status))
+  emit({ type: 'ws:status', projectId, status, connectionId: connection.socketId, socketId: connection.socketId })
+}
+
+function sendAck(
+  connection: RealtimeConnection,
+  projectId: string,
+  seq: number,
+  emit: (event: RealtimeServerEvent) => void,
+): void {
+  connection.sendStateless(JSON.stringify({ type: 'ACK', status: 'PERSISTED', projectId, seq }))
+  emit({
+    type: 'ws:ack',
+    projectId,
+    connectionId: connection.socketId,
+    socketId: connection.socketId,
+    seq,
+  })
+}
+
+function serializeStatusMessage(projectId: string, status: ProjectRuntimeState): string {
+  return JSON.stringify({ type: 'STATUS', projectId, status })
+}
+
+function runtimeCanAcceptMutation(runtime: RealtimeRuntime): boolean {
+  return typeof runtime.canAcceptMutation === 'function' ? runtime.canAcceptMutation() : true
+}
+
+function normalizeParticipantId(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined
+  }
+
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
+
+function guestName(number: number): string {
+  return `Guest ${number}`
 }
 
 function requireConnectionContext(
@@ -463,6 +1005,26 @@ function stringOrUndefined(value: unknown): string | undefined {
 function readPort(value: string | undefined): number | undefined {
   const port = Number.parseInt(value ?? '', 10)
   return Number.isFinite(port) ? port : undefined
+}
+
+function createRoomLifecycleClock(): RoomLifecycleClock {
+  return {
+    now: () => Date.now(),
+    setTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
+    clearTimeout: (timer) => {
+      if (timer != null) {
+        clearTimeout(timer as ReturnType<typeof setTimeout>)
+      }
+    },
+  }
+}
+
+function readClockNow(clock: RoomLifecycleClock): number {
+  if (typeof clock.now === 'function') {
+    return clock.now()
+  }
+
+  return typeof clock.now === 'number' ? clock.now : Date.now()
 }
 
 async function startFromCli(): Promise<void> {
