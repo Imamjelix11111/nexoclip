@@ -96,6 +96,14 @@ services:
       timeout: 5s
       retries: 20
 
+  asset-storage-init:
+    image: busybox:1.37
+    platform: linux/amd64
+    restart: "no"
+    command: ["sh", "-c", "mkdir -p /data && chown -R 1000:1000 /data"]
+    volumes:
+      - nexoclip-assets:/data
+
   nexoclip:
     platform: linux/amd64
     build:
@@ -121,7 +129,11 @@ services:
       VIMAX_RUNTIME_URL: http://vimax:4173
       VIMAX_RUNTIME_TOKEN: ${VIMAX_RUNTIME_TOKEN}
       R2_PUBLIC_URL: ${R2_PUBLIC_URL}
+      LOCAL_OBJECT_STORAGE_DIR: /data/assets
+    volumes:
+      - nexoclip-assets:/data
     depends_on:
+      asset-storage-init: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
       nexoclip-migrate: { condition: service_completed_successfully }
       ai-clip: { condition: service_healthy }
@@ -186,6 +198,32 @@ services:
       timeout: 5s
       retries: 20
 
+  image-worker:
+    platform: linux/amd64
+    build:
+      context: .
+      target: worker
+    command: ["node", "src/queue/imageWorker.mjs"]
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL_NEXOCLIP}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      LOCAL_OBJECT_STORAGE_DIR: /data/assets
+      LOCAL_OBJECT_STORAGE_SECRET: ${LOCAL_OBJECT_STORAGE_SECRET}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      BYTEPLUS_API_KEY: ${BYTEPLUS_API_KEY}
+      BYTEPLUS_BASE_URL: ${BYTEPLUS_BASE_URL}
+      IMAGE_WORKER_CONCURRENCY: ${IMAGE_WORKER_CONCURRENCY:-2}
+    volumes:
+      - nexoclip-assets:/data
+    depends_on:
+      asset-storage-init: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      nexoclip-migrate: { condition: service_completed_successfully }
+
   storyboard-worker:
     platform: linux/amd64
     build:
@@ -207,6 +245,7 @@ services:
       nexoclip-migrate: { condition: service_completed_successfully }
 
 volumes:
+  nexoclip-assets:
   redis-data:
   vimax-tenants:
   ai-clip-output:

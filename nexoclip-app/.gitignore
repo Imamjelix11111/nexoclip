@@ -32,6 +32,7 @@ release/
 out/
 
 # Misc
+.local-object-storage/
 *.pem
 .env
 .env.*
