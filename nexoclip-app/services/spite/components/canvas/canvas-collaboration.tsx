@@ -4,6 +4,7 @@ import { createContext, useContext } from 'react'
 import type { Edge, Node } from '@xyflow/react'
 
 import type { UseRealtimeCanvasResult } from '@/hooks/use-realtime-canvas'
+import { guardCanvasRuntimeControls } from '@/lib/canvas-runtime-ui'
 
 type NodeDataPatch = Record<string, unknown>
 type NodeDataUpdater = Parameters<UseRealtimeCanvasResult['commands']['updateNodeData']>[1]
@@ -30,13 +31,14 @@ export function CanvasCollaborationProvider({
   value: UseRealtimeCanvasResult
   children: React.ReactNode
 }) {
-  const findNode = (nodeId: string) => value.allNodes.find((node) => node.id === nodeId) as Node | undefined
+  const runtimeValue = guardCanvasRuntimeControls(value, value.persistenceStatus)
+  const findNode = (nodeId: string) => runtimeValue.allNodes.find((node) => node.id === nodeId) as Node | undefined
 
   const collaborationValue: CanvasCollaborationValue = {
-    ...value,
+    ...runtimeValue,
     addNodes(nodes) {
       if (nodes.length === 0) return
-      value.commands.batch(({ createNode }) => {
+      runtimeValue.commands.batch(({ createNode }) => {
         for (const node of nodes) {
           createNode(node as any)
         }
@@ -44,7 +46,7 @@ export function CanvasCollaborationProvider({
     },
     addEdges(edges) {
       if (edges.length === 0) return
-      value.commands.batch(({ createEdge }) => {
+      runtimeValue.commands.batch(({ createEdge }) => {
         for (const edge of edges) {
           createEdge(edge as any)
         }
@@ -52,7 +54,7 @@ export function CanvasCollaborationProvider({
     },
     deleteNodes(nodeIds) {
       if (nodeIds.length === 0) return
-      value.commands.batch(({ deleteNode }) => {
+      runtimeValue.commands.batch(({ deleteNode }) => {
         for (const nodeId of nodeIds) {
           deleteNode(nodeId)
         }
@@ -60,7 +62,7 @@ export function CanvasCollaborationProvider({
     },
     deleteEdges(edgeIds) {
       if (edgeIds.length === 0) return
-      value.commands.batch(({ deleteEdge }) => {
+      runtimeValue.commands.batch(({ deleteEdge }) => {
         for (const edgeId of edgeIds) {
           deleteEdge(edgeId)
         }
@@ -68,7 +70,7 @@ export function CanvasCollaborationProvider({
     },
     patchNodes(patches) {
       if (patches.length === 0) return
-      value.commands.batch(({ patchNode }) => {
+      runtimeValue.commands.batch(({ patchNode }) => {
         for (const entry of patches) {
           patchNode(entry.id, entry.patch)
         }
@@ -76,19 +78,19 @@ export function CanvasCollaborationProvider({
     },
     patchNodeData(nodeId, patch) {
       if (!findNode(nodeId)) return
-      value.commands.patchNodeData(nodeId, patch)
+      runtimeValue.commands.patchNodeData(nodeId, patch)
     },
     updateNodeData(nodeId, updater) {
       if (!findNode(nodeId)) return
-      value.commands.updateNodeData(nodeId, updater)
+      runtimeValue.commands.updateNodeData(nodeId, updater)
     },
     replaceShot(nodeId, shotId) {
       if (!findNode(nodeId)) return
-      value.commands.replaceShot(nodeId, shotId)
+      runtimeValue.commands.replaceShot(nodeId, shotId)
     },
     createNextShot(nodeId) {
       if (!findNode(nodeId)) return null
-      return value.commands.createNextShot(nodeId)
+      return runtimeValue.commands.createNextShot(nodeId)
     },
   }
 

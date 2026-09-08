@@ -1,18 +1,21 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowLeft, MagnifyingGlassPlus, MagnifyingGlassMinus, CornersOut, Lock, CheckCircle, Circle, GearSix, ListChecks, Question } from '@phosphor-icons/react'
+import { ArrowLeft, MagnifyingGlassPlus, MagnifyingGlassMinus, CornersOut, Lock, CheckCircle, Circle, WarningCircle, Prohibit, GearSix, ListChecks, Question } from '@phosphor-icons/react'
 import { useReactFlow } from '@xyflow/react'
 import { useState } from 'react'
 import { useAuth } from '@/components/auth-provider'
+import { getCanvasSaveIndicator } from '@/lib/canvas-runtime-ui'
 import { startTour } from '@/lib/onboarding'
+import type { ProjectRuntimeState } from '@/realtime/project-runtime'
 import { VersionBadge } from '@/components/version-badge'
 
 interface CanvasToolbarProps {
   projectName: string
   onProjectNameChange: (name: string) => void
-  saveStatus: 'saved' | 'unsaved'
+  persistenceStatus: ProjectRuntimeState
   projectId: string
+  readOnly?: boolean
   // Right-side jobs panel: workspace owns the open/close state so the
   // panel persists across canvas interactions and the toolbar just
   // triggers the toggle.
@@ -21,10 +24,11 @@ interface CanvasToolbarProps {
   activeJobCount?: number
 }
 
-export function CanvasToolbar({ projectName, onProjectNameChange, saveStatus, projectId, jobsPanelOpen, onToggleJobsPanel, activeJobCount = 0 }: CanvasToolbarProps) {
+export function CanvasToolbar({ projectName, onProjectNameChange, persistenceStatus, projectId, readOnly = false, jobsPanelOpen, onToggleJobsPanel, activeJobCount = 0 }: CanvasToolbarProps) {
   const { zoomIn, zoomOut, fitView } = useReactFlow()
   const [editing, setEditing] = useState(false)
   const { logout } = useAuth()
+  const saveIndicator = getCanvasSaveIndicator(persistenceStatus)
 
   const handleLogout = () => {
     logout()
@@ -53,6 +57,7 @@ export function CanvasToolbar({ projectName, onProjectNameChange, saveStatus, pr
             autoFocus
             value={projectName}
             onChange={e => onProjectNameChange(e.target.value)}
+            readOnly={readOnly}
             onBlur={() => setEditing(false)}
             onKeyDown={e => e.key === 'Enter' && setEditing(false)}
             className="bg-transparent border-none outline-none text-foreground text-base tracking-tight"
@@ -60,7 +65,10 @@ export function CanvasToolbar({ projectName, onProjectNameChange, saveStatus, pr
           />
         ) : (
           <button
-            onClick={() => setEditing(true)}
+            onClick={() => {
+              if (readOnly) return
+              setEditing(true)
+            }}
             className="text-base tracking-tight text-foreground hover:text-accent transition-colors cursor-text"
             style={{ fontFamily: 'var(--font-montserrat)' }}
           >
@@ -95,14 +103,28 @@ export function CanvasToolbar({ projectName, onProjectNameChange, saveStatus, pr
 
         <div className="w-px h-4 bg-border mx-1" />
 
-        <div className="flex items-center gap-1.5 text-[10px] font-mono tracking-wider text-muted-foreground select-none">
-          {saveStatus === 'saved' ? (
+        <div className="flex items-center gap-1.5 text-[10px] font-mono tracking-wider select-none">
+          {saveIndicator.persisted ? (
             <CheckCircle size={11} weight="fill" className="text-accent/60" />
+          ) : saveIndicator.label === 'Degraded' ? (
+            <WarningCircle size={11} weight="fill" className="text-amber-300/80" />
+          ) : saveIndicator.label === 'Read-only' ? (
+            <Prohibit size={11} weight="fill" className="text-destructive/80" />
           ) : (
             <Circle size={11} weight="thin" className="text-muted-foreground/40" />
           )}
-          <span className={saveStatus === 'saved' ? 'text-accent/60' : 'text-muted-foreground/40'}>
-            {saveStatus === 'saved' ? 'Saved' : 'Unsaved'}
+          <span
+            className={
+              saveIndicator.persisted
+                ? 'text-accent/60'
+                : saveIndicator.label === 'Degraded'
+                  ? 'text-amber-300/80'
+                  : saveIndicator.label === 'Read-only'
+                    ? 'text-destructive/80'
+                    : 'text-muted-foreground/40'
+            }
+          >
+            {saveIndicator.label}
           </span>
         </div>
 

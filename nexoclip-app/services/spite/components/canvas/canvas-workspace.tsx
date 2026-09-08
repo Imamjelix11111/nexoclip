@@ -1,6 +1,7 @@
 'use client'
 
 import { withBasePath } from '@/lib/base-path'
+import { getCanvasRuntimeCapabilities, guardCanvasRuntimeControls } from '@/lib/canvas-runtime-ui'
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { toast } from 'sonner'
 import {
@@ -253,6 +254,13 @@ function StickerGhost({ containerRef }: { containerRef: React.RefObject<HTMLDivE
 function CanvasInner({ projectId }: { projectId: string }) {
   const [projectName, setProjectName] = useState('Untitled Project')
   const realtime = useRealtimeCanvas(projectId)
+  const persistenceStatus = realtime.persistenceStatus
+  const { allowDocumentMutation } = getCanvasRuntimeCapabilities(persistenceStatus)
+  const readOnly = !allowDocumentMutation
+  const guardedRealtime = useMemo(
+    () => guardCanvasRuntimeControls(realtime, persistenceStatus),
+    [persistenceStatus, realtime],
+  )
   const {
     nodes,
     edges,
@@ -264,8 +272,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
     commands,
     undo,
     redo,
-    persistenceStatus,
-  } = realtime
+  } = guardedRealtime
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([])
   const presenceControllerRef = useRef<ReturnType<typeof createPresenceController> | null>(null)
   const selectedSceneNodeIdsRef = useRef<string[]>([])
@@ -407,21 +414,26 @@ function CanvasInner({ projectId }: { projectId: string }) {
     }
 
     const durableChanges = changes.filter((change) => change.type !== 'select')
-    if (durableChanges.length > 0) {
-      commands.applyNodeChanges(durableChanges)
+    if (!allowDocumentMutation || durableChanges.length === 0) {
+      return
     }
-  }, [commands, nodes])
+
+    commands.applyNodeChanges(durableChanges)
+  }, [allowDocumentMutation, commands, nodes])
 
   const onEdgesChange = useCallback((changes: EdgeChange[]) => {
     const durableChanges = changes.filter((change) => change.type !== 'select')
-    if (durableChanges.length > 0) {
-      commands.applyEdgeChanges(durableChanges)
+    if (!allowDocumentMutation || durableChanges.length === 0) {
+      return
     }
-  }, [commands])
+
+    commands.applyEdgeChanges(durableChanges)
+  }, [allowDocumentMutation, commands])
 
   // Save project name when it changes (debounced)
   const saveProjectNameRef = useRef<NodeJS.Timeout | null>(null)
   const handleProjectNameChange = (newName: string) => {
+    if (!allowDocumentMutation) return
     setProjectName(newName)
     
     // Debounce the save
@@ -494,6 +506,10 @@ function CanvasInner({ projectId }: { projectId: string }) {
   }, [scenes, allNodes])
 
   const onConnect = useCallback((params: Connection) => {
+    if (!allowDocumentMutation) {
+      return
+    }
+
     if (isValidConnection(params)) {
       commands.connect(params)
       // Force React Flow to re-measure the source/target handles. Without
@@ -512,7 +528,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
         duration: 3000,
       })
     }
-  }, [commands, updateNodeInternals])
+  }, [allowDocumentMutation, commands, updateNodeInternals])
   
   const [minimapOpen, setMinimapOpen] = useState(true)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; flowPos: { x: number; y: number } } | null>(null)
@@ -520,9 +536,10 @@ function CanvasInner({ projectId }: { projectId: string }) {
   const flowRef = useRef<HTMLDivElement>(null)
 
   const addNode = useCallback((type: string, flowPos?: { x: number; y: number }, initialData?: Record<string, any>) => {
+    if (!allowDocumentMutation) return
     const pos = flowPos || screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
     commands.createNode(makeNode(type, pos, undefined, activeSceneId, initialData))
-  }, [screenToFlowPosition, commands, activeSceneId])
+  }, [allowDocumentMutation, screenToFlowPosition, commands, activeSceneId])
 
   // Scene handlers. Name = highest existing "Scene N" + 1 so deletes
   // don't reuse numbers (deleting Scene 3 then adding a new one gives
@@ -530,6 +547,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
   // like shot numbers do, which avoids confusion when a node is
   // tagged to "Scene 3" and a different scene later wears that name).
   const handleAddScene = useCallback(() => {
+    if (!allowDocumentMutation) return
     let maxNum = 0
     for (const s of scenes) {
       const m = s.name.match(/^Scene (\d+)$/)
@@ -537,7 +555,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
     }
     commands.createScene(`Scene ${maxNum + 1}`)
     setSelectedNodeIds([])
-  }, [commands, scenes])
+  }, [allowDocumentMutation, commands, scenes])
 
   // Delete a scene: remove the scene itself, every node tagged with
   // that sceneId, and every edge between those nodes. Auto-save will
@@ -549,9 +567,10 @@ function CanvasInner({ projectId }: { projectId: string }) {
   // before the removal so the user isn't left looking at an empty
   // canvas with no active sceneId.
   const handleDeleteScene = useCallback((sceneId: string) => {
+    if (!allowDocumentMutation) return
     commands.deleteScene(sceneId)
     setSelectedNodeIds([])
-  }, [commands])
+  }, [allowDocumentMutation, commands])
 
   // Asset handlers
   const handleSelectAsset = useCallback((asset: Asset) => {}, [])
@@ -560,6 +579,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
 
   // Handle drag over canvas - accept both internal assets and desktop files
   const handleDragOver = useCallback((e: React.DragEvent) => {
+    if (!allowDocumentMutation) return
     const hasAsset = e.dataTransfer.types.includes('asset')
     const hasFiles = e.dataTransfer.types.includes('Files')
     if (hasAsset || hasFiles) {
@@ -567,7 +587,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
       e.dataTransfer.dropEffect = 'copy'
       if (hasFiles) setIsDragOver(true)
     }
-  }, [])
+  }, [allowDocumentMutation])
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     // Only hide overlay if leaving the canvas entirely
@@ -579,6 +599,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
   // Handle drop - desktop files or internal assets
   const handleDrop = useCallback((e: React.DragEvent) => {
     setIsDragOver(false)
+    if (!allowDocumentMutation) return
 
     // Desktop file drop
     const files = Array.from(e.dataTransfer.files).filter(f =>
@@ -686,7 +707,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
     } catch (error) {
       console.error('Drop error:', error)
     }
-  }, [screenToFlowPosition, commands, activeSceneId])
+  }, [allowDocumentMutation, screenToFlowPosition, commands, activeSceneId])
 
   // Shot click - center on node
   const handleShotClick = useCallback((sceneId: string, shotId: string) => {
@@ -701,6 +722,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
   }, [scenesWithShots, allNodes, setCenter])
 
   const deleteSelected = useCallback(() => {
+    if (!allowDocumentMutation) return
     const selectedIds = new Set(selectedNodeIds)
     if (selectedIds.size === 0) return
 
@@ -733,18 +755,19 @@ function CanvasInner({ projectId }: { projectId: string }) {
         }).catch(() => {})
       }
     }
-  }, [allNodes, commands, projectId, selectedNodeIds])
+  }, [allowDocumentMutation, allNodes, commands, projectId, selectedNodeIds])
 
   const duplicateSelected = useCallback(() => {
-    if (selectedNodeIds.length === 0) return
+    if (!allowDocumentMutation || selectedNodeIds.length === 0) return
     const duplicateIds = commands.duplicateNodes(selectedNodeIds)
     if (duplicateIds.length > 0) {
       setSelectedNodeIds(duplicateIds)
     }
-  }, [commands, selectedNodeIds])
+  }, [allowDocumentMutation, commands, selectedNodeIds])
 
   // Paste image file as reference node - uploads to R2 for persistence
   const pasteImageFile = useCallback(async (file: File, pos?: { x: number; y: number }) => {
+    if (!allowDocumentMutation) return
     const flowPos = pos || screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
     const nodeLabel = file.name.replace(/\.[^.]+$/, '')
     const n = makeNode('reference', flowPos, nodeLabel, activeSceneId)
@@ -821,7 +844,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
         uploadError: true,
       })
     }
-  }, [screenToFlowPosition, commands, activeSceneId])
+  }, [allowDocumentMutation, screenToFlowPosition, commands, activeSceneId])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -871,7 +894,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
         deleteSelected()
       }
       // Ctrl+V for internal node clipboard — image paste is handled by onPaste
-      if (ctrl && e.key === 'v' && clipboardNodes.length) {
+      if (allowDocumentMutation && ctrl && e.key === 'v' && clipboardNodes.length) {
         const copies = clipboardNodes.map((node) => ({
           ...node,
           id: makeId(),
@@ -908,7 +931,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
         return
       }
       // No image in clipboard — paste copied nodes if any
-      if (clipboardNodes.length) {
+      if (allowDocumentMutation && clipboardNodes.length) {
         e.preventDefault()
         const copies = clipboardNodes.map((node) => ({
           ...node,
@@ -931,7 +954,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('paste', onPaste)
     }
-  }, [addNode, commands, deleteSelected, duplicateSelected, nodes, pasteImageFile, redo, selectedNodeIds, undo])
+  }, [addNode, allowDocumentMutation, commands, deleteSelected, duplicateSelected, nodes, pasteImageFile, redo, selectedNodeIds, undo])
 
   const onContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -1111,13 +1134,8 @@ function CanvasInner({ projectId }: { projectId: string }) {
     fitView({ duration: 300, padding: 0.2 })
   }, [fitView])
 
-  const saveStatus =
-    persistenceStatus === 'SYNCED' || persistenceStatus === 'PERSISTED'
-      ? 'saved'
-      : 'unsaved'
-
   return (
-    <CanvasCollaborationProvider value={realtime}>
+    <CanvasCollaborationProvider value={guardedRealtime}>
       <div className="flex flex-col h-screen bg-[#080A0C] overflow-hidden">
       <OnboardingTour surface="canvas" />
       {/* Scene Timeline */}
@@ -1125,6 +1143,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
         scenes={scenesWithShots}
         activeSceneId={activeSceneId}
         onSceneChange={(sceneId) => {
+          if (!allowDocumentMutation) return
           commands.switchScene(sceneId)
           setSelectedNodeIds([])
         }}
@@ -1138,8 +1157,9 @@ function CanvasInner({ projectId }: { projectId: string }) {
       <CanvasToolbar
         projectName={projectName}
         onProjectNameChange={handleProjectNameChange}
-        saveStatus={saveStatus}
+        persistenceStatus={persistenceStatus}
         projectId={projectId}
+        readOnly={readOnly}
         jobsPanelOpen={jobsPanelOpen}
         onToggleJobsPanel={() => setJobsPanelOpen(v => !v)}
         activeJobCount={activeJobCount}
@@ -1184,6 +1204,8 @@ function CanvasInner({ projectId }: { projectId: string }) {
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
+              nodesDraggable={allowDocumentMutation}
+              nodesConnectable={allowDocumentMutation}
               isValidConnection={isValidConnection}
               onNodeDragStart={onNodeDragStart}
               onNodeDrag={onNodeDrag}
@@ -1197,7 +1219,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
                 window.dispatchEvent(new Event('closeStickerPickers'))
 
                 // Place sticker or comment if tool is active
-                if (activeTool === 'sticker' || activeTool === 'comment') {
+                if (allowDocumentMutation && (activeTool === 'sticker' || activeTool === 'comment')) {
                   const flowPos = screenToFlowPosition({ x: e.clientX, y: e.clientY })
                   addNode(activeTool, flowPos)
                   setActiveTool('select')
@@ -1208,7 +1230,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
               }}
               onEdgeClick={(e, edge) => {
                 // Cut tool: delete clicked edge
-                if (activeTool === 'cut') {
+                if (allowDocumentMutation && activeTool === 'cut') {
                   commands.deleteEdge(edge.id)
                   return
                 }
@@ -1223,7 +1245,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
               maxZoom={4}
               style={{ 
                 background: '#0D0F12',
-                cursor: activeTool === 'cut' ? 'crosshair' :
+                cursor: !allowDocumentMutation ? 'default' : activeTool === 'cut' ? 'crosshair' :
                        activeTool === 'sticker' ? 'none' :
                        activeTool === 'comment' ? 'copy' : 'default'
               }}
@@ -1281,6 +1303,8 @@ function CanvasInner({ projectId }: { projectId: string }) {
           activeTool={activeTool}
           onUndo={undo}
           onRedo={redo}
+          canUndo={!readOnly}
+          canRedo={!readOnly}
           assets={assets}
           onAssetsChange={setAssets}
           onSelectAsset={handleSelectAsset}
