@@ -396,6 +396,52 @@ test('compact replaces snapshot metadata and deletes only updates up to included
   ])
 })
 
+test('loadProjectionLag returns lagging projects ordered by largest lag first', async () => {
+  const database = new ScriptedDatabaseAdapter({
+    query: [
+      {
+        includes:
+          'select project_id, durable_seq, projected_seq, durable_seq - projected_seq as lag from canvas_yjs_documents where projected_seq < durable_seq order by lag desc, project_id asc',
+        result: {
+          rows: [
+            {
+              project_id: '550e8400-e29b-41d4-a716-446655440001',
+              durable_seq: '9',
+              projected_seq: '3',
+              lag: '6',
+            },
+            {
+              project_id: '550e8400-e29b-41d4-a716-446655440000',
+              durable_seq: 5,
+              projected_seq: 4,
+              lag: 1,
+            },
+          ],
+          rowCount: 2,
+        },
+      },
+    ],
+  })
+  const repository = new YjsRepository({ database })
+
+  const laggingProjects = await repository.loadProjectionLag()
+
+  assert.deepEqual(laggingProjects, [
+    {
+      projectId: '550e8400-e29b-41d4-a716-446655440001',
+      durableSeq: 9,
+      projectedSeq: 3,
+      lag: 6,
+    },
+    {
+      projectId: '550e8400-e29b-41d4-a716-446655440000',
+      durableSeq: 5,
+      projectedSeq: 4,
+      lag: 1,
+    },
+  ])
+})
+
 test('existing durable documents do not query legacy compatibility tables during hydration', async () => {
   const doc = createCanvasDocument()
   const snapshot = Y.encodeStateAsUpdate(doc)

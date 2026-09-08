@@ -34,7 +34,19 @@ type PoolLike = {
   end(): Promise<void>
 }
 
-let sharedPool: Pool | null = null
+type OwnedPoolOptions = {
+  pool: PoolLike
+  ownsPool: boolean
+}
+
+type SharedPoolOptions = {
+  pool?: undefined
+  connectionString?: string
+}
+
+type DatabaseAdapterOptions = OwnedPoolOptions | SharedPoolOptions
+
+let sharedPool: { pool: Pool; connectionString: string } | null = null
 
 export function getRealtimePool({
   connectionString = process.env.DATABASE_URL,
@@ -46,13 +58,21 @@ export function getRealtimePool({
   }
 
   if (!sharedPool) {
-    sharedPool = new Pool({ connectionString })
+    const pool = new Pool({ connectionString })
+    sharedPool = { pool, connectionString }
+    return pool
   }
 
-  return sharedPool
+  if (sharedPool.connectionString !== connectionString) {
+    throw new Error('Realtime pool already exists for a different connection string')
+  }
+
+  return sharedPool.pool
 }
 
-export function createDatabaseAdapter(pool: PoolLike = getRealtimePool()): DatabaseAdapter {
+export function createDatabaseAdapter(options: DatabaseAdapterOptions = {}): DatabaseAdapter {
+  const { pool, ownsPool } = resolvePoolOptions(options)
+
   return {
     async query<Row extends Record<string, unknown> = Record<string, unknown>>(
       text: string,
@@ -103,16 +123,41 @@ export function createDatabaseAdapter(pool: PoolLike = getRealtimePool()): Datab
     },
 
     async close(): Promise<void> {
+      if (!ownsPool) {
+        return
+      }
+
       await pool.end()
-      if (pool === sharedPool) {
+      if (sharedPool?.pool === pool) {
         sharedPool = null
       }
     },
   }
 }
 
+function resolvePoolOptions(options: DatabaseAdapterOptions): {
+  pool: PoolLike
+  ownsPool: boolean
+} {
+  if ('pool' in options && options.pool) {
+    if (typeof options.ownsPool !== 'boolean') {
+      throw new Error('createDatabaseAdapter requires explicit ownsPool when injecting a pool')
+    }
+
+    return {
+      pool: options.pool,
+      ownsPool: options.ownsPool,
+    }
+  }
+
+  return {
+    pool: getRealtimePool({ connectionString: options.connectionString }),
+    ownsPool: true,
+  }
+}
+
 export async function closeRealtimePool(): Promise<void> {
   if (!sharedPool) return
-  await sharedPool.end()
+  await sharedPool.pool.end()
   sharedPool = null
 }

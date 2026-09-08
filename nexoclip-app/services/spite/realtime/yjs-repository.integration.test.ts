@@ -33,7 +33,9 @@ function integrationTest(
     await applyRealtimeSchema({ databaseUrl })
 
     const pool = new Pool({ connectionString: databaseUrl })
-    const repository = new YjsRepository({ database: createDatabaseAdapter(pool) })
+    const repository = new YjsRepository({
+      database: createDatabaseAdapter({ pool, ownsPool: false }),
+    })
     const projectIds: string[] = []
 
     try {
@@ -163,7 +165,7 @@ integrationTest('failed append transactions roll back inserted updates and durab
     })
   })
 
-  const baseDatabase = createDatabaseAdapter(pool)
+  const baseDatabase = createDatabaseAdapter({ pool, ownsPool: false })
   const failingDatabase: DatabaseAdapter = {
     query: (...args) => baseDatabase.query(...args),
     close: async () => {},

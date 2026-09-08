@@ -7,12 +7,24 @@ import { Pool } from '@neondatabase/serverless'
 
 const TRANSACTION_SETUP_SQL = "SET LOCAL lock_timeout = '5s'"
 
+/**
+ * @typedef {{ query: (sql: string) => Promise<void>, release: () => void }} MigrationClient
+ * @typedef {{ connect: () => Promise<MigrationClient>, end: () => Promise<void> }} MigrationPool
+ */
+
 async function loadSetupSql() {
   const here = dirname(fileURLToPath(import.meta.url))
   const setupSqlPath = join(here, '..', 'database-setup.sql')
   return readFile(setupSqlPath, 'utf8')
 }
 
+/**
+ * @param {{
+ *   databaseUrl?: string,
+ *   loadSetupSql?: () => Promise<string>,
+ *   createPool?: (options: { connectionString: string }) => MigrationPool,
+ * }=} options
+ */
 export async function applyRealtimeSchema({
   databaseUrl = process.env.DATABASE_URL,
   loadSetupSql: readSetupSql = loadSetupSql,
