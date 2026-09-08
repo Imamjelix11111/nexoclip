@@ -47,7 +47,7 @@ export function createProviderRouter({ env = process.env, fetch: fetchImpl = glo
       // explicit direct-fallback allowlist below. Unmapped models still hard-fail on 400 as before.
       // 402 (insufficient OpenRouter account credits) is an OpenRouter-side capacity problem, not a
       // problem with this request, so it gets the same treatment for mapped models.
-      const retryable = isRetryableProviderError(error) || (mapping && [400, 402].includes(Number(error?.status)));
+      const retryable = isRetryableProviderError(error) || (mapping && [400, 402, 404].includes(Number(error?.status)));
       if (!retryable) throw error;
       // Models outside the explicit direct-fallback allowlist remain OpenRouter-only.
       if (!mapping) throw error;
