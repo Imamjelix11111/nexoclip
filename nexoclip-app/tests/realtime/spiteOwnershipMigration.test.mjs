@@ -97,6 +97,11 @@ function createSpiteDatabase({ projects = [], settings = {}, failMarkerWrite = f
   return adapter;
 }
 
+function hasTxSql(spiteDb, fragment) {
+  const expected = fragment.toLowerCase();
+  return spiteDb.txQueryCalls.some(({ text }) => normalize(text).includes(expected));
+}
+
 test('uses explicit SPITE_OWNER_USER_ID, updates only placeholder projects, and records a marker', async () => {
   const mainDb = createMainDatabase([
     { id: '550e8400-e29b-41d4-a716-4466554400aa', created_at: '2026-09-08T00:00:00.000Z' },
@@ -187,6 +192,102 @@ test('requires explicit SPITE_OWNER_USER_ID in production even when deterministi
   assert.equal(mainDb.queryCalls.length, 0);
 });
 
+test('treats invalid JSON marker as absent and replaces it with a successful marker', async () => {
+  const mainDb = createMainDatabase([]);
+  const spiteDb = createSpiteDatabase({
+    projects: [{ id: 'project-1', userid: PLACEHOLDER_OWNER_USER_ID }],
+    settings: {
+      [MIGRATION_MARKER_KEY]: '{not-valid-json',
+    },
+  });
+
+  const result = await runSpiteOwnershipMigration({
+    mainDb,
+    spiteDb,
+    env: {
+      SPITE_OWNER_USER_ID: '550e8400-e29b-41d4-a716-446655440001',
+    },
+  });
+
+  assert.equal(result.status, 'migrated');
+  assert.equal(result.migratedProjectCount, 1);
+  const marker = JSON.parse(spiteDb.state.settings[MIGRATION_MARKER_KEY]);
+  assert.equal(marker.ownerUserId, '550e8400-e29b-41d4-a716-446655440001');
+});
+
+test('treats partial marker as absent and replaces it with a successful marker', async () => {
+  const mainDb = createMainDatabase([]);
+  const spiteDb = createSpiteDatabase({
+    projects: [{ id: 'project-1', userid: PLACEHOLDER_OWNER_USER_ID }],
+    settings: {
+      [MIGRATION_MARKER_KEY]: JSON.stringify({
+        ownerUserId: '550e8400-e29b-41d4-a716-446655440001',
+      }),
+    },
+  });
+
+  const result = await runSpiteOwnershipMigration({
+    mainDb,
+    spiteDb,
+    env: {
+      SPITE_OWNER_USER_ID: '550e8400-e29b-41d4-a716-446655440001',
+    },
+  });
+
+  assert.equal(result.status, 'migrated');
+  assert.equal(result.migratedProjectCount, 1);
+  const marker = JSON.parse(spiteDb.state.settings[MIGRATION_MARKER_KEY]);
+  assert.equal(marker.migratedProjectCount, 1);
+  assert.equal(marker.placeholderOwnerUserId, PLACEHOLDER_OWNER_USER_ID);
+  assert.match(marker.completedAt, /^\d{4}-\d{2}-\d{2}t/i);
+});
+
+test('rejects explicit placeholder SPITE_OWNER_USER_ID before project updates or marker writes', async () => {
+  const mainDb = createMainDatabase([]);
+  const spiteDb = createSpiteDatabase({
+    projects: [{ id: 'project-1', userid: PLACEHOLDER_OWNER_USER_ID }],
+  });
+
+  await assert.rejects(
+    runSpiteOwnershipMigration({
+      mainDb,
+      spiteDb,
+      env: {
+        SPITE_OWNER_USER_ID: PLACEHOLDER_OWNER_USER_ID,
+      },
+    }),
+    /SPITE_OWNER_USER_ID must not be the placeholder owner UUID/i,
+  );
+
+  assert.equal(spiteDb.state.projects[0].userid, PLACEHOLDER_OWNER_USER_ID);
+  assert.equal(hasTxSql(spiteDb, 'update projects set userid'), false);
+  assert.equal(hasTxSql(spiteDb, 'insert into app_settings'), false);
+});
+
+test('rejects deterministic fallback placeholder owner before project updates or marker writes', async () => {
+  const mainDb = createMainDatabase([
+    { id: PLACEHOLDER_OWNER_USER_ID, created_at: '2026-09-09T00:00:00.000Z' },
+  ]);
+  const spiteDb = createSpiteDatabase({
+    projects: [{ id: 'project-1', userid: PLACEHOLDER_OWNER_USER_ID }],
+  });
+
+  await assert.rejects(
+    runSpiteOwnershipMigration({
+      mainDb,
+      spiteDb,
+      env: {
+        SPITE_ALLOW_DETERMINISTIC_FIRST_USER: '1',
+      },
+    }),
+    /first user id must not be the placeholder owner UUID/i,
+  );
+
+  assert.equal(spiteDb.state.projects[0].userid, PLACEHOLDER_OWNER_USER_ID);
+  assert.equal(hasTxSql(spiteDb, 'update projects set userid'), false);
+  assert.equal(hasTxSql(spiteDb, 'insert into app_settings'), false);
+});
+
 test('is idempotent once the migration marker exists', async () => {
   const mainDb = createMainDatabase([]);
   const spiteDb = createSpiteDatabase({
@@ -197,6 +298,7 @@ test('is idempotent once the migration marker exists', async () => {
         migratedProjectCount: 2,
         placeholderOwnerUserId: PLACEHOLDER_OWNER_USER_ID,
         completedAt: '2026-09-09T00:00:00.000Z',
+        usedDeterministicFirstUser: false,
       }),
     },
   });

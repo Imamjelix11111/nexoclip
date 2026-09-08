@@ -134,6 +134,7 @@ async function readExistingMarker(spiteDb) {
 async function resolveOwnerUserId({ mainDb, env }) {
   const configured = String(env.SPITE_OWNER_USER_ID || '').trim();
   if (configured) {
+    assertNotPlaceholderOwner(configured, 'SPITE_OWNER_USER_ID');
     assertUuid(configured, 'SPITE_OWNER_USER_ID');
     return {
       userId: configured,
@@ -157,6 +158,7 @@ async function resolveOwnerUserId({ mainDb, env }) {
     throw new Error('Cannot determine SPITE owner: main database has no users');
   }
 
+  assertNotPlaceholderOwner(firstUserId, 'first user id');
   assertUuid(firstUserId, 'first user id');
   return {
     userId: firstUserId,
@@ -167,15 +169,33 @@ async function resolveOwnerUserId({ mainDb, env }) {
 function parseMarker(value) {
   if (!value) return null;
 
-  const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+  let parsed;
+  try {
+    parsed = typeof value === 'string' ? JSON.parse(value) : value;
+  } catch {
+    return null;
+  }
+
   if (!parsed || typeof parsed !== 'object') return null;
 
+  const ownerUserId = String(parsed.ownerUserId || '').trim();
+  const migratedProjectCount = Number(parsed.migratedProjectCount);
+  const placeholderOwnerUserId = String(parsed.placeholderOwnerUserId || '').trim();
+  const completedAt = String(parsed.completedAt || '').trim();
+  const usedDeterministicFirstUser = parsed.usedDeterministicFirstUser;
+
+  if (!ownerUserId || !isUuid(ownerUserId)) return null;
+  if (!Number.isInteger(migratedProjectCount) || migratedProjectCount < 0) return null;
+  if (placeholderOwnerUserId !== PLACEHOLDER_OWNER_USER_ID) return null;
+  if (!completedAt || Number.isNaN(Date.parse(completedAt))) return null;
+  if (typeof usedDeterministicFirstUser !== 'boolean') return null;
+
   return {
-    ownerUserId: String(parsed.ownerUserId || '').trim(),
-    migratedProjectCount: Number(parsed.migratedProjectCount ?? 0),
-    placeholderOwnerUserId: String(parsed.placeholderOwnerUserId || PLACEHOLDER_OWNER_USER_ID),
-    completedAt: String(parsed.completedAt || ''),
-    usedDeterministicFirstUser: parsed.usedDeterministicFirstUser === true,
+    ownerUserId,
+    migratedProjectCount,
+    placeholderOwnerUserId,
+    completedAt,
+    usedDeterministicFirstUser,
   };
 }
 
@@ -191,8 +211,18 @@ function markerResult(status, marker) {
 }
 
 function assertUuid(value, label) {
-  if (!UUID_PATTERN.test(value)) {
+  if (!isUuid(value)) {
     throw new Error(`${label} must be a valid UUID`);
+  }
+}
+
+function isUuid(value) {
+  return UUID_PATTERN.test(value);
+}
+
+function assertNotPlaceholderOwner(value, label) {
+  if (value === PLACEHOLDER_OWNER_USER_ID) {
+    throw new Error(`${label} must not be the placeholder owner UUID`);
   }
 }
 
