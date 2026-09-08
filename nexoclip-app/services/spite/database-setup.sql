@@ -192,6 +192,7 @@ CREATE TABLE IF NOT EXISTS canvas_yjs_updates (
     seq          bigint NOT NULL,
     update_data  bytea NOT NULL,
     created_at   timestamptz NOT NULL DEFAULT now(),
+    CHECK (seq > 0),
     PRIMARY KEY (project_id, seq)
 );
 

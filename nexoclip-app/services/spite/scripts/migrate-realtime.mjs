@@ -5,28 +5,56 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Pool } from '@neondatabase/serverless'
 
-async function main() {
-  const databaseUrl = process.env.DATABASE_URL
+const TRANSACTION_SETUP_SQL = "SET LOCAL lock_timeout = '5s'"
+
+async function loadSetupSql() {
+  const here = dirname(fileURLToPath(import.meta.url))
+  const setupSqlPath = join(here, '..', 'database-setup.sql')
+  return readFile(setupSqlPath, 'utf8')
+}
+
+export async function applyRealtimeSchema({
+  databaseUrl = process.env.DATABASE_URL,
+  loadSetupSql: readSetupSql = loadSetupSql,
+  createPool = (options) => new Pool(options),
+} = {}) {
   if (!databaseUrl) {
     throw new Error('DATABASE_URL environment variable is required')
   }
 
-  const here = dirname(fileURLToPath(import.meta.url))
-  const setupSqlPath = join(here, '..', 'database-setup.sql')
-  const setupSql = await readFile(setupSqlPath, 'utf8')
-
-  const pool = new Pool({ connectionString: databaseUrl })
+  const setupSql = await readSetupSql()
+  const pool = createPool({ connectionString: databaseUrl })
+  const client = await pool.connect()
 
   try {
-    await pool.query(setupSql)
-    console.log('Realtime schema migration applied successfully.')
+    await client.query('BEGIN')
+    await client.query(TRANSACTION_SETUP_SQL)
+    await client.query(setupSql)
+    await client.query('COMMIT')
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK')
+    } catch {
+      // Preserve original migration error.
+    }
+    throw error
   } finally {
+    client.release()
     await pool.end()
   }
 }
 
-main().catch((error) => {
-  console.error('Realtime schema migration failed.')
-  console.error(error instanceof Error ? error.stack || error.message : error)
-  process.exit(1)
-})
+async function main() {
+  await applyRealtimeSchema()
+  console.log('Realtime schema migration applied successfully.')
+}
+
+const isDirectExecution = process.argv[1] != null && fileURLToPath(import.meta.url) === process.argv[1]
+
+if (isDirectExecution) {
+  main().catch((error) => {
+    console.error('Realtime schema migration failed.')
+    console.error(error instanceof Error ? error.stack || error.message : error)
+    process.exit(1)
+  })
+}

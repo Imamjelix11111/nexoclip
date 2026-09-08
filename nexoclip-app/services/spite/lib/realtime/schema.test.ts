@@ -33,6 +33,7 @@ test('database-setup defines append-only canvas_yjs_updates ordering per project
   expectContains('create table if not exists canvas_yjs_updates')
   expectContains('project_id uuid not null references projects(id) on delete cascade')
   expectContains('seq bigint not null')
+  expectContains('check (seq > 0)')
   expectContains('update_data bytea not null')
   expectContains('created_at timestamptz not null default now()')
   expectContains('primary key (project_id, seq)')
