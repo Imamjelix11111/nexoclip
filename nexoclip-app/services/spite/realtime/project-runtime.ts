@@ -420,8 +420,17 @@ export class ProjectRuntime {
   }
 
   private async runSnapshotIntervalTick(): Promise<void> {
-    await this.compact()
-    this.ensureSnapshotIntervalScheduled()
+    try {
+      await this.compact()
+    } catch {
+      // Retry on the next interval tick while durable state remains dirty.
+    } finally {
+      if (!this.acceptingMutations || !this.committedSinceCompact) {
+        return
+      }
+
+      this.ensureSnapshotIntervalScheduled()
+    }
   }
 
   private triggerCompactionIfNeeded(): void {

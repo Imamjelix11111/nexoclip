@@ -600,6 +600,52 @@ test('periodic compaction does not rearm when compaction leaves no dirty durable
   assert.equal(fixture.clock.pendingTimerCount(), 0)
 })
 
+test('periodic compaction retries after transient compaction failure while dirty and stops once clean', async () => {
+  const fixture = createRuntimeFixture({
+    projectionDebounceMs: 1,
+    snapshotIdleMs: 0,
+    snapshotIntervalMs: 30_000,
+    compactAfterUpdates: 1_000,
+    compactAfterBytes: 512 * 1024,
+  })
+  fixture.repository.appendBehavior = async () => 1
+
+  let compactAttempt = 0
+  fixture.repository.compactBehavior = async () => {
+    compactAttempt += 1
+    if (compactAttempt === 1) {
+      throw new Error('transient compact failure')
+    }
+  }
+
+  const committedUpdate = captureUpdate(fixture.doc, () => {
+    upsertNode(fixture.doc, {
+      id: 'node-1',
+      type: 'prompt',
+      position: { x: 1, y: 1 },
+      data: { label: 'single-write' },
+    })
+  })
+
+  const ackPromise = fixture.runtime.enqueue(committedUpdate)
+  await fixture.clock.advanceBy(25)
+  await ackPromise
+
+  await fixture.clock.advanceBy(1)
+  assert.equal(fixture.projectionCalls.length, 1)
+
+  await fixture.clock.advanceBy(30_000)
+  assert.equal(fixture.repository.compactCalls.length, 1)
+  assert.equal(fixture.clock.pendingTimerCount(), 1)
+
+  await fixture.clock.advanceBy(30_000)
+  assert.equal(fixture.repository.compactCalls.length, 2)
+
+  await fixture.clock.advanceBy(120_000)
+  assert.equal(fixture.repository.compactCalls.length, 2)
+  assert.equal(fixture.clock.pendingTimerCount(), 0)
+})
+
 test('periodic compaction keeps firing under sustained writes', async () => {
   const fixture = createRuntimeFixture({
     projectionDebounceMs: 5_000,
