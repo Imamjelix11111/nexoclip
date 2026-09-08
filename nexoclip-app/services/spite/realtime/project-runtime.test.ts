@@ -58,7 +58,7 @@ class FakeClock {
     return id
   }
 
-  clearTimeout = (timerId: number | null | undefined): void => {
+  clearTimeout = (timerId: ReturnType<typeof setTimeout> | number | null | undefined): void => {
     if (typeof timerId === 'number') {
       this.timers.delete(timerId)
     }
@@ -169,6 +169,8 @@ function createRuntimeFixture(options: {
   projectionRetryBaseMs?: number
   snapshotIdleMs?: number
   snapshotIntervalMs?: number
+  compactAfterUpdates?: number
+  compactAfterBytes?: number
   batchWindowMs?: number
   retryBaseMs?: number
   retryMaxMs?: number
@@ -216,6 +218,8 @@ function createRuntimeFixture(options: {
       projectionRetryMaxMs: options.projectionRetryMaxMs ?? 2_000,
       snapshotIdleMs: options.snapshotIdleMs ?? 5_000,
       snapshotIntervalMs: options.snapshotIntervalMs ?? 30_000,
+      compactAfterUpdates: options.compactAfterUpdates ?? 1_000,
+      compactAfterBytes: options.compactAfterBytes ?? 512 * 1024,
       maxQueuedUpdates: options.maxQueuedUpdates ?? 64,
       maxQueuedBytes: options.maxQueuedBytes ?? 128 * 1024,
     },
@@ -491,33 +495,130 @@ test('idle compaction snapshots only the latest durable boundary', async () => {
   ])
 })
 
-test('periodic compaction runs even without an idle window', async () => {
+test('compaction runs after the durable update-count threshold is reached', async () => {
   const fixture = createRuntimeFixture({
     projectionDebounceMs: 5_000,
     snapshotIdleMs: 60_000,
-    snapshotIntervalMs: 30_000,
+    snapshotIntervalMs: 60_000,
+    compactAfterUpdates: 2,
+    compactAfterBytes: 512 * 1024,
   })
-  fixture.repository.appendBehavior = async () => 2
+  let seq = 0
+  fixture.repository.appendBehavior = async () => {
+    seq += 1
+    return seq
+  }
+
+  const firstUpdate = captureUpdate(fixture.doc, () => {
+    upsertNode(fixture.doc, {
+      id: 'node-1',
+      type: 'prompt',
+      position: { x: 1, y: 1 },
+      data: { label: 'one' },
+    })
+  })
+  const secondUpdate = captureUpdate(fixture.doc, () => {
+    patchNode(fixture.doc, 'node-1', {
+      data: { label: 'two' },
+    })
+  })
+
+  const firstAck = fixture.runtime.enqueue(firstUpdate)
+  await fixture.clock.advanceBy(25)
+  assert.equal(await firstAck, 1)
+  assert.equal(fixture.repository.compactCalls.length, 0)
+
+  const secondAck = fixture.runtime.enqueue(secondUpdate)
+  await fixture.clock.advanceBy(25)
+  assert.equal(await secondAck, 2)
+  assert.equal(fixture.repository.compactCalls.length, 1)
+  assert.equal(fixture.repository.compactCalls[0].includedSeq, 2)
+})
+
+test('compaction runs after the durable byte threshold is reached', async () => {
+  const fixture = createRuntimeFixture({
+    projectionDebounceMs: 5_000,
+    snapshotIdleMs: 60_000,
+    snapshotIntervalMs: 60_000,
+    compactAfterUpdates: 1_000,
+    compactAfterBytes: 1,
+  })
+  fixture.repository.appendBehavior = async () => 3
 
   const update = captureUpdate(fixture.doc, () => {
     upsertNode(fixture.doc, {
       id: 'node-1',
       type: 'prompt',
       position: { x: 2, y: 3 },
-      data: { label: 'periodic' },
+      data: { label: 'byte-threshold' },
     })
   })
 
   const ackPromise = fixture.runtime.enqueue(update)
   await fixture.clock.advanceBy(25)
-  await ackPromise
+  assert.equal(await ackPromise, 3)
 
-  await fixture.clock.advanceBy(29_999)
+  assert.equal(fixture.repository.compactCalls.length, 1)
+  assert.equal(fixture.repository.compactCalls[0].includedSeq, 3)
+})
+
+test('periodic compaction keeps firing under sustained writes', async () => {
+  const fixture = createRuntimeFixture({
+    projectionDebounceMs: 5_000,
+    snapshotIdleMs: 60_000,
+    snapshotIntervalMs: 30_000,
+    compactAfterUpdates: 1_000,
+    compactAfterBytes: 512 * 1024,
+  })
+  let seq = 0
+  fixture.repository.appendBehavior = async () => {
+    seq += 1
+    return seq
+  }
+
+  const commitUpdate = async (label: string) => {
+    const update = captureUpdate(fixture.doc, () => {
+      if (seq === 0) {
+        upsertNode(fixture.doc, {
+          id: 'node-1',
+          type: 'prompt',
+          position: { x: 2, y: 3 },
+          data: { label },
+        })
+        return
+      }
+
+      patchNode(fixture.doc, 'node-1', {
+        data: { label },
+      })
+    })
+
+    const ackPromise = fixture.runtime.enqueue(update)
+    await fixture.clock.advanceBy(25)
+    await ackPromise
+  }
+
+  await commitUpdate('t0')
+  await fixture.clock.advanceBy(10_000)
+  await commitUpdate('t10s')
+  await fixture.clock.advanceBy(10_000)
+  await commitUpdate('t20s')
+
   assert.equal(fixture.repository.compactCalls.length, 0)
 
-  await fixture.clock.advanceBy(1)
+  await fixture.clock.advanceBy(10_000)
   assert.equal(fixture.repository.compactCalls.length, 1)
-  assert.equal(fixture.repository.compactCalls[0].includedSeq, 2)
+  assert.equal(fixture.repository.compactCalls[0].includedSeq, 3)
+
+  await commitUpdate('t30s')
+  await fixture.clock.advanceBy(10_000)
+  await commitUpdate('t40s')
+  await fixture.clock.advanceBy(10_000)
+  await commitUpdate('t50s')
+
+  await fixture.clock.advanceBy(10_000)
+  assert.equal(fixture.repository.compactCalls.length, 2)
+  assert.equal(fixture.repository.compactCalls[1].includedSeq, 6)
 })
 
 test('shutdown cancels a debounced projection that has not started yet', async () => {

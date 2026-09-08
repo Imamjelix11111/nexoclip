@@ -57,6 +57,8 @@ export type ProjectRuntimeConfig = {
   projectionRetryMaxMs: number
   snapshotIdleMs: number
   snapshotIntervalMs: number
+  compactAfterUpdates: number
+  compactAfterBytes: number
   maxQueuedUpdates: number
   maxQueuedBytes: number
   schemaVersion: number
@@ -88,6 +90,8 @@ export const DEFAULT_PROJECT_RUNTIME_CONFIG: ProjectRuntimeConfig = {
   projectionRetryMaxMs: readIntegerEnv('SPITE_REALTIME_PROJECTION_RETRY_MAX_MS', 5_000),
   snapshotIdleMs: readIntegerEnv('SPITE_REALTIME_SNAPSHOT_IDLE_MS', 5_000),
   snapshotIntervalMs: readIntegerEnv('SPITE_REALTIME_SNAPSHOT_INTERVAL_MS', 30_000),
+  compactAfterUpdates: readIntegerEnv('SPITE_REALTIME_COMPACT_AFTER_UPDATES', 128),
+  compactAfterBytes: readIntegerEnv('SPITE_REALTIME_COMPACT_AFTER_BYTES', 256 * 1024),
   maxQueuedUpdates: readIntegerEnv('SPITE_REALTIME_MAX_QUEUED_UPDATES', 256),
   maxQueuedBytes: readIntegerEnv('SPITE_REALTIME_MAX_QUEUED_BYTES', 512 * 1024),
   schemaVersion: CURRENT_SCHEMA_VERSION,
@@ -123,6 +127,8 @@ export class ProjectRuntime {
   private retryAttempt = 0
   private lastDurableSeq = 0
   private lastCompactedSeq = 0
+  private durableUpdatesSinceCompact = 0
+  private durableBytesSinceCompact = 0
 
   private batchTimer: ProjectRuntimeTimer | null = null
   private retryTimer: ProjectRuntimeTimer | null = null
@@ -150,6 +156,7 @@ export class ProjectRuntime {
     this.captureProjection = options.captureProjectionPayload ?? captureProjectionPayload
     this.durableDoc = new Y.Doc()
     Y.applyUpdate(this.durableDoc, Y.encodeStateAsUpdate(options.doc))
+    this.ensureSnapshotIntervalScheduled()
   }
 
   canAcceptMutation(): boolean {
@@ -226,7 +233,9 @@ export class ProjectRuntime {
       )
       this.lastCompactedSeq = includedSeq
       this.committedSinceCompact = false
-      this.resetSnapshotTimers()
+      this.durableUpdatesSinceCompact = 0
+      this.durableBytesSinceCompact = 0
+      this.clearTimer('snapshotIdleTimer')
     })
   }
 
@@ -278,9 +287,11 @@ export class ProjectRuntime {
       this.queuedUpdates = Math.max(0, this.queuedUpdates - batchSize)
       this.queuedBytes = Math.max(0, this.queuedBytes - batchBytes)
       this.committedSinceCompact = true
+      this.durableUpdatesSinceCompact += batchSize
+      this.durableBytesSinceCompact += batchBytes
 
       this.scheduleProjection(targetSeq)
-      this.resetSnapshotTimers()
+      this.resetSnapshotIdleTimer()
       this.setState('PERSISTED')
 
       for (const entry of batch) {
@@ -294,6 +305,8 @@ export class ProjectRuntime {
       } else {
         this.setState('READ_ONLY')
       }
+
+      this.triggerCompactionIfNeeded()
     } catch (error) {
       this.pendingEntries.unshift(...batch)
       this.setState('DEGRADED')
@@ -345,10 +358,11 @@ export class ProjectRuntime {
       await this.projector(this.options.projectId, job.payload, job.targetSeq)
     } catch {
       if (!this.projectionStopped) {
+        const pendingProjection = this.pendingProjection as ProjectionJob | null
         const hasNewerPendingProjection =
-          !!this.pendingProjection && this.pendingProjection.targetSeq > job.targetSeq
+          !!pendingProjection && pendingProjection.targetSeq > job.targetSeq
         const retryJob = hasNewerPendingProjection
-          ? this.pendingProjection
+          ? pendingProjection
           : {
               ...job,
               attempt: job.attempt + 1,
@@ -376,26 +390,58 @@ export class ProjectRuntime {
     }
   }
 
-  private resetSnapshotTimers(): void {
-    if (!this.committedSinceCompact) {
+  private resetSnapshotIdleTimer(): void {
+    if (!this.committedSinceCompact || this.config.snapshotIdleMs <= 0) {
       return
     }
 
-    if (this.config.snapshotIdleMs > 0) {
-      this.clearTimer('snapshotIdleTimer')
-      this.snapshotIdleTimer = this.clock.setTimeout(() => {
-        this.snapshotIdleTimer = null
-        void this.compact()
-      }, this.config.snapshotIdleMs)
+    this.clearTimer('snapshotIdleTimer')
+    this.snapshotIdleTimer = this.clock.setTimeout(() => {
+      this.snapshotIdleTimer = null
+      void this.compact()
+    }, this.config.snapshotIdleMs)
+  }
+
+  private ensureSnapshotIntervalScheduled(): void {
+    if (
+      this.config.snapshotIntervalMs <= 0 ||
+      this.snapshotIntervalTimer ||
+      !this.acceptingMutations
+    ) {
+      return
     }
 
-    if (this.config.snapshotIntervalMs > 0) {
-      this.clearTimer('snapshotIntervalTimer')
-      this.snapshotIntervalTimer = this.clock.setTimeout(() => {
-        this.snapshotIntervalTimer = null
-        void this.compact()
-      }, this.config.snapshotIntervalMs)
+    this.snapshotIntervalTimer = this.clock.setTimeout(() => {
+      this.snapshotIntervalTimer = null
+      void this.runSnapshotIntervalTick()
+    }, this.config.snapshotIntervalMs)
+  }
+
+  private async runSnapshotIntervalTick(): Promise<void> {
+    try {
+      await this.compact()
+    } finally {
+      this.ensureSnapshotIntervalScheduled()
     }
+  }
+
+  private triggerCompactionIfNeeded(): void {
+    if (!this.shouldCompactAfterAppend()) {
+      return
+    }
+
+    void this.compact()
+  }
+
+  private shouldCompactAfterAppend(): boolean {
+    const hitUpdateThreshold =
+      this.config.compactAfterUpdates > 0 &&
+      this.durableUpdatesSinceCompact >= this.config.compactAfterUpdates
+    const hitByteThreshold =
+      this.config.compactAfterBytes > 0 &&
+      this.durableBytesSinceCompact >= this.config.compactAfterBytes
+
+    return hitUpdateThreshold || hitByteThreshold
   }
 
   private resolveFlushWaitersIfReady(): void {
@@ -522,7 +568,11 @@ function createSystemClock(): ProjectRuntimeClock {
   return {
     now: () => Date.now(),
     setTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
-    clearTimeout: (timer) => clearTimeout(timer),
+    clearTimeout: (timer) => {
+      if (timer != null) {
+        clearTimeout(timer as ReturnType<typeof setTimeout>)
+      }
+    },
   }
 }
 
