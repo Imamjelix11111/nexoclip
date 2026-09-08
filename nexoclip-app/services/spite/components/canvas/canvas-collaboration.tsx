@@ -6,6 +6,7 @@ import type { Edge, Node } from '@xyflow/react'
 import type { UseRealtimeCanvasResult } from '@/hooks/use-realtime-canvas'
 
 type NodeDataPatch = Record<string, unknown>
+type NodeDataUpdater = Parameters<UseRealtimeCanvasResult['commands']['updateNodeData']>[1]
 type NodePatch = Parameters<UseRealtimeCanvasResult['commands']['patchNode']>[1]
 
 type CanvasCollaborationValue = UseRealtimeCanvasResult & {
@@ -15,6 +16,7 @@ type CanvasCollaborationValue = UseRealtimeCanvasResult & {
   deleteEdges: (edgeIds: string[]) => void
   patchNodes: (patches: Array<{ id: string; patch: NodePatch }>) => void
   patchNodeData: (nodeId: string, patch: NodeDataPatch) => void
+  updateNodeData: (nodeId: string, updater: NodeDataUpdater) => void
   replaceShot: (nodeId: string, shotId: string) => void
   createNextShot: (nodeId: string) => string | null
 }
@@ -76,58 +78,17 @@ export function CanvasCollaborationProvider({
       if (!findNode(nodeId)) return
       value.commands.patchNodeData(nodeId, patch)
     },
+    updateNodeData(nodeId, updater) {
+      if (!findNode(nodeId)) return
+      value.commands.updateNodeData(nodeId, updater)
+    },
     replaceShot(nodeId, shotId) {
-      const self = findNode(nodeId)
-      if (!self) return
-      const sceneId = (self.data as Record<string, unknown> | undefined)?.sceneId as string | undefined
-      value.commands.batch(({ patchNode }) => {
-        for (const node of value.allNodes as Node[]) {
-          const data = (node.data as Record<string, unknown>) || {}
-          const sameScene = !sceneId || data.sceneId === sceneId
-          const currentShotId = (data.shotId || data.selectedShotId) as string | undefined
-          if (node.id === nodeId) {
-            patchNode(node.id, {
-              data: {
-                ...data,
-                shotId,
-                selectedShotId: undefined,
-              },
-            })
-            continue
-          }
-          if (!sameScene || currentShotId !== shotId) continue
-          patchNode(node.id, {
-            data: {
-              ...data,
-              shotId: undefined,
-              selectedShotId: undefined,
-            },
-          })
-        }
-      })
+      if (!findNode(nodeId)) return
+      value.commands.replaceShot(nodeId, shotId)
     },
     createNextShot(nodeId) {
-      const self = findNode(nodeId)
-      if (!self) return null
-      const sceneId = (self.data as Record<string, unknown> | undefined)?.sceneId as string | undefined
-      let maxNum = 0
-      for (const node of value.allNodes as Node[]) {
-        const data = (node.data as Record<string, unknown>) || {}
-        if (sceneId && data.sceneId !== sceneId) continue
-        const match = String(data.shotId || data.selectedShotId || '').match(/^shot-(\d+)$/)
-        if (match) {
-          maxNum = Math.max(maxNum, Number.parseInt(match[1], 10))
-        }
-      }
-      const shotId = `shot-${maxNum + 1}`
-      value.commands.patchNode(nodeId, {
-        data: {
-          ...((self.data as Record<string, unknown>) || {}),
-          shotId,
-          selectedShotId: undefined,
-        },
-      })
-      return shotId
+      if (!findNode(nodeId)) return null
+      return value.commands.createNextShot(nodeId)
     },
   }
 

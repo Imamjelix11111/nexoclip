@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useState, useEffect, useRef } from 'react'
+import { memo, useState, useEffect, useRef, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { Position, NodeProps, Handle } from '@xyflow/react'
 import { TextT } from '@phosphor-icons/react'
@@ -8,6 +8,7 @@ import { NodeActionToolbar } from './node-toolbar'
 import { MentionTextarea, type Mention, type MentionTextareaRef } from '../mention-textarea'
 import { useProjectFolders } from '@/hooks/use-project-folders'
 import { useCanvasCollaboration } from '../canvas-collaboration'
+import { createLocalStateSyncGuard } from '@/lib/local-state-sync'
 
 function HandleIcon({ icon: Icon, color, style }: { icon: React.ElementType; color: string; style?: React.CSSProperties }) {
   return (
@@ -46,23 +47,23 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
   const [editing, setEditing] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<MentionTextareaRef>(null)
+  const syncGuardRef = useRef(createLocalStateSyncGuard())
 
   useEffect(() => {
     if (editing) return
+    const finishSync = syncGuardRef.current.beginPropSync()
     setText((data.text as string) || '')
     setMentions((data.mentions as Mention[]) || [])
+    queueMicrotask(finishSync)
   }, [data.text, data.mentions, editing])
 
-  // Sync text + mentions to node data so downstream image/video nodes can
-  // resolve @Folder tags out of the compiled prompt.
-  useEffect(() => {
-    const nextText = (data.text as string) || ''
-    const nextMentions = (data.mentions as Mention[]) || []
-    if (text === nextText && JSON.stringify(mentions) === JSON.stringify(nextMentions)) {
-      return
-    }
-    patchNodeData(id, { text, mentions })
-  }, [text, mentions, data.text, data.mentions, id, patchNodeData])
+  const handleChange = useCallback((nextText: string, nextMentions: Mention[]) => {
+    syncGuardRef.current.beginUserEdit()
+    setText(nextText)
+    setMentions(nextMentions)
+    if (!syncGuardRef.current.allowsPersistence()) return
+    patchNodeData(id, { text: nextText, mentions: nextMentions })
+  }, [id, patchNodeData])
 
   // Exit editing when the user clicks anywhere outside this card.
   useEffect(() => {
@@ -117,7 +118,7 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
           ref={editorRef}
           value={text}
           mentions={mentions}
-          onChange={(t, ms) => { setText(t); setMentions(ms) }}
+          onChange={handleChange}
           folders={folders}
           placeholder="Enter your prompt — type @ to reference a folder…"
           className="nodrag w-full bg-transparent resize-none outline-none text-[13px] text-foreground placeholder:text-muted-foreground/40 leading-relaxed p-4 min-h-[160px] cursor-text"

@@ -38,6 +38,7 @@ type EdgeInput = Partial<CanvasEdgeProjection> & {
 }
 
 type NodePatch = Partial<Omit<NodeInput, 'id'>>
+type NodeDataUpdater = (currentData: JsonRecord) => JsonRecord
 
 type RawBindingMutations = {
   createNode: (node: NodeInput) => void
@@ -65,6 +66,9 @@ export type RealtimeCanvasBinding = RawBindingMutations & {
   subscribe: (listener: () => void) => () => void
   applyNodeChanges: (changes: NodeChange[]) => void
   applyEdgeChanges: (changes: EdgeChange[]) => void
+  updateNodeData: (nodeId: string, updater: NodeDataUpdater) => void
+  replaceShot: (nodeId: string, shotId: string) => void
+  createNextShot: (nodeId: string) => string | null
   duplicateNodes: (nodeIds: string[]) => string[]
   connect: (connection: Connection) => string | null
   batch: (callback: (mutations: RawBindingMutations) => void) => void
@@ -267,6 +271,29 @@ export function createReactFlowBinding(
       })
     },
 
+    updateNodeData(nodeId, updater) {
+      if (!nodeId) return
+      runLocalTransaction(doc, () => {
+        updateNodeDataRecord(doc, nodeId, updater)
+      })
+    },
+
+    replaceShot(nodeId, shotId) {
+      if (!nodeId || !shotId) return
+      runLocalTransaction(doc, () => {
+        replaceShotRecord(doc, nodeId, shotId)
+      })
+    },
+
+    createNextShot(nodeId) {
+      if (!nodeId) return null
+      let shotId: string | null = null
+      runLocalTransaction(doc, () => {
+        shotId = createNextShotRecord(doc, nodeId)
+      })
+      return shotId
+    },
+
     deleteNode(nodeId) {
       runLocalTransaction(doc, () => {
         rawMutations.deleteNode(nodeId)
@@ -455,16 +482,84 @@ function patchNodeRecord(doc: Y.Doc, nodeId: string, patch: NodePatch): void {
 }
 
 function patchNodeDataRecord(doc: Y.Doc, nodeId: string, patch: JsonRecord): void {
+  updateNodeDataRecord(doc, nodeId, (currentData) => {
+    const nextData = { ...currentData }
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === undefined) delete nextData[key]
+      else nextData[key] = value
+    }
+    return nextData
+  })
+}
+
+function updateNodeDataRecord(doc: Y.Doc, nodeId: string, updater: NodeDataUpdater): void {
   const nodes = doc.getMap<Y.Map<unknown>>('nodes')
   const existing = nodes.get(nodeId)
   if (!(existing instanceof Y.Map)) return
 
-  const nextData = ensureRecord(existing.get('data'))
-  for (const [key, value] of Object.entries(patch)) {
-    if (value === undefined) delete nextData[key]
-    else nextData[key] = value
+  const currentData = ensureRecord(existing.get('data'))
+  const nextData = ensureRecord(updater({ ...currentData }))
+  for (const key of Object.keys(nextData)) {
+    if (nextData[key] === undefined) {
+      delete nextData[key]
+    }
   }
   existing.set('data', nextData)
+}
+
+function replaceShotRecord(doc: Y.Doc, nodeId: string, shotId: string): void {
+  const nodes = doc.getMap<Y.Map<unknown>>('nodes')
+  const self = nodes.get(nodeId)
+  if (!(self instanceof Y.Map)) return
+
+  const selfData = ensureRecord(self.get('data'))
+  const sceneId = typeof selfData.sceneId === 'string' ? selfData.sceneId : undefined
+
+  for (const [currentNodeId, node] of nodes.entries()) {
+    if (!(node instanceof Y.Map)) continue
+    const data = ensureRecord(node.get('data'))
+    const sameScene = !sceneId || data.sceneId === sceneId
+    const currentShotId = (data.shotId || data.selectedShotId) as string | undefined
+    if (currentNodeId === nodeId) {
+      patchNodeDataRecord(doc, currentNodeId, {
+        shotId,
+        selectedShotId: undefined,
+      })
+      continue
+    }
+    if (!sameScene || currentShotId !== shotId) continue
+    patchNodeDataRecord(doc, currentNodeId, {
+      shotId: undefined,
+      selectedShotId: undefined,
+    })
+  }
+}
+
+function createNextShotRecord(doc: Y.Doc, nodeId: string): string | null {
+  const nodes = doc.getMap<Y.Map<unknown>>('nodes')
+  const self = nodes.get(nodeId)
+  if (!(self instanceof Y.Map)) return null
+
+  const selfData = ensureRecord(self.get('data'))
+  const sceneId = typeof selfData.sceneId === 'string' ? selfData.sceneId : undefined
+  let maxNum = 0
+
+  for (const node of nodes.values()) {
+    if (!(node instanceof Y.Map)) continue
+    const data = ensureRecord(node.get('data'))
+    if (sceneId && data.sceneId !== sceneId) continue
+    const match = String(data.shotId || data.selectedShotId || '').match(/^shot-(\d+)$/)
+    if (match) {
+      maxNum = Math.max(maxNum, Number.parseInt(match[1], 10))
+    }
+  }
+
+  const shotId = `shot-${maxNum + 1}`
+  patchNodeDataRecord(doc, nodeId, {
+    shotId,
+    selectedShotId: undefined,
+  })
+  return shotId
 }
 
 function deleteNodeRecord(doc: Y.Doc, nodeId: string): void {

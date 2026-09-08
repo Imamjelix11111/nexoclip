@@ -775,12 +775,10 @@ function CanvasInner({ projectId }: { projectId: string }) {
       const proxyUrl = withBasePath(url)
 
       // Update node with proxy URL
-      commands.patchNode(n.id, {
-        data: {
-          ...(n.data as Record<string, unknown>),
-          thumbnail: proxyUrl,
-          isUploading: false,
-        },
+      commands.patchNodeData(n.id, {
+        thumbnail: proxyUrl,
+        isUploading: false,
+        uploadError: undefined,
       })
 
       // Record in assets with proxy URL and mark as protected (used in canvas)
@@ -796,13 +794,11 @@ function CanvasInner({ projectId }: { projectId: string }) {
       // node toolbar's "Add to folder" flow can pre-select it without
       // needing the modal to look it up by URL.
       if (assetData?.id) {
-        commands.patchNode(n.id, {
-          data: {
-            ...(n.data as Record<string, unknown>),
-            thumbnail: proxyUrl,
-            isUploading: false,
-            assetId: assetData.id,
-          },
+        commands.patchNodeData(n.id, {
+          thumbnail: proxyUrl,
+          isUploading: false,
+          uploadError: undefined,
+          assetId: assetData.id,
         })
       }
 
@@ -820,12 +816,9 @@ function CanvasInner({ projectId }: { projectId: string }) {
       toast.error(`${mediaType} upload failed: ${msg.split(':')[0]}. Drop again to retry.`)
       // Keep temp URL if upload fails — user can still work with it
       // for the current session, but it will not persist.
-      commands.patchNode(n.id, {
-        data: {
-          ...(n.data as Record<string, unknown>),
-          isUploading: false,
-          uploadError: true,
-        },
+      commands.patchNodeData(n.id, {
+        isUploading: false,
+        uploadError: true,
       })
     }
   }, [screenToFlowPosition, commands, activeSceneId])

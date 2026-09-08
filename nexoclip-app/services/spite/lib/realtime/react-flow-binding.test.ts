@@ -10,6 +10,7 @@ import {
   upsertEdge,
   upsertNode,
 } from './document'
+import { completeGenerationNode } from '../generation-node'
 import { LOCAL_REACT_FLOW_ORIGIN, createReactFlowBinding } from './react-flow-binding'
 import {
   getOrCreateRealtimeCanvasRoom,
@@ -350,6 +351,125 @@ test('binding observers publish remote updates without writing them back', () =>
   assert.equal(snapshots.length, 1)
 
   unsubscribe()
+  binding.destroy()
+})
+
+test('binding updateNodeData merges against authoritative node data so concurrent fields survive generation completion', () => {
+  const doc = createCanvasDocument()
+  upsertNode(doc, {
+    id: 'node-1',
+    type: 'imageGen',
+    position: { x: 10, y: 20 },
+    data: {
+      sceneId: 'scene-1',
+      label: 'Frame',
+      prompt: 'hello',
+      pendingRequestId: 'req-1',
+    },
+  })
+
+  const binding = createReactFlowBinding(doc)
+
+  const remoteReplica = new Y.Doc()
+  Y.applyUpdate(remoteReplica, Y.encodeStateAsUpdate(doc))
+  const remoteBinding = createReactFlowBinding(remoteReplica)
+  const remoteUpdate = captureUpdate(remoteReplica, () => {
+    remoteBinding.patchNodeData('node-1', {
+      remoteOnly: 'keep-me',
+    })
+  })
+  Y.applyUpdate(doc, remoteUpdate, 'remote-sync')
+
+  binding.updateNodeData('node-1', (currentData) =>
+    completeGenerationNode(currentData, '/generated.png'),
+  )
+
+  const projection = readCanvasProjection(doc)
+  assert.deepEqual(findNode(projection, 'node-1').data, {
+    sceneId: 'scene-1',
+    label: 'Frame',
+    prompt: 'hello',
+    outputUrl: '/generated.png',
+    remoteOnly: 'keep-me',
+    status: 'completed',
+    error: null,
+  })
+
+  remoteBinding.destroy()
+  binding.destroy()
+})
+
+test('binding replaceShot and createNextShot read the latest document state and patch only shot fields', () => {
+  const doc = createCanvasDocument()
+  setScenes(doc, [
+    { id: 'scene-1', name: 'Scene 1' },
+    { id: 'scene-2', name: 'Scene 2' },
+  ])
+  upsertNode(doc, {
+    id: 'node-a',
+    type: 'imageGen',
+    position: { x: 10, y: 20 },
+    data: { sceneId: 'scene-1', shotId: 'shot-1', label: 'A', remoteOnly: 'keep-a' },
+  })
+  upsertNode(doc, {
+    id: 'node-b',
+    type: 'reference',
+    position: { x: 40, y: 20 },
+    data: { sceneId: 'scene-1', shotId: 'shot-2', label: 'B', remoteOnly: 'keep-b' },
+  })
+  upsertNode(doc, {
+    id: 'node-c',
+    type: 'videoGen',
+    position: { x: 80, y: 20 },
+    data: { sceneId: 'scene-2', shotId: 'shot-2', label: 'C', remoteOnly: 'keep-c' },
+  })
+
+  const binding = createReactFlowBinding(doc)
+
+  const remoteReplica = new Y.Doc()
+  Y.applyUpdate(remoteReplica, Y.encodeStateAsUpdate(doc))
+  const remoteBinding = createReactFlowBinding(remoteReplica)
+  const remoteUpdate = captureUpdate(remoteReplica, () => {
+    remoteBinding.createNode({
+      id: 'node-d',
+      type: 'imageGen',
+      position: { x: 120, y: 20 },
+      data: { sceneId: 'scene-1', shotId: 'shot-3', label: 'D', remoteOnly: 'keep-d' },
+    })
+  })
+  Y.applyUpdate(doc, remoteUpdate, 'remote-sync')
+
+  binding.replaceShot('node-a', 'shot-2')
+  const nextShot = binding.createNextShot('node-b')
+
+  const projection = readCanvasProjection(doc)
+  assert.equal(nextShot, 'shot-4')
+  assert.deepEqual(findNode(projection, 'node-a').data, {
+    sceneId: 'scene-1',
+    shotId: 'shot-2',
+    label: 'A',
+    remoteOnly: 'keep-a',
+  })
+  assert.deepEqual(findNode(projection, 'node-b').data, {
+    sceneId: 'scene-1',
+    shotId: 'shot-4',
+    label: 'B',
+    remoteOnly: 'keep-b',
+  })
+  assert.deepEqual(findNode(projection, 'node-c').data, {
+    sceneId: 'scene-2',
+    shotId: 'shot-2',
+    label: 'C',
+    remoteOnly: 'keep-c',
+  })
+  assert.deepEqual(findNode(projection, 'node-d').data, {
+    sceneId: 'scene-1',
+    shotId: 'shot-3',
+    label: 'D',
+    remoteOnly: 'keep-d',
+  })
+
+  remoteBinding.destroy()
   binding.destroy()
 })
 

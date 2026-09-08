@@ -61,6 +61,9 @@ export type RealtimeCanvasCommands = Pick<
   | 'createNode'
   | 'patchNode'
   | 'patchNodeData'
+  | 'updateNodeData'
+  | 'replaceShot'
+  | 'createNextShot'
   | 'deleteNode'
   | 'createEdge'
   | 'deleteEdge'
@@ -92,6 +95,9 @@ const EMPTY_COMMANDS: RealtimeCanvasCommands = {
   createNode: () => {},
   patchNode: () => {},
   patchNodeData: () => {},
+  updateNodeData: () => {},
+  replaceShot: () => {},
+  createNextShot: () => null,
   deleteNode: () => {},
   createEdge: () => {},
   deleteEdge: () => {},
@@ -287,6 +293,9 @@ export class RealtimeCanvasRoom {
       createNode: this.binding.createNode,
       patchNode: this.binding.patchNode,
       patchNodeData: this.binding.patchNodeData,
+      updateNodeData: this.binding.updateNodeData,
+      replaceShot: this.binding.replaceShot,
+      createNextShot: this.binding.createNextShot,
       deleteNode: this.binding.deleteNode,
       createEdge: this.binding.createEdge,
       deleteEdge: this.binding.deleteEdge,
