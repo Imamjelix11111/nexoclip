@@ -81,6 +81,10 @@ class FakeClock {
     await flushMicrotasks()
   }
 
+  pendingTimerCount(): number {
+    return this.timers.size
+  }
+
   private nextDueTimer(target: number) {
     let winner: { id: number; dueAt: number; callback: () => void | Promise<void> } | null = null
 
@@ -560,6 +564,40 @@ test('compaction runs after the durable byte threshold is reached', async () => 
 
   assert.equal(fixture.repository.compactCalls.length, 1)
   assert.equal(fixture.repository.compactCalls[0].includedSeq, 3)
+})
+
+test('periodic compaction does not rearm when compaction leaves no dirty durable state', async () => {
+  const fixture = createRuntimeFixture({
+    projectionDebounceMs: 1,
+    snapshotIdleMs: 0,
+    snapshotIntervalMs: 30_000,
+    compactAfterUpdates: 1_000,
+    compactAfterBytes: 512 * 1024,
+  })
+  fixture.repository.appendBehavior = async () => 1
+
+  const committedUpdate = captureUpdate(fixture.doc, () => {
+    upsertNode(fixture.doc, {
+      id: 'node-1',
+      type: 'prompt',
+      position: { x: 1, y: 1 },
+      data: { label: 'single-write' },
+    })
+  })
+
+  const ackPromise = fixture.runtime.enqueue(committedUpdate)
+  await fixture.clock.advanceBy(25)
+  await ackPromise
+
+  await fixture.clock.advanceBy(1)
+  assert.equal(fixture.projectionCalls.length, 1)
+
+  await fixture.clock.advanceBy(30_000)
+  assert.equal(fixture.repository.compactCalls.length, 1)
+
+  await fixture.clock.advanceBy(120_000)
+  assert.equal(fixture.repository.compactCalls.length, 1)
+  assert.equal(fixture.clock.pendingTimerCount(), 0)
 })
 
 test('periodic compaction keeps firing under sustained writes', async () => {

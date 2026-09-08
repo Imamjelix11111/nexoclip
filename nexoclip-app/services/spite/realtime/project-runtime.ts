@@ -156,7 +156,6 @@ export class ProjectRuntime {
     this.captureProjection = options.captureProjectionPayload ?? captureProjectionPayload
     this.durableDoc = new Y.Doc()
     Y.applyUpdate(this.durableDoc, Y.encodeStateAsUpdate(options.doc))
-    this.ensureSnapshotIntervalScheduled()
   }
 
   canAcceptMutation(): boolean {
@@ -236,6 +235,7 @@ export class ProjectRuntime {
       this.durableUpdatesSinceCompact = 0
       this.durableBytesSinceCompact = 0
       this.clearTimer('snapshotIdleTimer')
+      this.clearTimer('snapshotIntervalTimer')
     })
   }
 
@@ -292,6 +292,7 @@ export class ProjectRuntime {
 
       this.scheduleProjection(targetSeq)
       this.resetSnapshotIdleTimer()
+      this.ensureSnapshotIntervalScheduled()
       this.setState('PERSISTED')
 
       for (const entry of batch) {
@@ -406,7 +407,8 @@ export class ProjectRuntime {
     if (
       this.config.snapshotIntervalMs <= 0 ||
       this.snapshotIntervalTimer ||
-      !this.acceptingMutations
+      !this.acceptingMutations ||
+      !this.committedSinceCompact
     ) {
       return
     }
@@ -418,11 +420,8 @@ export class ProjectRuntime {
   }
 
   private async runSnapshotIntervalTick(): Promise<void> {
-    try {
-      await this.compact()
-    } finally {
-      this.ensureSnapshotIntervalScheduled()
-    }
+    await this.compact()
+    this.ensureSnapshotIntervalScheduled()
   }
 
   private triggerCompactionIfNeeded(): void {
