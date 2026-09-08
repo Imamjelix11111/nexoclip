@@ -1,0 +1,58 @@
+import { fileURLToPath } from 'node:url';
+import { Queue, Worker } from 'bullmq';
+import IORedis from 'ioredis';
+import { getPool, closePool } from '../db/pool.js';
+import { createStorage } from '../services/assetService.js';
+import { createDefaultSaasImageHandler } from '../services/saasImageGeneration.js';
+import { persistGenerationResult } from '../services/generationOutputService.js';
+import { createBullMqGenerationQueue } from './bullmqGenerationQueue.js';
+import { recoverQueuedGenerations } from './generationQueue.js';
+import { createGenerationProcessor } from './generationWorker.js';
+import { recoverUnreservedGenerations } from '../services/generationCreditSettlementService.js';
+
+export function imageWorkerConfig(env = process.env) {
+  if (!env.REDIS_URL) throw new Error('REDIS_URL is required');
+  const concurrency = Number(env.IMAGE_WORKER_CONCURRENCY || 2);
+  if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 32) throw new Error('IMAGE_WORKER_CONCURRENCY must be an integer between 1 and 32');
+  return { redisUrl: env.REDIS_URL, concurrency };
+}
+
+export async function createImageWorker({
+  env = process.env, Redis = IORedis, loadPool = getPool, closeDatabasePool = closePool,
+  createQueue = createBullMqGenerationQueue, createHandler = createDefaultSaasImageHandler,
+  recover = recoverQueuedGenerations, recoverUnreserved = recoverUnreservedGenerations,
+  persistResult = persistGenerationResult, createStorage: loadStorage = createStorage,
+  schedule = globalThis.setInterval, clearSchedule = globalThis.clearInterval, onError = console.error,
+} = {}) {
+  const config = imageWorkerConfig(env);
+  const connection = new Redis(config.redisUrl, { maxRetriesPerRequest: null });
+  const pool = loadPool();
+  const queue = createQueue({ Queue, Worker, connection });
+  const recoverNow = async () => { await recoverUnreserved(pool); return recover({ pool, queue }); };
+  await recoverNow();
+  const interval = schedule(() => recoverNow().catch(onError), 30_000);
+  interval.unref?.();
+  const processor = createGenerationProcessor({
+    pool, handler: createHandler({ pool, storage: loadStorage() }), provider: 'openrouter', persistResult,
+    onError,
+  });
+  const worker = queue.createWorker(processor, { concurrency: config.concurrency });
+  let closed = false;
+  return { async close() {
+    if (closed) return;
+    closed = true;
+    clearSchedule(interval);
+    await worker.pause();
+    await worker.close();
+    await queue.close();
+    await connection.quit();
+    await closeDatabasePool();
+  } };
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const service = await createImageWorker();
+  const shutdown = async () => { await service.close(); process.exit(0); };
+  process.once('SIGTERM', shutdown);
+  process.once('SIGINT', shutdown);
+}

@@ -77,6 +77,40 @@ export async function generateImage(_apiKey, params) {
     return response.json();
 }
 
+export async function generateSaasImage(params, { maxAttempts = 180, interval = 2000 } = {}) {
+    const workspaceId = params.workspace_id || (typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null);
+    const model = OPENROUTER_IMAGE_MODEL_MAP[params.model];
+    if (!model) throw new Error(`Image model is not available through the SaaS provider router: ${params.model}`);
+    if (!workspaceId) throw new Error('Select a workspace before generating');
+    const response = await fetch('/api/generations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-workspace-id': workspaceId, 'Idempotency-Key': params.idempotencyKey },
+        body: JSON.stringify({ prompt: params.prompt || '', model, parameters: params.parameters || {}, idempotencyKey: params.idempotencyKey }),
+    });
+    if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || `Generation request failed: ${response.status}`);
+    }
+    const submitted = await response.json();
+    const generationId = submitted.generation?.id;
+    if (!generationId) throw new Error('Generation request did not return a job');
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, interval));
+        const poll = await fetch(`/api/generations/${encodeURIComponent(generationId)}`, { headers: { 'x-workspace-id': workspaceId } });
+        if (!poll.ok) {
+            if (poll.status >= 500 && attempt + 1 < maxAttempts) continue;
+            throw new Error(`Generation status failed: ${poll.status}`);
+        }
+        const { generation } = await poll.json();
+        if (generation.status === 'succeeded') {
+            const output = generation.outputs?.[0];
+            return { id: generation.id, provider: generation.provider, outputs: output ? [{ url: output.url }] : [] };
+        }
+        if (generation.status === 'failed' || generation.status === 'cancelled') throw new Error(generation.error?.message || 'Image generation failed');
+    }
+    throw new Error('Image generation timed out');
+}
+
 export async function generateI2I(_apiKey, params) {
     const model = OPENROUTER_IMAGE_MODEL_MAP[params.model];
     if (!model) throw new Error(`Image model is not available on OpenRouter: ${params.model}`);

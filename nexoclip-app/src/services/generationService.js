@@ -29,11 +29,15 @@ export function normalizeSaaSImageGenerationResult(generation) {
 export function validateImageGenerationInput(input) {
   const prompt = String(input?.prompt || '').trim();
   const model = String(input?.model || '').trim();
-  const aspectRatio = String(input?.aspectRatio || '1:1').trim();
+  const supplied = input?.parameters && Object.getPrototypeOf(input.parameters) === Object.prototype ? input.parameters : {};
+  const aspectRatio = String(supplied.aspectRatio || input?.aspectRatio || '1:1').trim();
   if (!prompt || prompt.length > 10000) throw new Error('Generation prompt is required');
   if (!model || model.length > 120) throw new Error('Generation model is required');
   if (!aspectRatios.has(aspectRatio)) throw new Error('Aspect ratio is invalid');
-  return { prompt, model, parameters: { aspectRatio } };
+  const parameters = { aspectRatio };
+  for (const key of ['resolution', 'quality', 'seed', 'name', 'swap_url']) if (supplied[key] !== undefined) parameters[key] = supplied[key];
+  if (Array.isArray(supplied.referenceImages) && supplied.referenceImages.every((url) => typeof url === 'string' && url.length <= 4096)) parameters.referenceImages = supplied.referenceImages.slice(0, 10);
+  return { prompt, model, parameters };
 }
 
 export function validateVimaxGenerationInput(input) {
@@ -83,8 +87,9 @@ async function enforceGenerationLimits(client, workspaceId, cost) {
   }
 }
 
-export async function createImageGenerationJobWithReservation(pool, workspaceId, input) {
+export async function createImageGenerationJobWithReservation(pool, workspaceId, input, { userId } = {}) {
   if (!workspaceId || !input?.idempotencyKey) throw new Error('Generation idempotency key is required');
+  if (!userId) throw new Error('Generation user is required');
   const validated = validateImageGenerationInput(input);
   const client = await pool.connect();
   try {
@@ -109,7 +114,7 @@ export async function createImageGenerationJobWithReservation(pool, workspaceId,
       metadata: { generationIdempotencyKey: input.idempotencyKey, pricingVersionId: estimate.pricingVersionId },
     });
     const job = await createImageGeneration(client, {
-      workspaceId, projectId: input.projectId || null, ...validated, idempotencyKey: input.idempotencyKey,
+      workspaceId, createdByUserId: userId, projectId: input.projectId || null, ...validated, idempotencyKey: input.idempotencyKey,
       estimatedCost: estimate.amount, pricingVersionId: estimate.pricingVersionId, reservationLedgerId: ledger.id,
     });
     await client.query('COMMIT');
@@ -118,8 +123,9 @@ export async function createImageGenerationJobWithReservation(pool, workspaceId,
   finally { client.release(); }
 }
 
-export async function createVimaxGenerationJobWithReservation(pool, workspaceId, input) {
+export async function createVimaxGenerationJobWithReservation(pool, workspaceId, input, { userId } = {}) {
   if (!workspaceId || !input?.idempotencyKey) throw new Error('Generation idempotency key is required');
+  if (!userId) throw new Error('Generation user is required');
   const validated = validateVimaxGenerationInput(input);
   const client = await pool.connect();
   try {
@@ -147,7 +153,7 @@ export async function createVimaxGenerationJobWithReservation(pool, workspaceId,
       });
     }
     const job = await createVimaxGeneration(client, {
-      workspaceId, projectId: input.projectId || null, ...validated, idempotencyKey: input.idempotencyKey,
+      workspaceId, createdByUserId: userId, projectId: input.projectId || null, ...validated, idempotencyKey: input.idempotencyKey,
       estimatedCost: estimate.amount, pricingVersionId: estimate.pricingVersionId, reservationLedgerId: ledger?.id || null,
       vimaxSessionId: validated.parameters.sessionId,
     });
