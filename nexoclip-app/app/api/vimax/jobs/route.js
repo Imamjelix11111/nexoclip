@@ -63,7 +63,7 @@ export function createVimaxStoryboardJobHandler({
 
     try {
       const database = pool || getPool();
-      const job = await reserve(database, workspace.id, input);
+      const job = await reserve(database, workspace.id, input, { userId: session.user_id });
       // Reservation commits before this recovery publisher runs. A publication failure
       // leaves the queued row recoverable by the worker startup/interval recovery path.
       try {

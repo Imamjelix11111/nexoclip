@@ -27,6 +27,7 @@ export async function POST(request) {
       (await import('../../../src/db/pool.js')).getPool(),
       tenant.workspace.id,
       { ...input, idempotencyKey },
+      { userId: tenant.user.id },
     ) }, { status: 201 });
   } catch (error) { return errorResponse(error); }
 }

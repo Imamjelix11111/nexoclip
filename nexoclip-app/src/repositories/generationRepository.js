@@ -1,40 +1,40 @@
-const columns = `id, workspace_id, project_id, kind, status, prompt, model,
+const columns = `id, workspace_id, created_by_user_id, project_id, kind, status, prompt, model,
   parameters, result, error, estimated_cost, pricing_version_id, reservation_ledger_id, settlement_status,
   idempotency_key, attempt_count, max_attempts, next_attempt_at, timeout_at,
   vimax_session_id, provider, provider_request_id, progress,
   created_at, updated_at, started_at, finished_at`;
 
-export async function createImageGeneration(client, { workspaceId, projectId, prompt, model, parameters, idempotencyKey, estimatedCost, pricingVersionId, reservationLedgerId }) {
+export async function createImageGeneration(client, { workspaceId, createdByUserId = null, projectId, prompt, model, parameters, idempotencyKey, estimatedCost, pricingVersionId, reservationLedgerId }) {
   const reserved = idempotencyKey !== undefined;
   const result = await client.query(
     reserved
       ? `INSERT INTO generation_jobs
-           (workspace_id, project_id, prompt, model, parameters, idempotency_key,
+           (workspace_id, created_by_user_id, project_id, prompt, model, parameters, idempotency_key,
             estimated_cost, pricing_version_id, reservation_ledger_id)
-         VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10)
          RETURNING ${columns}`
-      : `INSERT INTO generation_jobs (workspace_id, project_id, prompt, model, parameters)
-         VALUES ($1, $2, $3, $4, $5::jsonb)
+      : `INSERT INTO generation_jobs (workspace_id, created_by_user_id, project_id, prompt, model, parameters)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb)
          RETURNING ${columns}`,
     reserved
-      ? [workspaceId, projectId, prompt, model, JSON.stringify(parameters), idempotencyKey, estimatedCost, pricingVersionId, reservationLedgerId]
-      : [workspaceId, projectId, prompt, model, JSON.stringify(parameters)],
+      ? [workspaceId, createdByUserId, projectId, prompt, model, JSON.stringify(parameters), idempotencyKey, estimatedCost, pricingVersionId, reservationLedgerId]
+      : [workspaceId, createdByUserId, projectId, prompt, model, JSON.stringify(parameters)],
   );
   return result.rows[0];
 }
 
 export async function createVimaxGeneration(client, {
-  workspaceId, projectId, kind, prompt, model, parameters, idempotencyKey,
+  workspaceId, createdByUserId = null, projectId, kind, prompt, model, parameters, idempotencyKey,
   estimatedCost, pricingVersionId, reservationLedgerId, vimaxSessionId,
 }) {
   const result = await client.query(
     `INSERT INTO generation_jobs
-       (workspace_id, project_id, kind, prompt, model, parameters, idempotency_key,
+       (workspace_id, created_by_user_id, project_id, kind, prompt, model, parameters, idempotency_key,
         estimated_cost, pricing_version_id, reservation_ledger_id, vimax_session_id, provider)
-     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12)
+     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13)
      RETURNING ${columns}`,
     [
-      workspaceId, projectId, kind, prompt, model, JSON.stringify(parameters), idempotencyKey,
+      workspaceId, createdByUserId, projectId, kind, prompt, model, JSON.stringify(parameters), idempotencyKey,
       estimatedCost, pricingVersionId, reservationLedgerId, vimaxSessionId, 'vimax',
     ],
   );

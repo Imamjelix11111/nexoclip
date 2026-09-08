@@ -83,8 +83,9 @@ async function enforceGenerationLimits(client, workspaceId, cost) {
   }
 }
 
-export async function createImageGenerationJobWithReservation(pool, workspaceId, input) {
+export async function createImageGenerationJobWithReservation(pool, workspaceId, input, { userId } = {}) {
   if (!workspaceId || !input?.idempotencyKey) throw new Error('Generation idempotency key is required');
+  if (!userId) throw new Error('Generation user is required');
   const validated = validateImageGenerationInput(input);
   const client = await pool.connect();
   try {
@@ -109,7 +110,7 @@ export async function createImageGenerationJobWithReservation(pool, workspaceId,
       metadata: { generationIdempotencyKey: input.idempotencyKey, pricingVersionId: estimate.pricingVersionId },
     });
     const job = await createImageGeneration(client, {
-      workspaceId, projectId: input.projectId || null, ...validated, idempotencyKey: input.idempotencyKey,
+      workspaceId, createdByUserId: userId, projectId: input.projectId || null, ...validated, idempotencyKey: input.idempotencyKey,
       estimatedCost: estimate.amount, pricingVersionId: estimate.pricingVersionId, reservationLedgerId: ledger.id,
     });
     await client.query('COMMIT');
@@ -118,8 +119,9 @@ export async function createImageGenerationJobWithReservation(pool, workspaceId,
   finally { client.release(); }
 }
 
-export async function createVimaxGenerationJobWithReservation(pool, workspaceId, input) {
+export async function createVimaxGenerationJobWithReservation(pool, workspaceId, input, { userId } = {}) {
   if (!workspaceId || !input?.idempotencyKey) throw new Error('Generation idempotency key is required');
+  if (!userId) throw new Error('Generation user is required');
   const validated = validateVimaxGenerationInput(input);
   const client = await pool.connect();
   try {
@@ -147,7 +149,7 @@ export async function createVimaxGenerationJobWithReservation(pool, workspaceId,
       });
     }
     const job = await createVimaxGeneration(client, {
-      workspaceId, projectId: input.projectId || null, ...validated, idempotencyKey: input.idempotencyKey,
+      workspaceId, createdByUserId: userId, projectId: input.projectId || null, ...validated, idempotencyKey: input.idempotencyKey,
       estimatedCost: estimate.amount, pricingVersionId: estimate.pricingVersionId, reservationLedgerId: ledger?.id || null,
       vimaxSessionId: validated.parameters.sessionId,
     });

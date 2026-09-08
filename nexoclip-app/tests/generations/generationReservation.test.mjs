@@ -25,12 +25,15 @@ function poolFor({ existing = null, balance = '10', pricing = { pricingVersion: 
 test('reserves priced credits and creates the generation job in one transaction', async () => {
   const pool = poolFor();
   const job = await createImageGenerationJobWithReservation(pool, 'w1', {
-    prompt: 'fox', model: 'flux-dev', idempotencyKey: 'request-1', operation: 'image_generation',
-  });
+    prompt: 'fox', model: 'flux-dev', idempotencyKey: 'request-1', operation: 'image_generation', createdByUserId: 'attacker',
+  }, { userId: 'u1' });
   assert.equal(job.id, 'g1');
   assert.equal(pool.calls[0].text, 'BEGIN');
   assert.match(pool.calls.find((call) => /INSERT INTO credit_ledger/.test(call.text)).text, /INSERT INTO credit_ledger/);
-  assert.match(pool.calls.find((call) => /INSERT INTO generation_jobs/.test(call.text)).text, /estimated_cost/);
+  const generationInsert = pool.calls.find((call) => /INSERT INTO generation_jobs/.test(call.text));
+  assert.match(generationInsert.text, /estimated_cost/);
+  assert.equal(generationInsert.values[1], 'u1');
+  assert.equal(generationInsert.values.includes('attacker'), false);
   assert.equal(pool.calls.at(-1).text, 'COMMIT');
 });
 
@@ -38,7 +41,7 @@ test('returns an idempotent existing job without reserving credits again', async
   const pool = poolFor({ existing: { id: 'g-existing', status: 'queued' } });
   const job = await createImageGenerationJobWithReservation(pool, 'w1', {
     prompt: 'fox', model: 'flux-dev', idempotencyKey: 'request-1', operation: 'image_generation',
-  });
+  }, { userId: 'u1' });
   assert.equal(job.id, 'g-existing');
   assert.equal(pool.calls.filter((call) => /INSERT INTO credit_ledger/.test(call.text)).length, 0);
   assert.equal(pool.calls.at(-1).text, 'COMMIT');
@@ -48,12 +51,13 @@ test('creates a reserved ViMax job with explicit kind and structured parameters'
   const pool = poolFor({ pricing: { pricingVersion: { id: 'pv1', version: 1 }, rule: { operation: 'vimax_render_video', unit: 'job', unitPrice: '0.000000' } } });
   const job = await createVimaxGenerationJobWithReservation(pool, 'w1', {
     kind: 'vimax_render_video', sessionId: 's1', input: {}, idempotencyKey: 'request-1',
-  });
+  }, { userId: 'u1' });
   const insert = pool.calls.find((call) => /INSERT INTO generation_jobs/.test(call.text));
   assert.match(insert.text, /kind/);
-  assert.equal(insert.values[2], 'vimax_render_video');
+  assert.equal(insert.values[1], 'u1');
+  assert.equal(insert.values[3], 'vimax_render_video');
   assert.equal(pool.calls.filter((call) => /INSERT INTO credit_ledger/.test(call.text)).length, 0);
-  assert.equal(insert.values[9], null);
+  assert.equal(insert.values[10], null);
   assert.equal(job.status, 'queued');
 });
 
@@ -61,7 +65,7 @@ test('returns the prior ViMax job for the same workspace idempotency key without
   const pool = poolFor({ existing: { id: 'existing', status: 'queued' } });
   const job = await createVimaxGenerationJobWithReservation(pool, 'w1', {
     kind: 'vimax_render_video', sessionId: 's1', input: {}, idempotencyKey: 'request-1',
-  });
+  }, { userId: 'u1' });
   assert.equal(job.id, 'existing');
   assert.equal(pool.calls.filter((call) => /INSERT INTO credit_ledger/.test(call.text)).length, 0);
 });
@@ -87,7 +91,7 @@ test('re-reads a ViMax job after a concurrent idempotency unique conflict', asyn
   };
   const job = await createVimaxGenerationJobWithReservation({ async connect() { return client; } }, 'w1', {
     kind: 'vimax_render_video', sessionId: 's1', input: {}, idempotencyKey: 'request-1',
-  });
+  }, { userId: 'u1' });
   assert.equal(job.id, 'existing');
   assert.equal(calls.filter((call) => call.text === 'ROLLBACK').length, 1);
   assert.equal(calls.filter((call) => /FROM generation_jobs/.test(call.text)).length, 2);
@@ -96,7 +100,7 @@ test('re-reads a ViMax job after a concurrent idempotency unique conflict', asyn
 test('rejects reservation when the workspace balance is insufficient', async () => {
   const pool = poolFor({ balance: '2' });
   await assert.rejects(
-    createImageGenerationJobWithReservation(pool, 'w1', { prompt: 'fox', model: 'flux-dev', idempotencyKey: 'request-1', operation: 'image_generation' }),
+    createImageGenerationJobWithReservation(pool, 'w1', { prompt: 'fox', model: 'flux-dev', idempotencyKey: 'request-1', operation: 'image_generation' }, { userId: 'u1' }),
     /Insufficient credits/,
   );
   assert.equal(pool.calls.at(-1).text, 'ROLLBACK');
