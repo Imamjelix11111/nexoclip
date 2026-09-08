@@ -929,6 +929,7 @@ export default function ImageStudio({
   const [dropdownOpen, setDropdownOpen] = useState(null); // 'model' | 'ar' | 'quality' | null
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState(null);
+  const [creditEstimate, setCreditEstimate] = useState(null);
   const [fullscreenUrl, setFullscreenUrl] = useState(null);
   const [isDrawModalOpen, setIsDrawModalOpen] = useState(false);
 
@@ -1248,6 +1249,20 @@ export default function ImageStudio({
     setSelectedEffect("");
     setMaxImages(1);
   };
+
+  useEffect(() => {
+    const workspaceId = typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null;
+    if (!workspaceId) return;
+    let cancelled = false;
+    fetch('/api/generations/estimate', {
+      method: 'POST', credentials: 'include',
+      headers: { 'content-type': 'application/json', 'x-workspace-id': workspaceId },
+      body: JSON.stringify({ operation: 'image_generation', quantity: 1 }),
+    }).then(async (response) => response.ok ? response.json() : null)
+      .then((data) => !cancelled && setCreditEstimate(data?.estimate?.amount || null))
+      .catch(() => !cancelled && setCreditEstimate(null));
+    return () => { cancelled = true; };
+  }, []);
 
   // ── Generation ───────────────────────────────────────────────────────────
   const randomSeed = () => Math.floor(Math.random() * 2147483647);
@@ -1854,7 +1869,7 @@ export default function ImageStudio({
                 </>
               ) : (
                 <>
-                  <span>Generate ✦</span>
+                  <span>{creditEstimate ? `Generate · ${Number(creditEstimate).toLocaleString()} credits ✦` : 'Generate ✦'}</span>
                 </>
               )}
             </PromptAction>

@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import AccountMenu from './AccountMenu';
 import JobListPanel from './JobListPanel.js';
 import AssetsContent from './AssetsContent';
+import UsageContent from './UsageContent';
 // Default tab is kept static so the first paint of /studio has no loading flash.
 import { ImageStudio } from 'studio';
 
@@ -151,6 +152,12 @@ const TABS = [
     )
   },
   {
+    id: 'usage',
+    label: 'Usage',
+    hidden: true,
+    icon: null,
+  },
+  {
     id: 'ai-influencer',
     label: 'AI Influencer Studio',
     icon: (
@@ -257,7 +264,7 @@ export default function StandaloneShell({ initialTab, children }) {
     if (idFromParams || slug.includes('workflow')) return 'workflows';
     if (initialTab) return initialTab;
     const firstSegment = slug[0];
-    if (firstSegment && TABS.find(t => t.id === firstSegment && !t.hidden)) return firstSegment;
+    if (firstSegment && TABS.find(t => t.id === firstSegment)) return firstSegment;
     return 'image';
   };
   
@@ -265,7 +272,7 @@ export default function StandaloneShell({ initialTab, children }) {
   const [authStatus, setAuthStatus] = useState('loading');
   const [activeTab, setActiveTab] = useState(getInitialTab());
 
-  const [balance] = useState(null);
+  const [balance, setBalance] = useState(null);
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const [hasMounted, setHasMounted] = useState(false);
   const [showVadooBanner, setShowVadooBanner] = useState(() => {
@@ -343,7 +350,17 @@ export default function StandaloneShell({ initialTab, children }) {
     return () => window.clearTimeout(timer);
   }, [notifications]);
 
+  const refreshBalance = useCallback(async () => {
+    const workspaceId = window.sessionStorage.getItem('nexoclip_workspace_id');
+    if (!workspaceId) return;
+    try {
+      const response = await fetch('/api/usage?scope=me&page=1&pageSize=1', { credentials: 'include', headers: { 'x-workspace-id': workspaceId } });
+      if (response.ok) setBalance((await response.json()).balance);
+    } catch { setBalance(null); }
+  }, []);
+
   const makeSuccessCallback = useCallback((tabId) => (data) => {
+    refreshBalance();
     const tab = TABS.find(t => t.id === tabId);
     pushNotification({
       type: 'success',
@@ -351,12 +368,13 @@ export default function StandaloneShell({ initialTab, children }) {
       label: tab?.label || tabId,
       resultUrl: data?.url || null,
     });
-  }, [pushNotification]);
+  }, [pushNotification, refreshBalance]);
 
   const makeErrorCallback = useCallback((tabId) => (message) => {
+    refreshBalance();
     const tab = TABS.find(t => t.id === tabId);
     pushNotification({ type: 'error', tabId, label: tab?.label || tabId, message });
-  }, [pushNotification]);
+  }, [pushNotification, refreshBalance]);
 
   const makeGenerationStartCallback = useCallback((tabId) => () => {
     setGenerationCounts((previous) => ({
@@ -395,7 +413,7 @@ export default function StandaloneShell({ initialTab, children }) {
       const path = window.location.pathname;
       const segments = path.split('/').filter(Boolean);
       const tabId = segments[1] || 'image';
-      if (TABS.find(t => t.id === tabId && !t.hidden)) {
+      if (TABS.find(t => t.id === tabId)) {
         setActiveTab(tabId);
       }
     };
@@ -466,6 +484,7 @@ export default function StandaloneShell({ initialTab, children }) {
         const workspace = workspacePayload.workspaces?.[0];
         if (workspace?.id && typeof window !== 'undefined') {
           window.sessionStorage.setItem('nexoclip_workspace_id', workspace.id);
+          await refreshBalance();
         }
         if (!cancelled) setAuthStatus('authenticated');
       } catch {
@@ -476,7 +495,7 @@ export default function StandaloneShell({ initialTab, children }) {
     setHasMounted(true);
     restoreSaaSSession();
     return () => { cancelled = true; };
-  }, [router]);
+  }, [router, refreshBalance]);
 
 
   // Drag and Drop Handlers
@@ -649,12 +668,10 @@ export default function StandaloneShell({ initialTab, children }) {
 
           {/* Right: Actions */}
           <div className="flex-shrink-0 flex items-center gap-3">
-            <div className="flex items-center gap-2.5 bg-white/5 px-3 py-1.5 rounded-full border border-white/5 transition-colors">
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-xs font-bold text-white/90">
-                ${balance !== null ? `${balance}` : '---'}
-              </span>
-            </div>
+            <button onClick={() => handleTabChange('usage')} className="flex items-center gap-2.5 bg-white/5 px-3 py-1.5 rounded-full border border-white/5 transition-colors hover:bg-white/10" aria-label="View credit usage">
+              <span className="text-cyan-300">◈</span>
+              <span className="text-xs font-bold text-white/90">{balance !== null ? `${Number(balance).toLocaleString()} credits` : 'Credits unavailable'}</span>
+            </button>
 
             <JobListPanel />
             <AccountMenu />
@@ -811,7 +828,7 @@ export default function StandaloneShell({ initialTab, children }) {
 
         {/* Studio Content */}
         <div className="flex-1 min-h-0 h-full relative overflow-hidden bg-[#030303]">
-        {activeTab === 'assets' ? <div className="h-full w-full overflow-auto"><AssetsContent /></div> : <div className={activeTab === 'image' ? "h-full w-full" : "hidden"}>
+        {activeTab === 'usage' ? <UsageContent workspaceId={typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null} onBalanceChange={setBalance} /> : activeTab === 'assets' ? <div className="h-full w-full overflow-auto"><AssetsContent /></div> : <div className={activeTab === 'image' ? "h-full w-full" : "hidden"}>
           <ImageStudio apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('image')} onGenerationEnd={makeGenerationEndCallback('image')} onGenerationComplete={makeSuccessCallback('image')} onGenerationError={makeErrorCallback('image')} />
         </div>}
         {activeTab === 'video' && (
