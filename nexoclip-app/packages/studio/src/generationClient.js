@@ -104,7 +104,10 @@ export async function generateSaasImage(params, { maxAttempts = 180, interval = 
         const { generation } = await poll.json();
         if (generation.status === 'succeeded') {
             const output = generation.outputs?.[0];
-            return { id: generation.id, provider: generation.provider, outputs: output ? [{ url: output.url }] : [] };
+            const url = output?.assetId
+                ? `/api/assets/${encodeURIComponent(output.assetId)}/download?workspace_id=${encodeURIComponent(workspaceId)}`
+                : output?.url;
+            return { id: generation.id, provider: generation.provider, outputs: url ? [{ url }] : [] };
         }
         if (generation.status === 'failed' || generation.status === 'cancelled') throw new Error(generation.error?.message || 'Image generation failed');
     }
