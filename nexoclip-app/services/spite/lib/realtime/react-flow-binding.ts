@@ -1,0 +1,646 @@
+import {
+  applyEdgeChanges,
+  applyNodeChanges,
+  type Connection,
+  type Edge,
+  type EdgeChange,
+  type Node,
+  type NodeChange,
+} from '@xyflow/react'
+import * as Y from 'yjs'
+
+import {
+  readCanvasProjection,
+  type CanvasEdgeProjection,
+  type CanvasNodeProjection,
+  type CanvasProjection,
+} from './document'
+
+export const LOCAL_REACT_FLOW_ORIGIN = Object.freeze({ source: 'spite-react-flow-binding' })
+
+type JsonRecord = Record<string, unknown>
+type CanvasScene = CanvasProjection['scenes'][number]
+type Position = CanvasNodeProjection['position']
+
+type NodeInput = Partial<CanvasNodeProjection> & {
+  id: string
+  position?: Position
+  data?: JsonRecord
+  [key: string]: unknown
+}
+
+type EdgeInput = Partial<CanvasEdgeProjection> & {
+  id: string
+  source: string
+  target: string
+  data?: JsonRecord
+  [key: string]: unknown
+}
+
+type NodePatch = Partial<Omit<NodeInput, 'id'>>
+
+type RawBindingMutations = {
+  createNode: (node: NodeInput) => void
+  patchNode: (nodeId: string, patch: NodePatch) => void
+  deleteNode: (nodeId: string) => void
+  createEdge: (edge: EdgeInput) => void
+  deleteEdge: (edgeId: string) => void
+  createScene: (name?: string) => string
+  deleteScene: (sceneId: string) => void
+  switchScene: (sceneId: string) => void
+}
+
+export type RealtimeCanvasBindingSnapshot = {
+  nodes: CanvasNodeProjection[]
+  edges: CanvasEdgeProjection[]
+  scenes: CanvasScene[]
+  activeSceneId: string
+}
+
+export type RealtimeCanvasBinding = RawBindingMutations & {
+  getSnapshot: () => RealtimeCanvasBindingSnapshot
+  subscribe: (listener: () => void) => () => void
+  applyNodeChanges: (changes: NodeChange[]) => void
+  applyEdgeChanges: (changes: EdgeChange[]) => void
+  duplicateNodes: (nodeIds: string[]) => string[]
+  connect: (connection: Connection) => string | null
+  batch: (callback: (mutations: RawBindingMutations) => void) => void
+  undo: () => void
+  redo: () => void
+  destroy: () => void
+}
+
+export type ReactFlowBindingOptions = {
+  createId?: () => string
+  createSceneId?: () => string
+  duplicateOffset?: Position
+}
+
+const NODE_EPHEMERAL_KEYS = new Set(['selected', 'dragging', 'measured'])
+const EDGE_EPHEMERAL_KEYS = new Set(['selected'])
+const DEFAULT_DUPLICATE_OFFSET = { x: 40, y: 40 }
+
+export function createReactFlowBinding(
+  doc: Y.Doc,
+  options: ReactFlowBindingOptions = {},
+): RealtimeCanvasBinding {
+  const listeners = new Set<() => void>()
+  const duplicateOffset = options.duplicateOffset ?? DEFAULT_DUPLICATE_OFFSET
+  let snapshot = deriveSnapshot(doc)
+
+  const undoManager = new Y.UndoManager([doc.getMap('nodes'), doc.getMap('edges'), doc.getMap('meta')], {
+    trackedOrigins: new Set([LOCAL_REACT_FLOW_ORIGIN]),
+  })
+
+  const handleUpdate = () => {
+    snapshot = deriveSnapshot(doc)
+    for (const listener of listeners) {
+      listener()
+    }
+  }
+
+  doc.on('update', handleUpdate)
+
+  const rawMutations: RawBindingMutations = {
+    createNode(node) {
+      const activeSceneId = readActiveSceneId(doc)
+      upsertNodeRecord(doc, normalizeNode(node, activeSceneId))
+    },
+
+    patchNode(nodeId, patch) {
+      if (!nodeId) return
+      patchNodeRecord(doc, nodeId, patch)
+    },
+
+    deleteNode(nodeId) {
+      if (!nodeId) return
+      deleteNodeRecord(doc, nodeId)
+    },
+
+    createEdge(edge) {
+      upsertEdgeRecord(doc, normalizeEdge(edge))
+    },
+
+    deleteEdge(edgeId) {
+      if (!edgeId) return
+      deleteEdgeRecord(doc, edgeId)
+    },
+
+    createScene(name) {
+      const nextId = options.createSceneId?.() ?? createSceneId()
+      const scenes = readCanvasProjection(doc).scenes
+      const nextScenes = [...scenes, { id: nextId, name: name ?? nextSceneName(scenes) }]
+      setScenesRecord(doc, nextScenes)
+      setActiveSceneRecord(doc, nextId)
+      return nextId
+    },
+
+    deleteScene(sceneId) {
+      if (!sceneId) return
+      deleteSceneRecord(doc, sceneId)
+    },
+
+    switchScene(sceneId) {
+      if (!sceneId) return
+      setActiveSceneRecord(doc, sceneId)
+    },
+  }
+
+  const binding: RealtimeCanvasBinding = {
+    getSnapshot: () => snapshot,
+
+    subscribe(listener) {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    },
+
+    applyNodeChanges(changes) {
+      if (changes.length === 0) return
+      const currentNodes = snapshot.nodes as Node[]
+      const nextNodes = applyNodeChanges(changes, currentNodes) as Node[]
+      const nextNodesById = new Map(nextNodes.map((node) => [node.id, node]))
+
+      runLocalTransaction(doc, () => {
+        for (const change of changes) {
+          switch (change.type) {
+            case 'add': {
+              const nextNode = nextNodesById.get(change.item.id)
+              if (nextNode) {
+                upsertNodeRecord(doc, normalizeNode(nextNode as NodeInput, readActiveSceneId(doc)))
+              }
+              break
+            }
+            case 'remove':
+              deleteNodeRecord(doc, change.id)
+              break
+            case 'replace': {
+              const nextNode = nextNodesById.get(change.id)
+              if (nextNode) {
+                upsertNodeRecord(doc, normalizeNode(nextNode as NodeInput, readActiveSceneId(doc)))
+              }
+              break
+            }
+            case 'position':
+              patchNodeRecord(doc, change.id, { position: change.position })
+              break
+            case 'dimensions': {
+              const nextNode = nextNodesById.get(change.id) as (Node & { width?: number; height?: number }) | undefined
+              if (nextNode) {
+                const patch: NodePatch = {}
+                if (typeof nextNode.width === 'number') patch.width = nextNode.width
+                if (typeof nextNode.height === 'number') patch.height = nextNode.height
+                if (Object.keys(patch).length > 0) {
+                  patchNodeRecord(doc, change.id, patch)
+                }
+              }
+              break
+            }
+            case 'select':
+              break
+            default:
+              break
+          }
+        }
+      })
+    },
+
+    applyEdgeChanges(changes) {
+      if (changes.length === 0) return
+      const currentEdges = snapshot.edges as Edge[]
+      const nextEdges = applyEdgeChanges(changes, currentEdges) as Edge[]
+      const nextEdgesById = new Map(nextEdges.map((edge) => [edge.id, edge]))
+
+      runLocalTransaction(doc, () => {
+        for (const change of changes) {
+          switch (change.type) {
+            case 'add': {
+              const nextEdge = nextEdgesById.get(change.item.id)
+              if (nextEdge) {
+                upsertEdgeRecord(doc, normalizeEdge(nextEdge as EdgeInput))
+              }
+              break
+            }
+            case 'remove':
+              deleteEdgeRecord(doc, change.id)
+              break
+            case 'replace': {
+              const nextEdge = nextEdgesById.get(change.id)
+              if (nextEdge) {
+                upsertEdgeRecord(doc, normalizeEdge(nextEdge as EdgeInput))
+              }
+              break
+            }
+            case 'select':
+              break
+            default:
+              break
+          }
+        }
+      })
+    },
+
+    createNode(node) {
+      runLocalTransaction(doc, () => {
+        rawMutations.createNode(node)
+      })
+    },
+
+    patchNode(nodeId, patch) {
+      runLocalTransaction(doc, () => {
+        rawMutations.patchNode(nodeId, patch)
+      })
+    },
+
+    deleteNode(nodeId) {
+      runLocalTransaction(doc, () => {
+        rawMutations.deleteNode(nodeId)
+      })
+    },
+
+    createEdge(edge) {
+      runLocalTransaction(doc, () => {
+        rawMutations.createEdge(edge)
+      })
+    },
+
+    deleteEdge(edgeId) {
+      runLocalTransaction(doc, () => {
+        rawMutations.deleteEdge(edgeId)
+      })
+    },
+
+    createScene(name) {
+      let nextId = ''
+      runLocalTransaction(doc, () => {
+        nextId = rawMutations.createScene(name)
+      })
+      return nextId
+    },
+
+    deleteScene(sceneId) {
+      runLocalTransaction(doc, () => {
+        rawMutations.deleteScene(sceneId)
+      })
+    },
+
+    switchScene(sceneId) {
+      runLocalTransaction(doc, () => {
+        rawMutations.switchScene(sceneId)
+      })
+    },
+
+    duplicateNodes(nodeIds) {
+      const projection = readCanvasProjection(doc)
+      const selectedIds = new Set(nodeIds)
+      const createdIds: string[] = []
+      const idMap = new Map<string, string>()
+      const nodesToDuplicate = projection.nodes.filter((node) => selectedIds.has(node.id))
+      const edgesToDuplicate = projection.edges.filter(
+        (edge) => selectedIds.has(edge.source) && selectedIds.has(edge.target),
+      )
+
+      runLocalTransaction(doc, () => {
+        for (const node of nodesToDuplicate) {
+          const nextId = options.createId?.() ?? createItemId('node')
+          idMap.set(node.id, nextId)
+          createdIds.push(nextId)
+          upsertNodeRecord(doc, {
+            ...normalizeNode(node as NodeInput, readActiveSceneId(doc)),
+            id: nextId,
+            position: {
+              x: node.position.x + duplicateOffset.x,
+              y: node.position.y + duplicateOffset.y,
+            },
+          })
+        }
+
+        for (const edge of edgesToDuplicate) {
+          const source = idMap.get(edge.source)
+          const target = idMap.get(edge.target)
+          if (!source || !target) continue
+          upsertEdgeRecord(doc, {
+            ...normalizeEdge(edge),
+            id: options.createId?.() ?? createItemId('edge'),
+            source,
+            target,
+          })
+        }
+      })
+
+      return createdIds
+    },
+
+    connect(connection) {
+      if (!connection.source || !connection.target) {
+        return null
+      }
+
+      const edgeId = options.createId?.() ?? createItemId('edge')
+      runLocalTransaction(doc, () => {
+        upsertEdgeRecord(doc, normalizeEdge({
+          id: edgeId,
+          source: connection.source,
+          target: connection.target,
+          sourceHandle: connection.sourceHandle ?? undefined,
+          targetHandle: connection.targetHandle ?? undefined,
+          animated: true,
+          data: {},
+        }))
+      })
+      return edgeId
+    },
+
+    batch(callback) {
+      runLocalTransaction(doc, () => {
+        callback(rawMutations)
+      })
+    },
+
+    undo() {
+      undoManager.undo()
+    },
+
+    redo() {
+      undoManager.redo()
+    },
+
+    destroy() {
+      listeners.clear()
+      doc.off('update', handleUpdate)
+      undoManager.destroy()
+    },
+  }
+
+  return binding
+}
+
+function deriveSnapshot(doc: Y.Doc): RealtimeCanvasBindingSnapshot {
+  const projection = readCanvasProjection(doc)
+  const activeSceneId = projection.activeSceneId
+  const nodes = projection.nodes.filter((node) => readNodeSceneId(node) === activeSceneId)
+  const visibleNodeIds = new Set(nodes.map((node) => node.id))
+  const edges = projection.edges.filter(
+    (edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target),
+  )
+
+  return {
+    nodes,
+    edges,
+    scenes: projection.scenes.map((scene) => ({ ...scene })),
+    activeSceneId,
+  }
+}
+
+function runLocalTransaction(doc: Y.Doc, callback: () => void): void {
+  doc.transact(callback, LOCAL_REACT_FLOW_ORIGIN)
+}
+
+function upsertNodeRecord(doc: Y.Doc, node: NodeInput): void {
+  doc.getMap<Y.Map<unknown>>('nodes').set(node.id, buildNodeMap(node))
+}
+
+function patchNodeRecord(doc: Y.Doc, nodeId: string, patch: NodePatch): void {
+  const nodes = doc.getMap<Y.Map<unknown>>('nodes')
+  const existing = nodes.get(nodeId)
+  if (!(existing instanceof Y.Map)) return
+
+  if (patch.type !== undefined) {
+    setOrDelete(existing, 'type', patch.type)
+  }
+
+  if (isPosition(patch.position)) {
+    if (Number.isFinite(Number(patch.position.x))) {
+      existing.set('positionX', Number(patch.position.x))
+    }
+    if (Number.isFinite(Number(patch.position.y))) {
+      existing.set('positionY', Number(patch.position.y))
+    }
+  }
+
+  if (patch.data !== undefined) {
+    existing.set('data', ensureRecord(patch.data))
+  }
+
+  for (const [key, value] of Object.entries(patch)) {
+    if (
+      key === 'type' ||
+      key === 'position' ||
+      key === 'data' ||
+      NODE_EPHEMERAL_KEYS.has(key)
+    ) {
+      continue
+    }
+    setOrDelete(existing, key, value)
+  }
+}
+
+function deleteNodeRecord(doc: Y.Doc, nodeId: string): void {
+  doc.getMap<Y.Map<unknown>>('nodes').delete(nodeId)
+
+  const edges = doc.getMap<Y.Map<unknown>>('edges')
+  for (const [edgeId, edge] of edges.entries()) {
+    if (!(edge instanceof Y.Map)) continue
+    if (edge.get('source') === nodeId || edge.get('target') === nodeId) {
+      edges.delete(edgeId)
+    }
+  }
+}
+
+function upsertEdgeRecord(doc: Y.Doc, edge: EdgeInput): void {
+  doc.getMap<Y.Map<unknown>>('edges').set(edge.id, buildEdgeMap(edge))
+}
+
+function deleteEdgeRecord(doc: Y.Doc, edgeId: string): void {
+  doc.getMap<Y.Map<unknown>>('edges').delete(edgeId)
+}
+
+function setScenesRecord(doc: Y.Doc, scenes: CanvasScene[]): void {
+  const meta = doc.getMap('meta')
+  meta.set('scenes', scenes.map((scene) => ({ id: scene.id, name: scene.name })))
+}
+
+function setActiveSceneRecord(doc: Y.Doc, sceneId: string): void {
+  const projection = readCanvasProjection(doc)
+  if (!projection.scenes.some((scene) => scene.id === sceneId)) {
+    return
+  }
+  doc.getMap('meta').set('activeSceneId', sceneId)
+}
+
+function deleteSceneRecord(doc: Y.Doc, sceneId: string): void {
+  const projection = readCanvasProjection(doc)
+  if (!projection.scenes.some((scene) => scene.id === sceneId)) {
+    return
+  }
+
+  const nextScenes = projection.scenes.filter((scene) => scene.id !== sceneId)
+  const safeScenes = nextScenes.length > 0 ? nextScenes : [{ id: 'scene-1', name: 'Scene 1' }]
+  const nextActiveSceneId =
+    projection.activeSceneId === sceneId ? safeScenes[Math.max(0, projection.scenes.findIndex((scene) => scene.id === sceneId) - 1)]?.id ?? safeScenes[0].id : projection.activeSceneId
+
+  setScenesRecord(doc, safeScenes)
+  doc.getMap('meta').set('activeSceneId', nextActiveSceneId)
+
+  const doomedNodeIds = projection.nodes
+    .filter((node) => readNodeSceneId(node) === sceneId)
+    .map((node) => node.id)
+
+  for (const nodeId of doomedNodeIds) {
+    deleteNodeRecord(doc, nodeId)
+  }
+}
+
+function readActiveSceneId(doc: Y.Doc): string {
+  return readCanvasProjection(doc).activeSceneId
+}
+
+function readNodeSceneId(node: { data?: unknown }): string | undefined {
+  const data = ensureRecord(node.data)
+  return typeof data.sceneId === 'string' && data.sceneId ? data.sceneId : undefined
+}
+
+function normalizeNode(node: NodeInput, defaultSceneId: string): NodeInput {
+  const data = ensureRecord(node.data)
+  const position = isPosition(node.position) ? node.position : undefined
+
+  return {
+    ...sanitizeUnknownFields(node, NODE_EPHEMERAL_KEYS),
+    id: node.id,
+    type: typeof node.type === 'string' ? node.type : undefined,
+    position: {
+      x: asNumber(position?.x),
+      y: asNumber(position?.y),
+    },
+    data: {
+      ...data,
+      sceneId: typeof data.sceneId === 'string' && data.sceneId ? data.sceneId : defaultSceneId,
+    },
+  }
+}
+
+function normalizeEdge(edge: EdgeInput): EdgeInput {
+  return {
+    ...sanitizeUnknownFields(edge, EDGE_EPHEMERAL_KEYS),
+    id: edge.id,
+    source: edge.source,
+    target: edge.target,
+    sourceHandle: edge.sourceHandle ?? undefined,
+    targetHandle: edge.targetHandle ?? undefined,
+    animated: edge.animated ?? undefined,
+    data: ensureRecord(edge.data),
+  }
+}
+
+function sanitizeUnknownFields(
+  input: Record<string, unknown>,
+  ephemeralKeys: Set<string>,
+): Record<string, unknown> {
+  const output: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(input)) {
+    if (ephemeralKeys.has(key) || key === 'id' || key === 'type' || key === 'position' || key === 'data' || key === 'source' || key === 'target' || key === 'sourceHandle' || key === 'targetHandle' || key === 'animated') {
+      continue
+    }
+    output[key] = value
+  }
+  return output
+}
+
+function buildNodeMap(node: NodeInput): Y.Map<unknown> {
+  const normalized = normalizeNode(node, 'scene-1')
+  const map = new Y.Map<unknown>()
+  map.set('id', normalized.id)
+  if (normalized.type !== undefined) {
+    map.set('type', normalized.type)
+  }
+  map.set('positionX', asNumber(normalized.position?.x))
+  map.set('positionY', asNumber(normalized.position?.y))
+  map.set('data', ensureRecord(normalized.data))
+
+  for (const [key, value] of Object.entries(normalized)) {
+    if (key === 'id' || key === 'type' || key === 'position' || key === 'data') {
+      continue
+    }
+    map.set(key, value)
+  }
+
+  return map
+}
+
+function buildEdgeMap(edge: EdgeInput): Y.Map<unknown> {
+  const normalized = normalizeEdge(edge)
+  const map = new Y.Map<unknown>()
+  map.set('id', normalized.id)
+  map.set('source', normalized.source)
+  map.set('target', normalized.target)
+  map.set('data', ensureRecord(normalized.data))
+
+  if (normalized.sourceHandle !== undefined) {
+    map.set('sourceHandle', normalized.sourceHandle)
+  }
+  if (normalized.targetHandle !== undefined) {
+    map.set('targetHandle', normalized.targetHandle)
+  }
+  if (normalized.animated !== undefined) {
+    map.set('animated', normalized.animated)
+  }
+
+  for (const [key, value] of Object.entries(normalized)) {
+    if (
+      key === 'id' ||
+      key === 'source' ||
+      key === 'target' ||
+      key === 'sourceHandle' ||
+      key === 'targetHandle' ||
+      key === 'animated' ||
+      key === 'data'
+    ) {
+      continue
+    }
+    map.set(key, value)
+  }
+
+  return map
+}
+
+function setOrDelete(map: Y.Map<unknown>, key: string, value: unknown): void {
+  if (value === undefined) {
+    map.delete(key)
+    return
+  }
+  map.set(key, value)
+}
+
+function ensureRecord(value: unknown): JsonRecord {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {}
+  }
+  return { ...(value as JsonRecord) }
+}
+
+function isPosition(value: unknown): value is Position {
+  return !!value && typeof value === 'object' && 'x' in value && 'y' in value
+}
+
+function asNumber(value: unknown): number {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : 0
+}
+
+function createItemId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function createSceneId(): string {
+  return createItemId('scene')
+}
+
+function nextSceneName(scenes: CanvasScene[]): string {
+  const nextNumber = scenes.reduce((max, scene) => {
+    const match = scene.name.match(/^Scene (\d+)$/)
+    if (!match) return max
+    return Math.max(max, Number.parseInt(match[1], 10))
+  }, 0)
+  return `Scene ${nextNumber + 1}`
+}
