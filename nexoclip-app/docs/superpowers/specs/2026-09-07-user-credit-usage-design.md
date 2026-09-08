@@ -98,9 +98,15 @@ Response:
 
 The API returns credits as decimal strings to avoid floating-point formatting errors. It does not expose `raw_usage`, provider credentials, or provider monetary cost.
 
+### Image generation execution boundary
+
+The Image Studio SaaS flow uses `POST /api/generations`, not the browser-facing OpenRouter compatibility route. The route reserves credits and creates a durable job, then publishes it to the external queue after the transaction commits. A persistent image worker claims the job, calls the existing server-only provider router, persists output assets and provider usage, and settles the reservation.
+
+OpenRouter is the primary image provider. Existing direct-provider fallback mapping remains the sole fallback policy: OpenAI, Gemini, or BytePlus is attempted only for mapped models and retryable/model-routing failures. If a mapped direct provider is not configured, the worker fails safely and releases the reservation. Browser code never reads, transmits, or receives provider credentials.
+
 ### Estimate source
 
-No duplicate client pricing table is introduced. The UI obtains an estimate from the same server-side pricing logic used during reservation. The smallest implementation may add a read-only estimate mode to the generation route or a focused `/api/generations/estimate` route, whichever fits the existing route tests with less duplication.
+No duplicate client pricing table is introduced. The UI obtains an estimate from the same server-side pricing logic used during reservation through `/api/generations/estimate`.
 
 ## Data and query design
 

@@ -674,7 +674,61 @@ rtk git commit -m "feat(studio): show image credit estimate"
 
 ---
 
-### Task 9: Full regression and security verification
+### Task 9: Migrate Image Studio to the durable provider-routed SaaS pipeline
+
+**Files:**
+- Modify: `app/api/generations/route.js`
+- Modify: `src/services/saasImageGeneration.js`
+- Create: `src/queue/imageWorker.mjs`
+- Modify: `packages/studio/src/generationClient.js`
+- Modify: `packages/studio/src/components/ImageStudio.jsx`
+- Create: `tests/generations/saasProviderRoutedImage.test.mjs`
+- Create: `tests/api/generationsRoute.test.mjs`
+
+**Interfaces:**
+- `POST /api/generations` creates/reserves a tenant job, then attempts queue publication only after commit. A publication failure must leave the durable queued row recoverable.
+- `createSaasImageHandler({ providerRouter, storage, pool })` calls `providerRouter.generateImage()` with job model/prompt/parameters, stores output assets, and returns safe usage/provider metadata.
+- `createImageWorker()` uses `createGenerationProcessor` plus the BullMQ adapter and existing recovery loop; credentials are read only by the worker process.
+- Studio client creates SaaS jobs and polls `GET /api/generations/:id`; it does not call `/api/openrouter/images` for the credited flow.
+
+- [ ] **Step 1: Write failing provider-routed worker tests**
+
+Test `createSaasImageHandler` with an injected provider router. Assert the router receives the job model/prompt/aspect ratio/reference images, output data is stored as a tenant asset, returned provider/usage are persisted through the existing worker hook, and a router failure propagates to the generation processor so reservation release remains the one canonical failure behavior.
+
+- [ ] **Step 2: Implement the provider-routed image handler**
+
+Replace the MuAPI-specific default handler with a `createProviderRouter()` default. Support data URLs as well as HTTP output URLs when materializing assets. Return only provider, outputs, and safe provider usage; never return provider credentials or raw request payloads.
+
+- [ ] **Step 3: Write failing generation-route publication tests**
+
+Inject reserve/publish/context dependencies. Assert authenticated user ID reaches reservation, publisher runs only after a successful reservation, and a publisher error returns `201` with the durable queued job while recording no secret data.
+
+- [ ] **Step 4: Implement post-commit publishing**
+
+Refactor the generation route into a testable factory. Reuse `recoverQueuedGenerations` and the BullMQ queue adapter. Queue errors must not roll back the committed job or credit reservation because worker recovery will republish it.
+
+- [ ] **Step 5: Add the persistent image worker entry point**
+
+Follow `src/queue/storyboardWorker.mjs`: validate required `REDIS_URL`, initialize queue/pool/provider router/storage, run startup and interval recovery, create a BullMQ worker using the provider-routed image handler and `createGenerationProcessor`, and close all resources safely. Do not import client/UI code.
+
+- [ ] **Step 6: Replace the credited Image Studio submission path**
+
+Add a small client helper that posts `{ prompt, model, parameters, idempotencyKey }` to `/api/generations` with `x-workspace-id`, then polls `/api/generations/:id`. Keep direct compatibility functions intact for non-SaaS callers, but Image Studio must use the SaaS helper. When a job completes, use its signed output URL; on failure, show the safe API error. One click creates one job; do not silently submit a batch of direct-provider calls.
+
+- [ ] **Step 7: Run focused pipeline tests and commit**
+
+Run: `rtk node --test tests/generations/saasProviderRoutedImage.test.mjs tests/api/generationsRoute.test.mjs tests/generations/saasImageGeneration.test.mjs tests/frontend/imageCreditEstimate.test.mjs`
+
+Commit:
+
+```bash
+rtk git add app/api/generations/route.js src/services/saasImageGeneration.js src/queue/imageWorker.mjs packages/studio/src/generationClient.js packages/studio/src/components/ImageStudio.jsx tests/generations/saasProviderRoutedImage.test.mjs tests/api/generationsRoute.test.mjs
+rtk git commit -m "feat(generation): route images through SaaS worker"
+```
+
+---
+
+### Task 10: Full regression and security verification
 
 **Files:**
 - Modify only files required to fix failures caused by Tasks 1–8.

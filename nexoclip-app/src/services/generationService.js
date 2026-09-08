@@ -29,11 +29,15 @@ export function normalizeSaaSImageGenerationResult(generation) {
 export function validateImageGenerationInput(input) {
   const prompt = String(input?.prompt || '').trim();
   const model = String(input?.model || '').trim();
-  const aspectRatio = String(input?.aspectRatio || '1:1').trim();
+  const supplied = input?.parameters && Object.getPrototypeOf(input.parameters) === Object.prototype ? input.parameters : {};
+  const aspectRatio = String(supplied.aspectRatio || input?.aspectRatio || '1:1').trim();
   if (!prompt || prompt.length > 10000) throw new Error('Generation prompt is required');
   if (!model || model.length > 120) throw new Error('Generation model is required');
   if (!aspectRatios.has(aspectRatio)) throw new Error('Aspect ratio is invalid');
-  return { prompt, model, parameters: { aspectRatio } };
+  const parameters = { aspectRatio };
+  for (const key of ['resolution', 'quality', 'seed', 'name', 'swap_url']) if (supplied[key] !== undefined) parameters[key] = supplied[key];
+  if (Array.isArray(supplied.referenceImages) && supplied.referenceImages.every((url) => typeof url === 'string' && url.length <= 4096)) parameters.referenceImages = supplied.referenceImages.slice(0, 10);
+  return { prompt, model, parameters };
 }
 
 export function validateVimaxGenerationInput(input) {

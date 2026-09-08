@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import toast, { Toaster } from "react-hot-toast";
-import { generateImage, generateI2I, uploadFile } from "../generationClient.js";
+import { generateSaasImage, uploadFile } from "../generationClient.js";
 import { formatErrorMessage } from "../utils/formatError.js";
 import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
 import DurableJobHistory from "../../../../components/DurableJobHistory.js";
@@ -1300,37 +1300,25 @@ export default function ImageStudio({
     try {
       const workspaceId = typeof window !== "undefined" ? window.sessionStorage.getItem("nexoclip_workspace_id") : null;
       const results = await Promise.all(
-        batchSeeds.map(async (batchSeed) => {
-          if (imageMode) {
-            const genParams = {
-              model: selectedModelId,
-              images_list: uploadedImageUrls,
-              image_url: uploadedImageUrls[0],
-              aspect_ratio: selectedAr,
-              seed: batchSeed,
-            };
-            if (swapImageUrl) genParams.swap_url = swapImageUrl;
-            if (prompt.trim()) genParams.prompt = prompt.trim();
-            if (currentQualityField && selectedQuality) {
-              genParams[currentQualityField] = selectedQuality;
-            }
-            if (showEffectBtn && selectedEffect) genParams.name = selectedEffect;
-            genParams.workspace_id = workspaceId;
-            return await generateI2I(apiKey, genParams);
-          } else {
-            const genParams = {
-              model: selectedModelId,
-              prompt: prompt.trim(),
-              aspect_ratio: selectedAr,
-              seed: batchSeed,
-            };
-            if (currentQualityField && selectedQuality) {
-              genParams[currentQualityField] = selectedQuality;
-            }
-            genParams.workspace_id = workspaceId;
-            return generateImage(apiKey, genParams);
-          }
-        })
+        batchSeeds.map((batchSeed) => {
+          const parameters = {
+            aspectRatio: selectedAr,
+            seed: batchSeed,
+            ...(currentQualityField && selectedQuality ? { [currentQualityField]: selectedQuality } : {}),
+            ...(imageMode && uploadedImageUrls.length ? { referenceImages: uploadedImageUrls } : {}),
+          };
+          // These legacy model-specific fields are retained in the job parameters for
+          // adapters that support them; the provider router ignores unsupported fields.
+          if (swapImageUrl) parameters.swap_url = swapImageUrl;
+          if (showEffectBtn && selectedEffect) parameters.name = selectedEffect;
+          return generateSaasImage({
+            workspace_id: workspaceId,
+            model: selectedModelId,
+            prompt: prompt.trim(),
+            parameters,
+            idempotencyKey: crypto.randomUUID(),
+          });
+        }),
       );
       setSeed(batchSeeds[batchSeeds.length - 1]);
 
