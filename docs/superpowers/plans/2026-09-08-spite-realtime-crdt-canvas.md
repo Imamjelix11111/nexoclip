@@ -790,3 +790,16 @@ Search for writes to `canvas_nodes`, `canvas_edges`, `projects.scenes`, and `act
 git add nexoclip-app docs
 git commit -m "test(spite): verify realtime CRDT canvas"
 ```
+
+## 2026-09-08 Task 7 Round 1 minor gap follow-up
+
+- Added explicit `constantTimeEqual` exports in both isolated Task 7 crypto modules:
+  - `nexoclip-app/src/lib/realtime/internalAuth.js`
+  - `nexoclip-app/services/spite/realtime/internal-auth.ts`
+- Added focused behavioral tests in both suites for:
+  - equal strings
+  - different lengths
+  - mismatch at first byte
+  - mismatch at last byte
+- Portability preserved: helper stays Web-Crypto-compatible string/byte comparison (no Node-only `timingSafeEqual` swap).
+- Intentional duplication remains in place for service isolation; shared package extraction is deferred as minor follow-up by design.

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { SignJWT, UnsecuredJWT } from 'jose';
 
 import {
+  constantTimeEqual,
   signCanvasAuthorization,
   verifyCanvasAuthorization,
 } from '../../src/lib/realtime/internalAuth.js';
@@ -80,6 +81,13 @@ test('verifyCanvasAuthorization rejects stale and future timestamps', () => {
     verifyCanvasAuthorization(futurePayload, signCanvasAuthorization(futurePayload, INTERNAL_SECRET), INTERNAL_SECRET),
     false,
   );
+});
+
+test('constantTimeEqual handles equal, different length, and first/last byte mismatches', () => {
+  assert.equal(constantTimeEqual('abcdef', 'abcdef'), true);
+  assert.equal(constantTimeEqual('abcdef', 'abcde'), false);
+  assert.equal(constantTimeEqual('abcdef', 'xbcdef'), false);
+  assert.equal(constantTimeEqual('abcdef', 'abcdeX'), false);
 });
 
 test('issueRealtimeToken issues a valid 60-second room-bound JWT', async () => {

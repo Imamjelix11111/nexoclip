@@ -11,7 +11,7 @@ export const CANVAS_AUTH_MAX_SKEW_SECONDS = 60
 
 const textEncoder = new TextEncoder()
 
-function safeStringEquals(left: string, right: string): boolean {
+export function constantTimeEqual(left: string, right: string): boolean {
   const leftBytes = textEncoder.encode(left)
   const rightBytes = textEncoder.encode(right)
   const length = Math.max(leftBytes.length, rightBytes.length)
@@ -88,7 +88,7 @@ export function verifyCanvasAuthorization(
     }
 
     const expectedSignature = signCanvasAuthorization(payload, secret)
-    return safeStringEquals(expectedSignature, signature)
+    return constantTimeEqual(expectedSignature, signature)
   } catch {
     return false
   }
