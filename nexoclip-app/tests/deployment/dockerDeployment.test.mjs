@@ -77,8 +77,11 @@ test('Realtime dependency contract is pinned in app and spite manifests', () => 
 
   assert.equal(typeof providerVersion, 'string');
   assert.equal(typeof serverVersion, 'string');
-  assert.equal(providerVersion.split('.')[0], serverVersion.split('.')[0]);
+  assert.match(providerVersion, /^4\.6\./, '@hocuspocus/provider must stay on 4.6.x');
+  assert.match(serverVersion, /^4\.6\./, '@hocuspocus/server must stay on 4.6.x');
+  assert.equal(providerVersion, serverVersion, 'provider/server pins must match exactly');
   assert.equal(spitePackage.dependencies.yjs, '13.6.32');
+  assert.equal(spitePackage.dependencies['y-protocols'], '1.0.7');
   assert.equal(spitePackage.dependencies.jose, '6.2.12');
   assert.equal(appPackage.dependencies.jose, '6.2.12');
 });
