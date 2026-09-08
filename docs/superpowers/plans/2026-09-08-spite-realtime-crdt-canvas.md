@@ -19,9 +19,12 @@
 - Incremental updates are first-class durable data with monotonic per-project sequence numbers.
 - Snapshot encoding and its persisted update boundary are serialized per project.
 - JWT verification pins `HS256`, issuer `nexoclip`, audience `nexoclip-realtime`, expiry, and room-bound `projectId`.
-- Ownership is checked before room join/hydration and repeated by Hocuspocus.
+- Ownership is checked before room access or hydration and repeated by Hocuspocus; unauthenticated clients receive no Y.Doc or persisted state regardless of hook ordering.
+- `PERSISTED` and its client acknowledgment mean the corresponding Yjs update has committed successfully to Neon: update → enqueue → Neon COMMIT → `PERSISTED` → ACK.
+- Every trusted HTTP server mutation enters `ProjectRuntime`, applies a Y.Doc transaction, follows the normal durable update pipeline, and schedules projection; it never updates projection tables directly or saves a whole snapshot per mutation.
 - Three participants is a target, never a hard limit.
 - Neon failure uses a bounded queue and transitions document mutation to read-only while Awareness remains available.
+- Database credentials are isolated: Main App gets only its main database URL; Spite Realtime gets only the Spite database URL; Spite HTTP gets neither the main database URL nor browser-visible database credentials.
 - All feature and behavior changes follow red-green-refactor; no production implementation precedes its failing test.
 
 ---
@@ -74,6 +77,48 @@
 - Add environment examples and deployment contract tests.
 
 ---
+
+### Task 0: Read-Only Repository Reconnaissance
+
+**Files:**
+- Read only: package manifests and lockfiles
+- Read only: Spite application and realtime-adjacent entrypoints
+- Read only: canvas workspace, node/edge components, autosave hooks, REST routes, project ownership, generation routes, database schema, Docker/Compose/Caddy, and test configuration
+- Create only as execution artifact: `docs/superpowers/plans/2026-09-08-spite-realtime-reconnaissance.md`
+
+**Interfaces:**
+- Produces a verified repository map used to validate file paths and implementation assumptions in Tasks 1–20.
+- Must not redesign the locked architecture or modify application/configuration files.
+
+- [ ] **Step 1: Inspect package and runtime boundaries**
+
+Record package managers, dependency versions, Node versions, Next.js entrypoints, service boundaries, build targets, and existing test commands.
+
+- [ ] **Step 2: Trace current canvas state and every mutation path**
+
+Trace initial hydration, React Flow ownership, autosave, nodes, edges, scenes, undo/redo, child-component setters, generation callbacks, restore, duplication, and destructive asset checks.
+
+- [ ] **Step 3: Trace authentication, authorization, persistence, and deployment**
+
+Map the main custom session, Spite session middleware, ownership predicates or gaps, Neon schema, project lifecycle, Compose environment wiring, and Caddy routes.
+
+- [ ] **Step 4: Write the reconnaissance report**
+
+The report must contain exactly these sections:
+
+1. Current architecture map
+2. Existing mutation paths
+3. Existing persistence paths
+4. Existing auth/session paths
+5. Existing deployment paths
+6. Conflicts with this implementation plan
+7. Files that differ from the proposed file map
+
+Do not edit production files. If a file path or assumption differs, update this plan before Task 1 without changing the five locked invariants.
+
+- [ ] **Step 5: Review checkpoint**
+
+Confirm the repository still has no unintended changes beyond the report. Commit the report only at this milestone if granular plan commits are being used.
 
 ### Task 1: Install and Pin Realtime Dependencies
 
@@ -283,7 +328,7 @@ Use one promise/mutex chain per project, `Y.mergeUpdates`, bounded bytes/count f
 
 Commit as `feat(spite): add durable room runtime`.
 
-### Task 7: Implement HMAC Canvas Authorization and JWT Policy
+### Task 7: Implement Crypto and Token Policy Only
 
 **Files:**
 - Create: `nexoclip-app/src/lib/realtime/internalAuth.js`
@@ -294,12 +339,16 @@ Commit as `feat(spite): add durable room runtime`.
 - Create: `nexoclip-app/services/spite/realtime/auth.test.ts`
 
 **Interfaces:**
-- Main produces `signCanvasAuthorization(payload, secret)` and `issueRealtimeToken({userId, projectId}, secret)`.
-- Realtime produces `authorizeInternalRequest` and `verifyRealtimeToken(token, expectedProjectId)`.
+- Produces crypto/policy functions only:
+  - `signCanvasAuthorization(payload, secret)`
+  - `verifyCanvasAuthorization(payload, signature, secret)`
+  - `issueRealtimeToken({userId, projectId}, secret)`
+  - `verifyRealtimeToken(token, expectedProjectId, secret)`
+- Does not create HTTP routes, call session services, query ownership, or orchestrate Canvas Auth requests.
 
 - [ ] **Step 1: Write failing crypto contract tests**
 
-Test canonical field order, altered payload rejection, constant-time signature comparison, stale/future timestamp rejection, nonce replay rejection, and JWT rejection for wrong algorithm/signature/issuer/audience/expiry/project.
+Test canonical field order, altered payload rejection, constant-time signature comparison, stale/future timestamp rejection, and JWT rejection for wrong algorithm/signature/issuer/audience/expiry/project. Durable nonce insertion/replay orchestration belongs to the private Canvas Auth HTTP boundary, not this crypto-only task.
 
 - [ ] **Step 2: Verify RED in both packages**
 
@@ -307,7 +356,7 @@ Run main and Spite focused tests.
 
 - [ ] **Step 3: Implement fixed-policy cryptography**
 
-Use Web/Node crypto HMAC SHA-256 for internal authorization and `jose` for JWT. Pin `HS256`, issuer, audience, and 60-second expiry. Store nonces atomically in Neon before ownership query; delete expired nonces opportunistically.
+Use Web/Node crypto HMAC SHA-256 for internal authorization and `jose` for JWT. Pin `HS256`, issuer, audience, and 60-second expiry. Keep all functions transport-independent and side-effect-free; nonce persistence is implemented by the private Canvas Auth endpoint in Task 9.
 
 - [ ] **Step 4: Verify GREEN and commit**
 
@@ -320,7 +369,9 @@ Commit as `feat(auth): secure realtime authorization`.
 - Create: `nexoclip-app/tests/realtime/realtimeTokenRoute.test.mjs`
 
 **Interfaces:**
-- Produces `POST /api/auth/realtime-token -> {token, expiresAt}`.
+- Consumes Task 7 crypto/policy functions without reimplementing them.
+- Produces HTTP orchestration only: `POST /api/auth/realtime-token -> {token, expiresAt}`.
+- Owns session lookup, request `projectId` validation, signed Canvas Auth request, error mapping, and response serialization.
 
 - [ ] **Step 1: Write failing route tests**
 
@@ -338,36 +389,71 @@ Read `nexoclip_session`, call `getCurrentSession`, accept only `projectId`, call
 
 Commit as `feat(auth): issue realtime canvas tokens`.
 
-### Task 9: Build the Hocuspocus Service
+### Task 9: Build the Hocuspocus Core
 
 **Files:**
 - Create: `nexoclip-app/services/spite/realtime/server.ts`
-- Create: `nexoclip-app/services/spite/realtime/server.test.ts`
+- Create: `nexoclip-app/services/spite/realtime/server-core.test.ts`
 
 **Interfaces:**
-- Produces persistent WebSocket endpoint and private `/internal/authorize` plus `/healthz` HTTP endpoints.
+- Produces the persistent WebSocket server core and private `/internal/authorize` plus `/healthz` HTTP endpoints.
+- Consumes Task 4 repository, Task 6 runtime, and Task 7 crypto policy.
 
-- [ ] **Step 1: Write failing server integration tests**
+- [ ] **Step 1: Write failing lifecycle-order security tests against the pinned Hocuspocus version**
 
-Start on an ephemeral port. Assert auth failure occurs before repository hydration; wrong room binding fails; valid owner joins; more than three clients join; two clients converge; durable stateless acknowledgment follows repository commit; reconnect token callback runs again; read-only rejects document mutations but not Awareness; disconnect removes Awareness.
+Start a real server on an ephemeral port and instrument authorization, room access, hydration, and outbound sync. Assert the security invariant rather than assuming hook order: an invalid, expired, non-owner, or wrong-project connection receives no room access, triggers no repository hydration, and receives no Y.Doc/persisted state bytes.
 
-- [ ] **Step 2: Verify RED**
+- [ ] **Step 2: Write failing collaboration core tests**
 
-Run the focused server test.
+Assert a valid owner joins `project:<projectId>`, hydration occurs only after authorization, more than three clients can join, two clients converge, `onChange` enqueues the exact update into `ProjectRuntime`, and disconnect releases the core connection reference.
 
-- [ ] **Step 3: Implement Hocuspocus hooks**
+- [ ] **Step 3: Verify RED**
 
-Wire `onAuthenticate`, `onLoadDocument`, `beforeSync`, `onChange`, `beforeHandleAwareness`, `onDisconnect`, and `beforeUnloadDocument` to repository/runtime. Sanitize user identity from auth context, assign `Guest N` by participant ID, observe lock heartbeat server-side, and send persistence statuses as stateless messages.
+Run the focused server-core tests.
 
-- [ ] **Step 4: Implement graceful shutdown**
+- [ ] **Step 4: Implement the minimal core hooks**
 
-On SIGTERM/SIGINT stop new connections, mark active rooms read-only, flush queues, compact if time allows, destroy Hocuspocus, and close Neon pool.
+Wire authentication, authorization, document loading, change-to-runtime enqueueing, and disconnect cleanup. Implement private Canvas Auth nonce insertion atomically before ownership lookup and reject replay. Do not add Awareness naming, lock policy, status ACKs, or shutdown behavior in this task.
 
 - [ ] **Step 5: Verify GREEN and commit**
 
-Commit as `feat(spite): serve collaborative Yjs rooms`.
+Commit as `feat(spite): serve authorized Yjs rooms`.
 
-### Task 10: Add Same-Origin Spite HTTP Identity and Ownership
+### Task 10: Add Hocuspocus Lifecycle, Awareness, ACKs, and Shutdown
+
+**Files:**
+- Modify: `nexoclip-app/services/spite/realtime/server.ts`
+- Create: `nexoclip-app/services/spite/realtime/server-lifecycle.test.ts`
+
+**Interfaces:**
+- Extends Task 9 without changing its pre-hydration authorization invariant.
+- Produces sanitized Awareness, `Guest N` allocation, server-observed soft-lock lifetime, durable status messages, read-only admission, and graceful shutdown.
+
+- [ ] **Step 1: Write failing Awareness and lifecycle tests**
+
+Assert forged `userId`/name is replaced from authenticated context, each `participantId` gets room-scoped `Guest N`, disconnect releases its name, locks expire from server-observed heartbeat rather than browser time, and Awareness still propagates while document mutation is read-only.
+
+- [ ] **Step 2: Write failing durability ACK tests**
+
+Instrument runtime and transport to prove the exact order `Yjs update -> enqueue -> Neon COMMIT -> PERSISTED -> ACK`. Assert no `PERSISTED` ACK is emitted while append is pending or failed, and read-only rejects new document mutations before application.
+
+- [ ] **Step 3: Verify RED**
+
+Run the focused lifecycle tests.
+
+- [ ] **Step 4: Implement Awareness, statuses, and admission control**
+
+Sanitize Awareness from auth context, allocate names by participant, track lock heartbeat with server time, send stateless statuses, and use the pinned Hocuspocus APIs only after tests demonstrate the security/admission lifecycle.
+
+- [ ] **Step 5: Implement and test graceful shutdown**
+
+On SIGTERM/SIGINT stop new connections, mark rooms read-only, flush pending updates to Neon, emit no premature ACK, compact when time permits, destroy Hocuspocus, and close the Neon pool.
+
+- [ ] **Step 6: Verify GREEN and commit**
+
+Commit as `feat(spite): manage realtime room lifecycle`.
+
+### Task 11: Add Same-Origin Spite HTTP Identity and Ownership
 
 **Files:**
 - Create: `nexoclip-app/services/spite/lib/main-session.ts`
@@ -402,7 +488,7 @@ Remove `DEFAULT_USER_ID`; use trusted user ID for project creation and duplicati
 
 Commit as `fix(spite): enforce project ownership`.
 
-### Task 11: Add One-Time Placeholder Ownership Migration
+### Task 12: Add One-Time Placeholder Ownership Migration
 
 **Files:**
 - Create: `nexoclip-app/scripts/migrate-spite-ownership.mjs`
@@ -427,7 +513,7 @@ Require explicit `SPITE_OWNER_USER_ID` in production; allow deterministic first-
 
 Commit as `feat(spite): migrate legacy project ownership`.
 
-### Task 12: Implement the React Flow/Yjs Binding
+### Task 13: Implement the React Flow/Yjs Binding
 
 **Files:**
 - Create: `nexoclip-app/services/spite/lib/realtime/react-flow-binding.test.ts`
@@ -457,7 +543,7 @@ Create one Y.Doc/provider per project. Provider token callback POSTs `/api/auth/
 
 Commit as `feat(spite): bind React Flow to Yjs`.
 
-### Task 13: Integrate Awareness, Cursor Rendering, and Soft Locks
+### Task 14: Integrate Awareness, Cursor Rendering, and Soft Locks
 
 **Files:**
 - Create: `nexoclip-app/services/spite/lib/realtime/presence.test.ts`
@@ -485,7 +571,7 @@ Store participant ID in `sessionStorage`; publish cursor every 30–60 ms, selec
 
 Commit as `feat(spite): show realtime canvas presence`.
 
-### Task 14: Move Every Canvas Mutation to Yjs
+### Task 15: Move Every Canvas Mutation to Yjs
 
 **Files:**
 - Modify: `components/canvas/canvas-workspace.tsx`
@@ -528,7 +614,7 @@ Search mutation-bearing files for direct React Flow durable setters; only derive
 
 Commit as `refactor(spite): make Yjs canvas authoritative`.
 
-### Task 15: Replace Autosave with Durable Status
+### Task 16: Replace Autosave with Durable Status
 
 **Files:**
 - Modify: `services/spite/components/canvas/canvas-toolbar.tsx`
@@ -555,7 +641,7 @@ Delete debounce/interval/beacon calls and map stateless server acknowledgments i
 
 Commit as `refactor(spite): replace canvas autosave`.
 
-### Task 16: Convert Server-Side Canvas Writers
+### Task 17: Convert Server-Side Canvas Writers
 
 **Files:**
 - Modify: `services/spite/lib/r2-upload.ts`
@@ -568,6 +654,8 @@ Commit as `refactor(spite): replace canvas autosave`.
 
 **Interfaces:**
 - Produces a private authenticated realtime mutation endpoint/client for trusted server updates.
+- Every request follows exactly: HTTP authentication/authorization → `ProjectRuntime` → Y.Doc transaction → normal incremental durable persistence → asynchronous projection.
+- The endpoint never updates `canvas_nodes`/`canvas_edges` directly and never persists a whole snapshot for each mutation.
 
 - [ ] **Step 1: Write failing tests for generation, restore, and duplication**
 
@@ -579,7 +667,7 @@ Run focused tests.
 
 - [ ] **Step 3: Add trusted mutation API**
 
-Add a private HMAC-protected realtime endpoint that loads the authoritative document, applies typed node patches or document replacement under the project runtime lock, persists updates, and schedules projection.
+Add a private HMAC-protected realtime endpoint that validates the request, enters the existing `ProjectRuntime`, applies a typed Y.Doc transaction to its active replica, lets the ordinary incremental update queue reach Neon commit, then schedules projection. Whole-document replacement is permitted only for explicit snapshot restore or project duplication, still as a Yjs transaction through this pipeline; routine mutations must remain granular and must not force a snapshot.
 
 - [ ] **Step 4: Move server writers**
 
@@ -593,7 +681,7 @@ Before deleting media based on projection references, require `projected_seq = d
 
 Commit as `refactor(spite): route server writes through Yjs`.
 
-### Task 17: Lock Legacy APIs to Projection-Only Semantics
+### Task 18: Lock Legacy APIs to Projection-Only Semantics
 
 **Files:**
 - Modify: `services/spite/app/api/projects/[projectId]/canvas/route.ts`
@@ -619,7 +707,7 @@ Delete whole-array delete/reinsert and JSON snapshot write logic from the legacy
 
 Commit as `refactor(spite): make legacy canvas read-only`.
 
-### Task 18: Wire Docker, Caddy, Environment, and Health Checks
+### Task 19: Wire Docker, Caddy, Environment, and Health Checks
 
 **Files:**
 - Modify: `nexoclip-app/services/spite/Dockerfile`
@@ -636,7 +724,7 @@ Commit as `refactor(spite): make legacy canvas read-only`.
 
 - [ ] **Step 1: Extend failing deployment tests**
 
-Assert Node 22 realtime target, private realtime port, `/spite/ws` route before `/spite*`, blocked `/spite/api/internal/*`, main-only session DB, realtime-only Spite DB, correct JWT/HMAC sharing, migrations before startup, health checks, queue defaults, and no public internal auth route.
+Parse the actual Compose service environment blocks and assert Node 22 realtime target, private realtime port, `/spite/ws` route before `/spite*`, blocked `/spite/api/internal/*`, correct JWT/HMAC sharing, migrations before startup, health checks, queue defaults, and no public internal auth route. Explicitly assert: Main has `DATABASE_URL_NEXOCLIP` but not `DATABASE_URL_SPITE`; realtime has `DATABASE_URL_SPITE` but not `DATABASE_URL_NEXOCLIP`; Spite HTTP has `NEXOCLIP_INTERNAL_URL` but no main database URL; no `NEXT_PUBLIC_*` or browser build argument contains a database credential.
 
 - [ ] **Step 2: Verify RED**
 
@@ -644,7 +732,7 @@ Run deployment/config tests.
 
 - [ ] **Step 3: Implement Docker and proxy wiring**
 
-Add realtime and one-shot migration/ownership jobs. Route WebSocket upgrades through Caddy and explicitly respond `404` to public internal paths. Do not publish realtime container ports.
+Add realtime and one-shot migration/ownership jobs. Route WebSocket upgrades through Caddy and explicitly respond `404` to public internal paths. Do not publish realtime container ports. Wire separate Compose variable names so the main service receives only its main database value and realtime receives only the Spite database value; never use a shared generic database secret across these services.
 
 - [ ] **Step 4: Add documented environment variables**
 
@@ -654,7 +742,7 @@ Add `CANVAS_AUTH_URL`, `CANVAS_AUTH_HMAC_SECRET`, `REALTIME_JWT_SECRET`, `NEXOCL
 
 Commit as `build(spite): deploy realtime canvas service`.
 
-### Task 19: End-to-End Collaboration and Recovery Verification
+### Task 20: End-to-End Collaboration and Recovery Verification
 
 **Files:**
 - Create: `nexoclip-app/services/spite/realtime/collaboration.integration.test.ts`
@@ -692,7 +780,7 @@ When `SPITE_TEST_DATABASE_URL` is configured, also run all realtime integration 
 
 - [ ] **Step 5: Review projection/source boundaries**
 
-Search for writes to `canvas_nodes`, `canvas_edges`, `projects.scenes`, and `active_scene_id`. Confirm only projector, initial schema/migration, and explicitly retired legacy code touch them; confirm no client REST hydration or whole-array autosave remains.
+Search for writes to `canvas_nodes`, `canvas_edges`, `projects.scenes`, and `active_scene_id`. Confirm only projector and initial migration/import infrastructure touch them; retired legacy endpoints must contain no executable writes. Confirm no client REST hydration or whole-array autosave remains. Re-run the five invariant checks: persisted Yjs is authoritative, React Flow is derived, legacy tables are projection-only, ACK follows Neon COMMIT, and authorization precedes room access/hydration.
 
 - [ ] **Step 6: Commit**
 
