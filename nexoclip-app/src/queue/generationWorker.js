@@ -90,8 +90,11 @@ export function createGenerationProcessor({
           result: result.result || {}, attempt, claimToken,
         };
         if (persistResult) {
-          const {result: _result, ...persistence} = completion;
-          await persistResult({...persistence, estimatedCost: job.estimated_cost ?? null, outputs: result.outputs || [], usage: result.usage || {}});
+          await persistResult(pool, {
+            workspaceId, generationId: job.id, provider: completion.provider,
+            providerRequestId: result.providerRequestId || `${completion.provider}:${job.id}`,
+            estimatedCost: job.estimated_cost ?? null, outputs: result.outputs || [], usage: result.usage || {},
+          });
         }
         const completed = await completeGenerationJob(pool, completion);
         if (!completed) return false;

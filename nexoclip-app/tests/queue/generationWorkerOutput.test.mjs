@@ -15,12 +15,13 @@ function poolFor(job) {
 
 test('passes the provider persistence hook result through successful worker handling', async () => {
   const job = { id: 'g1', workspace_id: 'w1', status: 'queued', attempt_count: 0, max_attempts: 3 };
+  const pool = poolFor(job);
   let persisted;
   const worker = createGenerationWorker({
-    pool: poolFor(job),
+    pool,
     queue: { async dequeue() { return { type: 'generation', generationId: 'g1' }; } },
     pollIntervalMs: 0,
-    persistResult: async (result) => { persisted = result; },
+    persistResult: async (receivedPool, result) => { assert.equal(receivedPool, pool); persisted = result; },
     handler: async () => ({ status: 'succeeded', providerRequestId: 'req1', outputs: [{ assetId: 'a1' }], usage: { cost: 0.2 } }),
   });
   await worker.run({ maxMessages: 1 });

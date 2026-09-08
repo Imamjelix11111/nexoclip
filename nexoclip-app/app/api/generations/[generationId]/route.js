@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { SESSION_COOKIE } from '../../../../src/lib/auth/session.js';
 import { resolveTenantContext } from '../../../../src/services/tenantContext.js';
 import { getGenerationJob } from '../../../../src/services/generationService.js';
@@ -10,16 +9,25 @@ function workspaceId(request) {
 
 function errorResponse(error) {
   const status = error.status || (error.message === 'Authentication required' ? 401 : error.message === 'Workspace access denied' ? 403 : 400);
-  return NextResponse.json({ error: error.message }, { status });
+  return Response.json({ error: error.message }, { status });
 }
 
-export async function GET(request, { params }) {
-  try {
-    const id = workspaceId(request);
-    if (!id) throw Object.assign(new Error('workspace_id is required'), { status: 400 });
-    const tenant = await resolveTenantContext({ token: request.cookies.get(SESSION_COOKIE)?.value, workspaceId: id });
-    const generation = await getGenerationJob(tenant.workspace.id, params.generationId, createStorage());
-    if (!generation) return NextResponse.json({ error: 'Generation not found' }, { status: 404 });
-    return NextResponse.json({ generation });
-  } catch (error) { return errorResponse(error); }
+export function createGenerationStatusHandler({
+  resolveContext = resolveTenantContext,
+  getGeneration = getGenerationJob,
+  createStorage: loadStorage = createStorage,
+} = {}) {
+  return async function GET(request, { params }) {
+    try {
+      const id = workspaceId(request);
+      if (!id) throw Object.assign(new Error('workspace_id is required'), { status: 400 });
+      const tenant = await resolveContext({ token: request.cookies.get(SESSION_COOKIE)?.value, workspaceId: id });
+      const { generationId } = await params;
+      const generation = await getGeneration(tenant.workspace.id, generationId, loadStorage());
+      if (!generation) return Response.json({ error: 'Generation not found' }, { status: 404 });
+      return Response.json({ generation });
+    } catch (error) { return errorResponse(error); }
+  };
 }
+
+export const GET = createGenerationStatusHandler();
