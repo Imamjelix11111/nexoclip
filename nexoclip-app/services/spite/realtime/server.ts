@@ -59,6 +59,7 @@ export type RealtimeServerEvent = {
     | 'ws:disconnect'
   projectId?: string
   userId?: string
+  connectionId?: string
   socketId?: string
 }
 
@@ -124,6 +125,7 @@ export function createRealtimeServer(options: RealtimeServerOptions = {}): Realt
         type: 'ws:authorized',
         projectId: context.projectId,
         userId: context.userId,
+        connectionId: payload.socketId,
         socketId: payload.socketId,
       })
       return context
@@ -134,6 +136,7 @@ export function createRealtimeServer(options: RealtimeServerOptions = {}): Realt
         type: 'ws:load-document',
         projectId: context.projectId,
         userId: context.userId,
+        connectionId: payload.socketId,
         socketId: payload.socketId,
       })
 
@@ -164,6 +167,8 @@ export function createRealtimeServer(options: RealtimeServerOptions = {}): Realt
         type: 'ws:before-sync',
         projectId: context.projectId,
         userId: context.userId,
+        connectionId: payload.connection.socketId,
+        socketId: payload.connection.socketId,
       })
     },
     onChange: async (payload) => {
@@ -177,6 +182,7 @@ export function createRealtimeServer(options: RealtimeServerOptions = {}): Realt
         type: 'ws:change',
         projectId: context.projectId,
         userId: context.userId,
+        connectionId: payload.socketId,
         socketId: payload.socketId,
       })
 
@@ -189,6 +195,7 @@ export function createRealtimeServer(options: RealtimeServerOptions = {}): Realt
         type: 'ws:disconnect',
         projectId: context?.projectId,
         userId: context?.userId,
+        connectionId: payload.socketId,
         socketId: payload.socketId,
       })
     },

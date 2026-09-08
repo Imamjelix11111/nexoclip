@@ -327,6 +327,35 @@ test('private /internal/authorize inserts nonce before ownership lookup and reje
   }
 })
 
+test('GET /healthz returns ok without touching realtime authorization', async () => {
+  const repository = new FakeRealtimeRepository()
+  const database = new FakeAuthorizationDatabase()
+
+  const server = createRealtimeServer({
+    address: '127.0.0.1',
+    port: 0,
+    env: {
+      REALTIME_TOKEN_SECRET: JWT_SECRET,
+      CANVAS_AUTH_SECRET,
+    },
+    repository,
+    database,
+  })
+
+  await server.listen()
+
+  try {
+    const response = await fetch(`${server.httpUrl}/healthz`)
+
+    assert.equal(response.status, 200)
+    assert.deepEqual(await response.json(), { ok: true })
+    assert.deepEqual(database.operations, [])
+    assert.deepEqual(repository.loadCalls, [])
+  } finally {
+    await server.destroy()
+  }
+})
+
 test('unauthorized websocket connections receive no room access, no hydration, and no sync bytes', async () => {
   const repository = new FakeRealtimeRepository()
   repository.setOwner(PROJECT_ID, OWNER_USER_ID)
@@ -341,7 +370,7 @@ test('unauthorized websocket connections receive no room access, no hydration, a
   repository.setDocument(PROJECT_ID, seededDoc)
 
   const runtime = new FakeRuntime()
-  const events: string[] = []
+  const events: Array<{ type: string; connectionId?: string }> = []
   const server = createRealtimeServer({
     address: '127.0.0.1',
     port: 0,
@@ -353,7 +382,7 @@ test('unauthorized websocket connections receive no room access, no hydration, a
     database: new FakeAuthorizationDatabase(),
     createRuntime: () => runtime,
     onEvent: (event) => {
-      events.push(event.type)
+      events.push({ type: event.type, connectionId: event.connectionId })
     },
   })
 
@@ -382,6 +411,7 @@ test('unauthorized websocket connections receive no room access, no hydration, a
     for (const invalidCase of invalidCases) {
       const clientDoc = new Y.Doc()
       const baselineBytes = emptyStateBytes(clientDoc)
+      const eventCountBeforeConnect = events.length
       const { provider, outcome } = await connectProvider({
         url: server.wsUrl,
         name: roomName(PROJECT_ID),
@@ -393,12 +423,17 @@ test('unauthorized websocket connections receive no room access, no hydration, a
       assert.notEqual(result, 'authenticated', `${invalidCase.name} unexpectedly authenticated`)
       await waitFor(() => provider.isAuthenticated === false)
       assert.equal(emptyStateBytes(clientDoc), baselineBytes, `${invalidCase.name} received document state bytes`)
+      assert.equal(
+        events.slice(eventCountBeforeConnect).some((event) => event.type === 'ws:load-document' || event.type === 'ws:before-sync'),
+        false,
+        `${invalidCase.name} progressed past authorization failure`,
+      )
       provider.destroy()
     }
 
     assert.deepEqual(repository.loadCalls, [])
     assert.equal(runtime.enqueueCalls.length, 0)
-    assert.equal(events.includes('ws:before-sync'), false)
+    assert.equal(events.some((event) => event.type === 'ws:before-sync'), false)
     assert.equal(server.getConnectionCount(), 0)
   } finally {
     await server.destroy()
@@ -419,7 +454,7 @@ test('authorized owners hydrate only after authorization, more than three client
   repository.setDocument(PROJECT_ID, seededDoc)
 
   const runtime = new FakeRuntime()
-  const events: string[] = []
+  const events: Array<{ type: string; connectionId?: string }> = []
   const server = createRealtimeServer({
     address: '127.0.0.1',
     port: 0,
@@ -431,7 +466,7 @@ test('authorized owners hydrate only after authorization, more than three client
     database: new FakeAuthorizationDatabase(),
     createRuntime: () => runtime,
     onEvent: (event) => {
-      events.push(event.type)
+      events.push({ type: event.type, connectionId: event.connectionId })
     },
   })
 
@@ -452,14 +487,34 @@ test('authorized owners hydrate only after authorization, more than three client
     assert.equal(readCanvasProjection(clients[0].document).nodes.some((node) => node.id === 'seed-node'), true)
     assert.equal(server.getConnectionCount(), 4)
 
-    const authIndex = events.indexOf('ws:authorized')
-    const hydrateIndex = events.indexOf('ws:load-document')
-    const syncIndex = events.indexOf('ws:before-sync')
-    assert.notEqual(authIndex, -1)
-    assert.notEqual(hydrateIndex, -1)
-    assert.notEqual(syncIndex, -1)
-    assert.ok(authIndex < hydrateIndex)
-    assert.ok(hydrateIndex < syncIndex)
+    const lifecycleEventsByConnection = new Map<string, string[]>()
+    for (const event of events) {
+      if (!event.connectionId) continue
+      const connectionEvents = lifecycleEventsByConnection.get(event.connectionId) ?? []
+      connectionEvents.push(event.type)
+      lifecycleEventsByConnection.set(event.connectionId, connectionEvents)
+    }
+
+    const authorizedConnectionIds = [...new Set(
+      events
+        .filter((event) => event.type === 'ws:authorized' && typeof event.connectionId === 'string')
+        .map((event) => event.connectionId as string),
+    )]
+    assert.equal(authorizedConnectionIds.length, clients.length)
+
+    for (const connectionId of authorizedConnectionIds) {
+      const connectionEvents = lifecycleEventsByConnection.get(connectionId) ?? []
+      const authIndex = connectionEvents.indexOf('ws:authorized')
+      const hydrateIndex = connectionEvents.indexOf('ws:load-document')
+      const syncIndex = connectionEvents.indexOf('ws:before-sync')
+      assert.notEqual(authIndex, -1, `missing auth event for ${connectionId}`)
+      assert.notEqual(syncIndex, -1, `missing sync event for ${connectionId}`)
+      assert.ok(authIndex < syncIndex, `expected auth before sync for ${connectionId}: ${connectionEvents.join(' -> ')}`)
+      if (hydrateIndex !== -1) {
+        assert.ok(authIndex < hydrateIndex, `expected auth before load for ${connectionId}: ${connectionEvents.join(' -> ')}`)
+        assert.ok(hydrateIndex < syncIndex, `expected load before sync for ${connectionId}: ${connectionEvents.join(' -> ')}`)
+      }
+    }
 
     let localUpdate: Uint8Array | null = null
     clients[0].document.on('update', (update) => {
