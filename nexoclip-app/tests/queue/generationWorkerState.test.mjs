@@ -12,7 +12,7 @@ function poolFor(job) {
     if (/status = 'failed'/.test(text) && ['running', 'processing'].includes(job.status)) job.status = 'failed';
     return { rows: [job] };
   }
-  return { query, async connect() { return { query, release() {} }; } };
+  return { calls: [], async query(text, values) { this.calls.push({ text, values }); return query(text, values); }, async connect() { return { query: async (text, values) => { this.calls.push({ text, values }); return query(text, values); }, release() {} }; } };
 }
 
 test('worker transitions successful handler work to succeeded', async () => {
@@ -127,6 +127,18 @@ test('worker startup recovers a pending terminal unreserved settlement without e
 
   assert.equal(recoveries, 1);
   assert.equal(executions, 0);
+});
+
+test('worker stores a safe provider failure message for the client', async () => {
+  const job = { id: 'g1', workspace_id: 'w1', status: 'queued', attempt_count: 2, max_attempts: 3, reservation_ledger_id: null };
+  const pool = poolFor(job);
+  await createGenerationWorker({
+    pool, queue: { async dequeue() { return { type: 'generation', generationId: 'g1' }; } }, pollIntervalMs: 0, onError: () => {},
+    handler: async () => { throw Object.assign(new Error('Google image request failed: quota exceeded'), { code: 'GOOGLE_IMAGE_FAILED' }); },
+  }).run({ maxMessages: 1 });
+  const failure = pool.calls?.find?.(({ text }) => text.includes("SET status = 'failed'"));
+  assert.ok(failure?.values?.[2].includes('Image generation failed. Please retry'));
+  assert.ok(!failure?.values?.[2].includes('quota exceeded'));
 });
 
 test('worker retries a retryable failure and records bounded backoff metadata', async () => {

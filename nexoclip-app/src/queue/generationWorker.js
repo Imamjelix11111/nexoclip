@@ -114,7 +114,13 @@ export function createGenerationProcessor({
         onError(error, job);
         return false;
       }
-      const failure = { code: error.code || 'GENERATION_FAILED', retryable: isRetryableFailure(error) };
+      const failure = {
+        code: error.code || 'GENERATION_FAILED',
+        retryable: isRetryableFailure(error),
+        // The browser needs a useful terminal error, but worker errors can include
+        // provider response bodies. Keep the durable job record deliberately generic.
+        message: error.publicMessage || 'Image generation failed. Please retry or select another model.',
+      };
       if (failure.retryable && attempt < limit) {
         const delay = retryDelayMs(attempt, { baseDelayMs, maxDelayMs });
         await retryGenerationJob(pool, {
