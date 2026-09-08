@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
 import { recordAsset, rehostToR2 } from '@/lib/r2-upload'
 import { isValidFalModel, isValidFalRequestId } from '@/lib/fal-validate'
+import { getAuthenticatedUser } from '@/lib/main-session'
+import {
+  projectNotFoundResponse,
+  unauthorizedResponse,
+  userOwnsProject,
+} from '@/lib/project-ownership'
 
 // Recovery endpoint. fal keeps job results around for ~24h after completion,
 // so a generation that "disappeared" from SPITE — because polling failed,
@@ -29,9 +35,7 @@ interface RecoveryItem {
   requestId: string
   modelEndpoint: string
   projectId: string
-  // Used for sensible defaults when the node type is unknown (manual mode).
   hintedType?: 'image' | 'video'
-  // For bulk mode: link the result back to the node it came from.
   nodeId?: string
   prompt?: string
 }
@@ -45,19 +49,17 @@ interface RecoveryResult {
 }
 
 async function fetchFalStatus(requestId: string, modelEndpoint: string, falKey: string) {
-  const statusRes = await fetch(
+  return fetch(
     `https://queue.fal.run/${modelEndpoint}/requests/${requestId}/status`,
     { headers: { Authorization: `Key ${falKey}` } },
   )
-  return statusRes
 }
 
 async function fetchFalResult(requestId: string, modelEndpoint: string, falKey: string) {
-  const res = await fetch(
+  return fetch(
     `https://queue.fal.run/${modelEndpoint}/requests/${requestId}`,
     { headers: { Authorization: `Key ${falKey}` } },
   )
-  return res
 }
 
 function extractOutputUrl(result: any): { url: string | null; isVideo: boolean } {
@@ -82,10 +84,6 @@ function extractOutputUrl(result: any): { url: string | null; isVideo: boolean }
 }
 
 async function recoverOne(item: RecoveryItem, falKey: string): Promise<RecoveryResult> {
-  // Defence-in-depth: bulk-mode recovery reads modelEndpoint from the
-  // canvas_nodes jsonb, which was written by an authenticated user. If
-  // that data ever gets tampered with (via a future write bug or DB
-  // access), we still refuse to interpolate it into the fal URL.
   if (!isValidFalModel(item.modelEndpoint) || !isValidFalRequestId(item.requestId)) {
     return {
       requestId: item.requestId,
@@ -162,8 +160,6 @@ async function recoverOne(item: RecoveryItem, falKey: string): Promise<RecoveryR
 
   const isVideo = item.hintedType ? item.hintedType === 'video' : detectedVideo
 
-  // Re-host the fal-hosted URL into our R2 so it survives fal's 24h
-  // retention. Falls back to the original URL if re-hosting fails.
   let storedUrl = url
   try {
     storedUrl = await rehostToR2(url)
@@ -172,9 +168,6 @@ async function recoverOne(item: RecoveryItem, falKey: string): Promise<RecoveryR
   }
 
   try {
-    // Mark recovered=true so the UI can show a blue badge on these
-    // assets — lets the user spot the ones that came back from a
-    // stuck/timed-out generation vs. fresh ones.
     await recordAsset(
       isVideo ? 'video' : 'image',
       item.modelEndpoint,
@@ -210,24 +203,30 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({}))
+  const user = await getAuthenticatedUser(request)
+  if (!user) return unauthorizedResponse()
 
-  // Backfill mode: mark every asset in the recent window as recovered
-  // without re-running the fal lookup. Used to flag generations
-  // recovered BEFORE the badge feature shipped. Defaults to "last 2
-  // hours" but the caller can pass `withinHours` to widen it.
+  const sql = getDb()
+  const projectFilter = body.projectId ? String(body.projectId) : null
+  if (projectFilter && !(await userOwnsProject(sql, user.id, projectFilter))) {
+    return projectNotFoundResponse()
+  }
+
   if (body.mode === 'backfill-recent') {
-    const sql = getDb()
     await sql`ALTER TABLE generation_history ADD COLUMN IF NOT EXISTS recovered boolean DEFAULT false`
     const hours = Math.max(0.25, Math.min(72, Number(body.withinHours) || 2))
     const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000)
     const updated = await sql`
       UPDATE generation_history
       SET recovered = true
-      WHERE created_at > ${cutoff.toISOString()}
+      FROM projects p
+      WHERE p.id = generation_history.project_id
+        AND p.userid = ${user.id}
+        AND created_at > ${cutoff.toISOString()}
         AND COALESCE(recovered, false) = false
-        ${body.projectId ? sql`AND project_id = ${String(body.projectId)}` : sql``}
+        ${projectFilter ? sql`AND project_id = ${projectFilter}` : sql``}
         ${body.modelLike ? sql`AND model ILIKE ${String(body.modelLike)}` : sql``}
-      RETURNING id, model, prompt, created_at
+      RETURNING generation_history.id, generation_history.model, generation_history.prompt, generation_history.created_at
     `
     return NextResponse.json({
       mode: 'backfill-recent',
@@ -237,17 +236,13 @@ export async function POST(request: NextRequest) {
     })
   }
 
-  // Manual single-request mode.
   if (body.requestId && body.modelEndpoint) {
-    if (!body.projectId) {
+    if (!projectFilter) {
       return NextResponse.json(
         { error: 'projectId is required so we know where to file the recovered asset.' },
         { status: 400 },
       )
     }
-    // Validate before either reaches the fal URL interpolation.
-    // Without this an attacker can pass modelEndpoint="../@evil/path"
-    // and turn this route into an SSRF primitive.
     const requestIdRaw = String(body.requestId)
     const modelEndpointRaw = String(body.modelEndpoint)
     if (!isValidFalModel(modelEndpointRaw) || !isValidFalRequestId(requestIdRaw)) {
@@ -260,7 +255,7 @@ export async function POST(request: NextRequest) {
       {
         requestId: requestIdRaw,
         modelEndpoint: modelEndpointRaw,
-        projectId: String(body.projectId),
+        projectId: projectFilter,
         prompt: body.prompt ? String(body.prompt) : undefined,
         hintedType: body.type === 'video' || body.type === 'image' ? body.type : undefined,
       },
@@ -269,9 +264,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ mode: 'manual', results: [result] })
   }
 
-  // Bulk mode — scan canvas_nodes for any node holding a pendingRequestId.
-  const sql = getDb()
-  const projectFilter = body.projectId ? String(body.projectId) : null
   const rows = await (projectFilter
     ? sql`
         SELECT projectId, nodeId, data, type
@@ -281,10 +273,12 @@ export async function POST(request: NextRequest) {
           AND data->>'pendingFalEndpoint' IS NOT NULL
       `
     : sql`
-        SELECT projectId, nodeId, data, type
-        FROM canvas_nodes
-        WHERE data->>'pendingRequestId' IS NOT NULL
-          AND data->>'pendingFalEndpoint' IS NOT NULL
+        SELECT c.projectId, c.nodeId, c.data, c.type
+        FROM canvas_nodes c
+        JOIN projects p ON p.id::text = c.projectId
+        WHERE p.userid = ${user.id}
+          AND c.data->>'pendingRequestId' IS NOT NULL
+          AND c.data->>'pendingFalEndpoint' IS NOT NULL
       `)
 
   if (rows.length === 0) {
@@ -296,8 +290,6 @@ export async function POST(request: NextRequest) {
     })
   }
 
-  // Process sequentially so a slow fal endpoint doesn't fan out into a
-  // burst of parallel requests against the same backend.
   const results: RecoveryResult[] = []
   for (const row of rows as any[]) {
     const data = (row.data || {}) as any
@@ -320,9 +312,6 @@ export async function POST(request: NextRequest) {
     results.push(result)
   }
 
-  // Clean up the pending markers on nodes whose request resolved
-  // (recovered / failed / not_found) so the canvas isn't stuck "in queue"
-  // forever on the next page load.
   const cleared: string[] = results
     .filter(r => r.status === 'recovered' || r.status === 'failed' || r.status === 'not_found')
     .map(r => r.nodeId!)
