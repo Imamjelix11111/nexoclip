@@ -37,7 +37,7 @@ When a job is accepted, the reserved amount immediately reduces the workspace ba
 - `My usage` for every member.
 - `Workspace usage` only for workspace owners and admins.
 
-A running generation displays its reserved estimate as `N est.`. A settled generation displays its final charged credits. Failed or canceled generations whose reservation was fully released display `0`.
+A running generation displays its reserved estimate as `N est.`. A settled generation displays its final charged credits derived from the credit ledger: the original negative reservation plus any positive capture adjustment. Failed or canceled generations whose reservation was fully released display `0`. Provider `actual_cost` is not used as a credit amount because it may be denominated in provider currency rather than NexoClip credits.
 
 Historical generation rows without an actor are excluded from `My usage` and remain visible in `Workspace usage`.
 
@@ -114,7 +114,7 @@ CREATE INDEX generation_jobs_workspace_user_created_idx
   ON generation_jobs (workspace_id, created_by_user_id, created_at DESC);
 ```
 
-Usage history joins `generation_jobs` to `provider_usage`. Credit display is derived from job reservation/settlement state and usage actual cost where available; summary calculation follows the same rule so cards and rows cannot disagree.
+Usage history joins `generation_jobs` to `provider_usage` for provider/unit metadata and to `credit_ledger` for credit accounting. Credit display uses one canonical expression: pending jobs show `estimated_cost`; captured jobs calculate the net charge from the reservation ledger entry plus settlement adjustment entries whose metadata references the generation; released/refunded jobs show zero. Summary calculation uses the same expression so cards and rows cannot disagree. Provider `actual_cost` remains provider-accounting data and is never treated as credits without an explicit conversion.
 
 The current workspace balance comes from `credit_accounts`. A missing account is represented as zero.
 
