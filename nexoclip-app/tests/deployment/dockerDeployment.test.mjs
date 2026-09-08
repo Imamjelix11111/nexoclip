@@ -31,6 +31,10 @@ test('deployment files and routes exist', () => {
   assert.match(caddy, /handle_path \/ai-clip-api\/\*/);
   assert.match(caddy, /handle \/spite\*/);
   assert.match(caddy, /handle \/scheduler\*/);
+
+  const productionEnv = read('.env.production.example');
+  assert.match(productionEnv, /^SPITE_OWNER_USER_ID=/m);
+  assert.match(productionEnv, /^# SPITE_ALLOW_DETERMINISTIC_FIRST_USER=1$/m);
 });
 
 test('Docker context excludes secrets', () => {
