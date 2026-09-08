@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 
 const read = (path) => readFileSync(path, 'utf8');
+const readJson = (path) => JSON.parse(read(path));
 
 const serviceBlock = (compose, name, nextName) => {
   const start = compose.indexOf(`  ${name}:\n`);
@@ -65,4 +66,19 @@ test('Compose protects stateful services and separates databases', () => {
   for (const volume of ['redis-data', 'vimax-tenants', 'ai-clip-output', 'caddy-data', 'caddy-config']) {
     assert.match(compose, new RegExp(`^  ${volume}:`, 'm'));
   }
+});
+
+test('Realtime dependency contract is pinned in app and spite manifests', () => {
+  const spitePackage = readJson('services/spite/package.json');
+  const appPackage = readJson('package.json');
+
+  const providerVersion = spitePackage.dependencies['@hocuspocus/provider'];
+  const serverVersion = spitePackage.dependencies['@hocuspocus/server'];
+
+  assert.equal(typeof providerVersion, 'string');
+  assert.equal(typeof serverVersion, 'string');
+  assert.equal(providerVersion.split('.')[0], serverVersion.split('.')[0]);
+  assert.equal(spitePackage.dependencies.yjs, '13.6.32');
+  assert.equal(spitePackage.dependencies.jose, '6.2.12');
+  assert.equal(appPackage.dependencies.jose, '6.2.12');
 });
