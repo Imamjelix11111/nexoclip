@@ -520,6 +520,69 @@ test('periodic compaction runs even without an idle window', async () => {
   assert.equal(fixture.repository.compactCalls[0].includedSeq, 2)
 })
 
+test('shutdown cancels a debounced projection that has not started yet', async () => {
+  const fixture = createRuntimeFixture({
+    projectionDebounceMs: 1_000,
+    snapshotIdleMs: 60_000,
+    snapshotIntervalMs: 60_000,
+  })
+  fixture.repository.appendBehavior = async () => 6
+
+  const update = captureUpdate(fixture.doc, () => {
+    upsertNode(fixture.doc, {
+      id: 'node-1',
+      type: 'prompt',
+      position: { x: 4, y: 5 },
+      data: { label: 'cancel-projection' },
+    })
+  })
+
+  const ackPromise = fixture.runtime.enqueue(update)
+  await fixture.clock.advanceBy(25)
+  await ackPromise
+
+  await fixture.runtime.shutdown()
+  await fixture.clock.advanceBy(1_000)
+
+  assert.equal(fixture.projectionCalls.length, 0)
+})
+
+test('shutdown cancels a queued projection retry after a failed attempt', async () => {
+  const fixture = createRuntimeFixture({
+    projectionDebounceMs: 1,
+    projectionRetryBaseMs: 200,
+    projectionRetryMaxMs: 200,
+    retryJitterRatio: 0,
+    snapshotIdleMs: 60_000,
+    snapshotIntervalMs: 60_000,
+  })
+  fixture.repository.appendBehavior = async () => 8
+  fixture.projectionBehaviors.push(async () => {
+    throw new Error('projection failed once')
+  })
+
+  const update = captureUpdate(fixture.doc, () => {
+    upsertNode(fixture.doc, {
+      id: 'node-1',
+      type: 'prompt',
+      position: { x: 8, y: 9 },
+      data: { label: 'cancel-retry' },
+    })
+  })
+
+  const ackPromise = fixture.runtime.enqueue(update)
+  await fixture.clock.advanceBy(25)
+  await ackPromise
+
+  await fixture.clock.advanceBy(1)
+  assert.equal(fixture.projectionCalls.length, 1)
+
+  await fixture.runtime.shutdown()
+  await fixture.clock.advanceBy(200)
+
+  assert.equal(fixture.projectionCalls.length, 1)
+})
+
 test('shutdown flushes pending writes before compaction and stops new mutations', async () => {
   const fixture = createRuntimeFixture({
     projectionDebounceMs: 5_000,

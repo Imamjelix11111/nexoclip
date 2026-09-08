@@ -133,6 +133,7 @@ export class ProjectRuntime {
 
   private persistActive = false
   private projectionActive = false
+  private projectionStopped = false
   private storageChain: Promise<void> = Promise.resolve()
   private flushWaiters: DeferredVoid[] = []
   private pendingProjection: ProjectionJob | null = null
@@ -196,7 +197,7 @@ export class ProjectRuntime {
   }
 
   scheduleProjection(targetSeq: number): void {
-    if (targetSeq <= 0) return
+    if (this.projectionStopped || targetSeq <= 0) return
 
     this.pendingProjection = {
       payload: this.captureProjection(this.durableDoc),
@@ -231,8 +232,12 @@ export class ProjectRuntime {
 
   async shutdown(): Promise<void> {
     this.acceptingMutations = false
+    this.projectionStopped = true
+    this.pendingProjection = null
     this.clearTimer('snapshotIdleTimer')
     this.clearTimer('snapshotIntervalTimer')
+    this.clearTimer('projectionTimer')
+    this.clearTimer('projectionRetryTimer')
 
     await this.flush()
     await this.compact()
@@ -328,7 +333,7 @@ export class ProjectRuntime {
   }
 
   private async runProjectionAttempt(): Promise<void> {
-    if (this.projectionActive || !this.pendingProjection) {
+    if (this.projectionStopped || this.projectionActive || !this.pendingProjection) {
       return
     }
 
@@ -339,31 +344,33 @@ export class ProjectRuntime {
     try {
       await this.projector(this.options.projectId, job.payload, job.targetSeq)
     } catch {
-      const hasNewerPendingProjection =
-        !!this.pendingProjection && this.pendingProjection.targetSeq > job.targetSeq
-      const retryJob = hasNewerPendingProjection
-        ? this.pendingProjection
-        : {
-            ...job,
-            attempt: job.attempt + 1,
-          }
+      if (!this.projectionStopped) {
+        const hasNewerPendingProjection =
+          !!this.pendingProjection && this.pendingProjection.targetSeq > job.targetSeq
+        const retryJob = hasNewerPendingProjection
+          ? this.pendingProjection
+          : {
+              ...job,
+              attempt: job.attempt + 1,
+            }
 
-      this.pendingProjection = retryJob
-      const delayMs = nextRetryDelayMs({
-        attempt: hasNewerPendingProjection ? 0 : job.attempt,
-        baseMs: this.config.projectionRetryBaseMs,
-        maxMs: this.config.projectionRetryMaxMs,
-        jitterRatio: this.config.retryJitterRatio,
-        random: this.random,
-      })
+        this.pendingProjection = retryJob
+        const delayMs = nextRetryDelayMs({
+          attempt: hasNewerPendingProjection ? 0 : job.attempt,
+          baseMs: this.config.projectionRetryBaseMs,
+          maxMs: this.config.projectionRetryMaxMs,
+          jitterRatio: this.config.retryJitterRatio,
+          random: this.random,
+        })
 
-      this.projectionRetryTimer = this.clock.setTimeout(() => {
-        this.projectionRetryTimer = null
-        void this.runProjectionAttempt()
-      }, delayMs)
+        this.projectionRetryTimer = this.clock.setTimeout(() => {
+          this.projectionRetryTimer = null
+          void this.runProjectionAttempt()
+        }, delayMs)
+      }
     } finally {
       this.projectionActive = false
-      if (this.pendingProjection && !this.projectionRetryTimer) {
+      if (!this.projectionStopped && this.pendingProjection && !this.projectionRetryTimer) {
         this.scheduleProjectionTimer(this.config.projectionDebounceMs)
       }
     }

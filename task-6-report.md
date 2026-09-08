@@ -28,3 +28,7 @@ Verified with:
 ## Concerns
 - Integration coverage that needs `SPITE_TEST_DATABASE_URL` was skipped, so Task 6 is verified at unit/realtime-suite level but not against the live Neon-style test database in this session.
 - The test runner emits the existing `ExperimentalWarning: localStorage is not available because --localstorage-file was not provided`; no task-specific change was made there.
+
+## Follow-up fix
+- `ProjectRuntime.shutdown()` now disables projection scheduling/retries and clears queued projection timers before returning.
+- Added regression coverage for both pending projection debounce cancellation and pending projection retry cancellation during shutdown.
