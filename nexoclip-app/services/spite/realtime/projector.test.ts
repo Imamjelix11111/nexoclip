@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import * as Y from 'yjs'
 
-import { createCanvasDocument, importLegacyCanvas } from '../lib/realtime/document'
+import { createCanvasDocument, importLegacyCanvas, patchNode } from '../lib/realtime/document'
 import { projectDocument } from './projector'
 import type { DatabaseAdapter, QueryResult } from './db'
 import type { Queryable } from './db'
@@ -117,6 +117,17 @@ function createProjectionDocument(): Y.Doc {
   return doc
 }
 
+function createProjectionTrapDocument(message: string): Y.Doc {
+  const doc = createProjectionDocument()
+  Object.defineProperty(doc, 'getMap', {
+    configurable: true,
+    value: () => {
+      throw new Error(message)
+    },
+  })
+  return doc
+}
+
 test('projectDocument rewrites compatibility tables, project metadata, and projected_seq in one transaction', async () => {
   const projectId = '550e8400-e29b-41d4-a716-446655440000'
   const doc = createProjectionDocument()
@@ -193,7 +204,7 @@ test('projectDocument rewrites compatibility tables, project metadata, and proje
   )
 })
 
-test('projectDocument no-ops when target sequence is stale', async () => {
+test('projectDocument no-ops for stale target sequences before deriving a projection payload', async () => {
   const projectId = '550e8400-e29b-41d4-a716-446655440000'
   const database = new ScriptedDatabaseAdapter([
     { includes: 'select pg_advisory_xact_lock' },
@@ -207,7 +218,12 @@ test('projectDocument no-ops when target sequence is stale', async () => {
     },
   ])
 
-  await projectDocument(projectId, createProjectionDocument(), 9, { database })
+  await projectDocument(
+    projectId,
+    createProjectionTrapDocument('stale target should not derive projection'),
+    9,
+    { database },
+  )
 
   assert.equal(database.txQueryCalls.length, 2)
   assert.equal(
@@ -215,6 +231,135 @@ test('projectDocument no-ops when target sequence is stale', async () => {
       normalizeWhitespace(call.text).includes('update canvas_yjs_documents set projected_seq'),
     ),
     false,
+  )
+})
+
+test('projectDocument rejects future target sequences before deriving a projection payload', async () => {
+  const projectId = '550e8400-e29b-41d4-a716-446655440000'
+  const database = new ScriptedDatabaseAdapter([
+    { includes: 'select pg_advisory_xact_lock' },
+    {
+      includes:
+        'select durable_seq, projected_seq from canvas_yjs_documents where project_id = \\$1 for update',
+      result: {
+        rows: [{ durable_seq: 9, projected_seq: 4 }],
+        rowCount: 1,
+      },
+    },
+  ])
+
+  await assert.rejects(
+    projectDocument(
+      projectId,
+      createProjectionTrapDocument('future target should not derive projection'),
+      10,
+      { database },
+    ),
+    /cannot project .* beyond durable sequence 9/i,
+  )
+
+  assert.equal(database.txQueryCalls.length, 2)
+})
+
+test('projectDocument rejects non-durable boundary targets before deriving a projection payload', async () => {
+  const projectId = '550e8400-e29b-41d4-a716-446655440000'
+  const database = new ScriptedDatabaseAdapter([
+    { includes: 'select pg_advisory_xact_lock' },
+    {
+      includes:
+        'select durable_seq, projected_seq from canvas_yjs_documents where project_id = \\$1 for update',
+      result: {
+        rows: [{ durable_seq: 9, projected_seq: 4 }],
+        rowCount: 1,
+      },
+    },
+  ])
+
+  await assert.rejects(
+    projectDocument(
+      projectId,
+      createProjectionTrapDocument('non-durable boundary target should not derive projection'),
+      8,
+      { database },
+    ),
+    /must equal durable sequence 9/i,
+  )
+
+  assert.equal(database.txQueryCalls.length, 2)
+})
+
+test('projectDocument captures projection only after lock and sequence boundary validation', async () => {
+  const projectId = '550e8400-e29b-41d4-a716-446655440000'
+  const doc = createProjectionDocument()
+  const txQueryCalls: QueryCall[] = []
+  let releaseLock!: () => void
+  let resolveLockRequested!: () => void
+  const lockRequested = new Promise<void>((resolve) => {
+    resolveLockRequested = resolve
+  })
+  const database: DatabaseAdapter = {
+    async query() {
+      throw new Error('unexpected non-transaction query')
+    },
+    async transaction<T>(work: (client: Queryable) => Promise<T>): Promise<T> {
+      let queryIndex = 0
+      const txClient: Queryable = {
+        query: async <Row extends Record<string, unknown> = Record<string, unknown>>(
+          text: string,
+          params: readonly unknown[] = [],
+        ): Promise<QueryResult<Row>> => {
+          txQueryCalls.push({ text, params })
+          queryIndex += 1
+
+          if (queryIndex === 1) {
+            resolveLockRequested()
+            await new Promise<void>((resolve) => {
+              releaseLock = resolve
+            })
+            return { rows: [], rowCount: 0 } as QueryResult<Row>
+          }
+
+          if (queryIndex === 2) {
+            return {
+              rows: [{ durable_seq: 9, projected_seq: 4 }],
+              rowCount: 1,
+            } as unknown as QueryResult<Row>
+          }
+
+          return { rows: [], rowCount: 1 } as QueryResult<Row>
+        },
+      }
+
+      return work(txClient)
+    },
+    async close(): Promise<void> {},
+  }
+
+  const projectionPromise = projectDocument(projectId, doc, 9, { database })
+  await lockRequested
+
+  patchNode(doc, 'node-2', {
+    position: { x: 300, y: 400 },
+    data: { label: 'Image v2', assetId: 'asset-2' },
+  })
+  releaseLock()
+
+  await projectionPromise
+
+  assert.deepEqual(
+    txQueryCalls.find(
+      (call) =>
+        normalizeWhitespace(call.text).includes('insert into canvas_nodes') &&
+        call.params[1] === 'node-2',
+    )?.params,
+    [
+      projectId,
+      'node-2',
+      'image',
+      300,
+      400,
+      JSON.stringify({ label: 'Image v2', assetId: 'asset-2' }),
+    ],
   )
 })
 

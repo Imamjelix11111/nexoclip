@@ -17,6 +17,11 @@ export type ProjectDocumentOptions = {
   advisoryLockNamespace?: number
 }
 
+/**
+ * Caller contract: Task 6 serializes active Y.Doc mutations around this call.
+ * This function validates the durable sequence boundary first, then snapshots an
+ * immutable projection payload from the supplied doc before any compatibility writes.
+ */
 export async function projectDocument(
   projectId: string,
   doc: Y.Doc,
@@ -26,8 +31,6 @@ export async function projectDocument(
     advisoryLockNamespace = DEFAULT_REALTIME_ADVISORY_LOCK_NAMESPACE,
   }: ProjectDocumentOptions = {},
 ): Promise<void> {
-  const projection = readCanvasProjection(doc)
-
   await database.transaction(async (tx) => {
     await tx.query(`SELECT pg_advisory_xact_lock($1, hashtext($2))`, [
       advisoryLockNamespace,
@@ -49,10 +52,25 @@ export async function projectDocument(
       throw new Error(`Missing durable Yjs document for project ${projectId}`)
     }
 
+    const durableSeq = asNumber(row.durable_seq)
     const projectedSeq = asNumber(row.projected_seq)
     if (targetSeq <= projectedSeq) {
       return
     }
+
+    if (targetSeq > durableSeq) {
+      throw new Error(
+        `Cannot project project ${projectId} beyond durable sequence ${durableSeq}`,
+      )
+    }
+
+    if (targetSeq !== durableSeq) {
+      throw new Error(
+        `Projection target sequence ${targetSeq} must equal durable sequence ${durableSeq} for project ${projectId}`,
+      )
+    }
+
+    const projection = captureProjectionPayload(doc)
 
     await tx.query(`DELETE FROM canvas_nodes WHERE projectId = $1::text`, [projectId])
     await tx.query(`DELETE FROM canvas_edges WHERE projectId = $1::text`, [projectId])
@@ -126,6 +144,10 @@ export async function projectDocument(
       [projectId, targetSeq],
     )
   })
+}
+
+function captureProjectionPayload(doc: Y.Doc) {
+  return structuredClone(readCanvasProjection(doc))
 }
 
 function asNumber(value: number | string | null | undefined): number {
