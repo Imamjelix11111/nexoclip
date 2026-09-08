@@ -1,7 +1,11 @@
 'use client'
 
 import { withBasePath } from '@/lib/base-path'
-import { getCanvasRuntimeCapabilities, guardCanvasRuntimeControls } from '@/lib/canvas-runtime-ui'
+import {
+  createInvocationTimeRuntimeControls,
+  getCanvasRuntimeCapabilities,
+  type CanvasRuntimeControls,
+} from '@/lib/canvas-runtime-ui'
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { toast } from 'sonner'
 import {
@@ -257,9 +261,21 @@ function CanvasInner({ projectId }: { projectId: string }) {
   const persistenceStatus = realtime.persistenceStatus
   const { allowDocumentMutation } = getCanvasRuntimeCapabilities(persistenceStatus)
   const readOnly = !allowDocumentMutation
-  const guardedRealtime = useMemo(
-    () => guardCanvasRuntimeControls(realtime, persistenceStatus),
-    [persistenceStatus, realtime],
+  const runtimeStatusRef = useRef(persistenceStatus)
+  runtimeStatusRef.current = persistenceStatus
+  const runtimeControlsRef = useRef<CanvasRuntimeControls>({
+    commands: realtime.commands,
+    undo: realtime.undo,
+    redo: realtime.redo,
+  })
+  runtimeControlsRef.current = {
+    commands: realtime.commands,
+    undo: realtime.undo,
+    redo: realtime.redo,
+  }
+  const guardedRuntimeControls = useMemo(
+    () => createInvocationTimeRuntimeControls(runtimeControlsRef, runtimeStatusRef),
+    [],
   )
   const {
     nodes,
@@ -269,10 +285,8 @@ function CanvasInner({ projectId }: { projectId: string }) {
     activeSceneId,
     peers: realtimePeers,
     awareness,
-    commands,
-    undo,
-    redo,
-  } = guardedRealtime
+  } = realtime
+  const { commands, undo, redo } = guardedRuntimeControls
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([])
   const presenceControllerRef = useRef<ReturnType<typeof createPresenceController> | null>(null)
   const selectedSceneNodeIdsRef = useRef<string[]>([])
@@ -432,15 +446,37 @@ function CanvasInner({ projectId }: { projectId: string }) {
 
   // Save project name when it changes (debounced)
   const saveProjectNameRef = useRef<NodeJS.Timeout | null>(null)
+  const allowDocumentMutationRef = useRef(allowDocumentMutation)
+  allowDocumentMutationRef.current = allowDocumentMutation
+
+  useEffect(() => {
+    if (allowDocumentMutation) return
+    if (!saveProjectNameRef.current) return
+    clearTimeout(saveProjectNameRef.current)
+    saveProjectNameRef.current = null
+  }, [allowDocumentMutation])
+
+  useEffect(() => {
+    return () => {
+      if (!saveProjectNameRef.current) return
+      clearTimeout(saveProjectNameRef.current)
+      saveProjectNameRef.current = null
+    }
+  }, [])
+
   const handleProjectNameChange = (newName: string) => {
-    if (!allowDocumentMutation) return
+    if (!allowDocumentMutationRef.current) return
     setProjectName(newName)
-    
+
     // Debounce the save
     if (saveProjectNameRef.current) {
       clearTimeout(saveProjectNameRef.current)
     }
     saveProjectNameRef.current = setTimeout(async () => {
+      if (!allowDocumentMutationRef.current) {
+        return
+      }
+
       try {
         await fetch(withBasePath(`/api/projects/${projectId}`), {
           method: 'PUT',
@@ -558,9 +594,8 @@ function CanvasInner({ projectId }: { projectId: string }) {
   }, [allowDocumentMutation, commands, scenes])
 
   // Delete a scene: remove the scene itself, every node tagged with
-  // that sceneId, and every edge between those nodes. Auto-save will
-  // catch up and remove the rows from the canvas_nodes / canvas_edges
-  // tables on the next debounced write.
+  // that sceneId, and every edge between those nodes. The durable
+  // realtime runtime persists and projects those deletions.
   //
   // If the active scene is being deleted, switch to the previous scene
   // in the list (or the first one if we're deleting the first scene)
@@ -579,14 +614,20 @@ function CanvasInner({ projectId }: { projectId: string }) {
 
   // Handle drag over canvas - accept both internal assets and desktop files
   const handleDragOver = useCallback((e: React.DragEvent) => {
-    if (!allowDocumentMutation) return
     const hasAsset = e.dataTransfer.types.includes('asset')
     const hasFiles = e.dataTransfer.types.includes('Files')
-    if (hasAsset || hasFiles) {
-      e.preventDefault()
-      e.dataTransfer.dropEffect = 'copy'
-      if (hasFiles) setIsDragOver(true)
+    const hasFolderAssets = e.dataTransfer.types.includes('folder-assets')
+    if (!hasAsset && !hasFiles && !hasFolderAssets) return
+
+    e.preventDefault()
+    if (!allowDocumentMutation) {
+      e.dataTransfer.dropEffect = 'none'
+      setIsDragOver(false)
+      return
     }
+
+    e.dataTransfer.dropEffect = 'copy'
+    if (hasFiles) setIsDragOver(true)
   }, [allowDocumentMutation])
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
@@ -599,16 +640,23 @@ function CanvasInner({ projectId }: { projectId: string }) {
   // Handle drop - desktop files or internal assets
   const handleDrop = useCallback((e: React.DragEvent) => {
     setIsDragOver(false)
-    if (!allowDocumentMutation) return
 
-    // Desktop file drop
     const files = Array.from(e.dataTransfer.files).filter(f =>
       f.type.startsWith('image/') ||
       f.type.startsWith('video/') ||
       f.type.startsWith('audio/'),
     )
-    if (files.length > 0) {
+    const folderData = e.dataTransfer.getData('folder-assets')
+    const assetData = e.dataTransfer.getData('asset')
+    const recognizedDrop = files.length > 0 || Boolean(folderData) || Boolean(assetData)
+    if (recognizedDrop) {
       e.preventDefault()
+    }
+
+    if (!allowDocumentMutation) return
+
+    // Desktop file drop
+    if (files.length > 0) {
       files.forEach((file, i) => {
         const pos = screenToFlowPosition({ x: e.clientX + i * 20, y: e.clientY + i * 20 })
         pasteImageFile(file, pos)
@@ -619,7 +667,6 @@ function CanvasInner({ projectId }: { projectId: string }) {
     // Whole-folder drop from the sidebar's category panel: spawn one
     // reference node per asset, laid out as a small grid so they don't
     // stack on top of each other.
-    const folderData = e.dataTransfer.getData('folder-assets')
     if (folderData) {
       try {
         const payload = JSON.parse(folderData) as {
@@ -672,7 +719,6 @@ function CanvasInner({ projectId }: { projectId: string }) {
     }
 
     // Internal asset drop from assets panel
-    const assetData = e.dataTransfer.getData('asset')
     if (!assetData) return
 
     try {
@@ -1135,7 +1181,14 @@ function CanvasInner({ projectId }: { projectId: string }) {
   }, [fitView])
 
   return (
-    <CanvasCollaborationProvider value={guardedRealtime}>
+    <CanvasCollaborationProvider
+      value={{
+        ...realtime,
+        commands,
+        undo,
+        redo,
+      }}
+    >
       <div className="flex flex-col h-screen bg-[#080A0C] overflow-hidden">
       <OnboardingTour surface="canvas" />
       {/* Scene Timeline */}

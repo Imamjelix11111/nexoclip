@@ -1,10 +1,13 @@
 'use client'
 
-import { createContext, useContext } from 'react'
+import { createContext, useContext, useMemo, useRef } from 'react'
 import type { Edge, Node } from '@xyflow/react'
 
 import type { UseRealtimeCanvasResult } from '@/hooks/use-realtime-canvas'
-import { guardCanvasRuntimeControls } from '@/lib/canvas-runtime-ui'
+import {
+  createInvocationTimeRuntimeControls,
+  type CanvasRuntimeControls,
+} from '@/lib/canvas-runtime-ui'
 
 type NodeDataPatch = Record<string, unknown>
 type NodeDataUpdater = Parameters<UseRealtimeCanvasResult['commands']['updateNodeData']>[1]
@@ -31,7 +34,32 @@ export function CanvasCollaborationProvider({
   value: UseRealtimeCanvasResult
   children: React.ReactNode
 }) {
-  const runtimeValue = guardCanvasRuntimeControls(value, value.persistenceStatus)
+  const runtimeStatusRef = useRef(value.persistenceStatus)
+  runtimeStatusRef.current = value.persistenceStatus
+
+  const runtimeControlsRef = useRef<CanvasRuntimeControls>({
+    commands: value.commands,
+    undo: value.undo,
+    redo: value.redo,
+  })
+  runtimeControlsRef.current = {
+    commands: value.commands,
+    undo: value.undo,
+    redo: value.redo,
+  }
+
+  const guardedRuntimeControls = useMemo(
+    () => createInvocationTimeRuntimeControls(runtimeControlsRef, runtimeStatusRef),
+    [],
+  )
+
+  const runtimeValue = {
+    ...value,
+    commands: guardedRuntimeControls.commands,
+    undo: guardedRuntimeControls.undo,
+    redo: guardedRuntimeControls.redo,
+  }
+
   const findNode = (nodeId: string) => runtimeValue.allNodes.find((node) => node.id === nodeId) as Node | undefined
 
   const collaborationValue: CanvasCollaborationValue = {
