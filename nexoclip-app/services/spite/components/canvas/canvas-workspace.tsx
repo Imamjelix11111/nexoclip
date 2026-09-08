@@ -766,7 +766,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
           fetch(withBasePath(`/api/assets/by-url`), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: thumbnail, used_in_canvas: false }),
+            body: JSON.stringify({ projectId, url: thumbnail, used_in_canvas: false }),
           }).then(() => {
             window.dispatchEvent(new CustomEvent('asset-status-changed'))
           }).catch(() => {})

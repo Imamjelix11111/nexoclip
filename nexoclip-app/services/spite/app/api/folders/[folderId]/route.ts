@@ -3,6 +3,8 @@ import { getDb } from '@/lib/db'
 import { ensureFoldersSchema } from '@/lib/folders-schema'
 import { getAuthenticatedUser } from '@/lib/main-session'
 import {
+  assetNotFoundResponse,
+  countOwnedGenerationAssetsForProject,
   folderNotFoundResponse,
   unauthorizedResponse,
   userOwnsFolder,
@@ -11,6 +13,11 @@ import {
 interface FolderRouteDeps {
   getDb?: typeof getDb
   getAuthenticatedUser?: typeof getAuthenticatedUser
+}
+
+function normalizeAssetIds(assetIds: unknown): string[] {
+  if (!Array.isArray(assetIds)) return []
+  return [...new Set(assetIds.filter((assetId): assetId is string => typeof assetId === 'string' && assetId.length > 0))]
 }
 
 export function createFolderRouteHandlers(deps: FolderRouteDeps = {}) {
@@ -85,6 +92,14 @@ export function createFolderRouteHandlers(deps: FolderRouteDeps = {}) {
 
         const { name, description, addAssetIds, removeAssetIds, setAssetIds } = await request.json()
 
+        const folders = await sql`
+          SELECT project_id FROM asset_folders WHERE id = ${folderId} LIMIT 1
+        ` as Array<{ project_id: string }>
+        const projectId = folders[0]?.project_id
+        if (!projectId) {
+          return folderNotFoundResponse()
+        }
+
         if (name !== undefined || description !== undefined) {
           await sql`
             UPDATE asset_folders
@@ -96,9 +111,25 @@ export function createFolderRouteHandlers(deps: FolderRouteDeps = {}) {
           `
         }
 
+        const normalizedSetAssetIds = normalizeAssetIds(setAssetIds)
+        if (
+          normalizedSetAssetIds.length > 0 &&
+          (await countOwnedGenerationAssetsForProject(sql, user.id, projectId, normalizedSetAssetIds)) !== normalizedSetAssetIds.length
+        ) {
+          return assetNotFoundResponse()
+        }
+
+        const normalizedAddAssetIds = normalizeAssetIds(addAssetIds)
+        if (
+          normalizedAddAssetIds.length > 0 &&
+          (await countOwnedGenerationAssetsForProject(sql, user.id, projectId, normalizedAddAssetIds)) !== normalizedAddAssetIds.length
+        ) {
+          return assetNotFoundResponse()
+        }
+
         if (Array.isArray(setAssetIds)) {
           await sql`DELETE FROM asset_folder_items WHERE folder_id = ${folderId}`
-          for (const assetId of setAssetIds) {
+          for (const assetId of normalizedSetAssetIds) {
             if (!assetId) continue
             await sql`
               INSERT INTO asset_folder_items (folder_id, asset_id)
@@ -113,7 +144,7 @@ export function createFolderRouteHandlers(deps: FolderRouteDeps = {}) {
           }
         } else {
           if (Array.isArray(addAssetIds)) {
-            for (const assetId of addAssetIds) {
+            for (const assetId of normalizedAddAssetIds) {
               if (!assetId) continue
               await sql`
                 INSERT INTO asset_folder_items (folder_id, asset_id)

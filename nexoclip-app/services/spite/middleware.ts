@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { checkRequiredEnv } from '@/lib/env-check'
-import { SESSION_COOKIE_NAME, isSessionValid } from '@/lib/sessions'
 import { withBasePath } from '@/lib/base-path'
-import { getAuthenticatedUser } from '@/lib/main-session'
+import { isRequestAuthenticated } from '@/lib/main-session'
 
 // Paths that must stay reachable without a login cookie.
 // - /login: the login page itself
@@ -60,12 +59,7 @@ export async function middleware(request: NextRequest) {
 
   // Accept either the legacy SPITE login cookie or a valid same-origin
   // nexoclip session from the main app.
-  const token = request.cookies.get(SESSION_COOKIE_NAME)?.value
-  const [mainUser, isSpiteSessionAuthenticated] = await Promise.all([
-    getAuthenticatedUser(request),
-    isSessionValid(token),
-  ])
-  const isAuthenticated = Boolean(mainUser) || isSpiteSessionAuthenticated
+  const isAuthenticated = await isRequestAuthenticated(request)
 
   const isPublic = PUBLIC_PATHS.some(
     (p) => appPath === p || appPath.startsWith(p + '/'),

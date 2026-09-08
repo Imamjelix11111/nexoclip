@@ -1,85 +1,139 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getDb } from '@/lib/db'
-import { assetExpiresAt } from '@/lib/retention'
 
-// Escape LIKE metacharacters so a user-supplied key can't smuggle wildcards
-// into the suffix match (e.g. a key of "%" would otherwise match — and
-// mutate — every row). Backslash is Postgres's default LIKE escape char.
+import { getDb } from '@/lib/db'
+import { getAuthenticatedUser } from '@/lib/main-session'
+import {
+  projectNotFoundResponse,
+  unauthorizedResponse,
+  userOwnsProject,
+} from '@/lib/project-ownership'
+import { assetExpiresAt as resolveAssetExpiresAt } from '@/lib/retention'
+
 function escapeLike(s: string): string {
   return s.replace(/[\\%_]/g, (c) => '\\' + c)
 }
-// Look up the generation_history asset id for a given r2 url, so the
-// "Add to folder" flow can pre-select an asset on a legacy reference
-// node that doesn't have data.assetId stored. Matches by key suffix to
-// tolerate both proxy-form (/api/r2-image/...) and direct r2.dev URLs.
-export async function GET(request: NextRequest) {
-  try {
-    const sql = getDb()
-    const url = request.nextUrl.searchParams.get('url')
-    if (!url) {
-      return NextResponse.json({ error: 'url is required' }, { status: 400 })
-    }
-    const key = url.includes('/api/r2-image/')
-      ? url.split('/api/r2-image/')[1]
-      : url.includes('.r2.dev/')
-      ? url.split('.r2.dev/')[1]
-      : null
-    const rows = key
-      ? await sql`SELECT id FROM generation_history WHERE r2_url LIKE ${'%' + escapeLike(key)} ORDER BY created_at DESC LIMIT 1`
-      : await sql`SELECT id FROM generation_history WHERE r2_url = ${url} ORDER BY created_at DESC LIMIT 1`
-    if (rows.length === 0) {
-      return NextResponse.json({ id: null })
-    }
-    return NextResponse.json({ id: rows[0].id })
-  } catch (error) {
-    console.error('[assets/by-url] GET error:', error)
-    return NextResponse.json({ error: 'lookup failed' }, { status: 500 })
+
+function extractAssetKey(url: string): string | null {
+  if (url.includes('/api/r2-image/')) {
+    return url.split('/api/r2-image/')[1] ?? null
+  }
+  if (url.includes('.r2.dev/')) {
+    return url.split('.r2.dev/')[1] ?? null
+  }
+  return null
+}
+
+interface AssetByUrlRouteDeps {
+  getDb?: typeof getDb
+  getAuthenticatedUser?: typeof getAuthenticatedUser
+  assetExpiresAt?: typeof resolveAssetExpiresAt
+}
+
+export function createAssetByUrlRouteHandlers(deps: AssetByUrlRouteDeps = {}) {
+  const db = deps.getDb ?? getDb
+  const resolveUser = deps.getAuthenticatedUser ?? getAuthenticatedUser
+  const assetExpiresAt = deps.assetExpiresAt ?? resolveAssetExpiresAt
+
+  return {
+    async GET(request: Request) {
+      try {
+        const user = await resolveUser(request)
+        if (!user) return unauthorizedResponse()
+
+        const sql = db()
+        const url = new URL(request.url).searchParams.get('url')
+        const projectId = new URL(request.url).searchParams.get('projectId')
+        if (!url) {
+          return NextResponse.json({ error: 'url is required' }, { status: 400 })
+        }
+        if (!projectId) {
+          return NextResponse.json({ error: 'projectId is required' }, { status: 400 })
+        }
+        if (!(await userOwnsProject(sql, user.id, projectId))) {
+          return projectNotFoundResponse()
+        }
+
+        const key = extractAssetKey(url)
+        const rows = key
+          ? await sql`
+              SELECT id
+              FROM generation_history
+              WHERE project_id = ${projectId}
+                AND r2_url LIKE ${'%' + escapeLike(key)}
+              ORDER BY created_at DESC
+              LIMIT 1
+            `
+          : await sql`
+              SELECT id
+              FROM generation_history
+              WHERE project_id = ${projectId}
+                AND r2_url = ${url}
+              ORDER BY created_at DESC
+              LIMIT 1
+            `
+
+        if (rows.length === 0) {
+          return NextResponse.json({ id: null })
+        }
+        return NextResponse.json({ id: rows[0].id })
+      } catch (error) {
+        console.error('[assets/by-url] GET error:', error)
+        return NextResponse.json({ error: 'lookup failed' }, { status: 500 })
+      }
+    },
+
+    async POST(request: Request) {
+      try {
+        const user = await resolveUser(request)
+        if (!user) return unauthorizedResponse()
+
+        const sql = db()
+        const { url, used_in_canvas, projectId } = await request.json()
+        if (!url) {
+          return NextResponse.json({ error: 'URL is required' }, { status: 400 })
+        }
+        if (!projectId) {
+          return NextResponse.json({ error: 'projectId is required' }, { status: 400 })
+        }
+        if (!(await userOwnsProject(sql, user.id, String(projectId)))) {
+          return projectNotFoundResponse()
+        }
+
+        const key = extractAssetKey(String(url))
+        const expiresAt = used_in_canvas ? null : ((await assetExpiresAt())?.toISOString() ?? null)
+        const result = key
+          ? await sql`
+              UPDATE generation_history
+              SET used_in_canvas = ${used_in_canvas ?? false},
+                  expires_at = ${expiresAt}
+              WHERE project_id = ${String(projectId)}
+                AND r2_url LIKE ${'%' + escapeLike(key)}
+              RETURNING id
+            `
+          : await sql`
+              UPDATE generation_history
+              SET used_in_canvas = ${used_in_canvas ?? false},
+                  expires_at = ${expiresAt}
+              WHERE project_id = ${String(projectId)}
+                AND r2_url = ${String(url)}
+              RETURNING id
+            `
+
+        return NextResponse.json({ success: true, updated: result.length })
+      } catch (error) {
+        console.error('[assets/by-url] Error:', error)
+        return NextResponse.json({ error: 'Failed to update asset' }, { status: 500 })
+      }
+    },
   }
 }
 
-// Update asset status by URL (used when assetId is not stored on node)
+const handlers = createAssetByUrlRouteHandlers()
+
+export async function GET(request: NextRequest) {
+  return handlers.GET(request)
+}
+
 export async function POST(request: NextRequest) {
-  try {
-    const sql = getDb()
-    const { url, used_in_canvas } = await request.json()
-
-    if (!url) {
-      return NextResponse.json({ error: 'URL is required' }, { status: 400 })
-    }
-
-    // The thumbnail URL may be a proxy URL (/api/r2-image/...) 
-    // or a direct R2 URL - strip to just the key and match
-    const key = url.includes('/api/r2-image/') 
-      ? url.split('/api/r2-image/')[1] 
-      : url.split('.r2.dev/')[1]
-
-    // When detaching from canvas, restart the retention clock (null when
-    // ASSET_RETENTION_DAYS is 0 → never expires). On canvas → permanent.
-    const expiresAt = used_in_canvas ? null : ((await assetExpiresAt())?.toISOString() ?? null)
-    let result
-    if (key) {
-      // Match by URL key suffix
-      result = await sql`
-        UPDATE generation_history
-        SET used_in_canvas = ${used_in_canvas ?? false},
-            expires_at = ${expiresAt}
-        WHERE r2_url LIKE ${'%' + escapeLike(key)}
-        RETURNING id
-      `
-    } else {
-      // Exact match fallback
-      result = await sql`
-        UPDATE generation_history
-        SET used_in_canvas = ${used_in_canvas ?? false},
-            expires_at = ${expiresAt}
-        WHERE r2_url = ${url}
-        RETURNING id
-      `
-    }
-
-    return NextResponse.json({ success: true, updated: result.length })
-  } catch (error) {
-    console.error('[assets/by-url] Error:', error)
-    return NextResponse.json({ error: 'Failed to update asset' }, { status: 500 })
-  }
+  return handlers.POST(request)
 }

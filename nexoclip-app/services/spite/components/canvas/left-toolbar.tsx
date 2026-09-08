@@ -357,10 +357,7 @@ export function LeftToolbar({
     try {
       const response = await fetch(withBasePath(`/api/projects/${projectId}/assets/upload`), {
         method: 'DELETE',
-        body: JSON.stringify({
-          assetId: asset.id,
-          filename: asset.metadata?.filename,
-        }),
+        body: JSON.stringify({ assetId: asset.id }),
       })
 
       if (response.ok) {

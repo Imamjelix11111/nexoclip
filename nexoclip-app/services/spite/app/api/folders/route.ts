@@ -4,6 +4,8 @@ import { v4 as uuidv4 } from 'uuid'
 import { ensureFoldersSchema } from '@/lib/folders-schema'
 import { getAuthenticatedUser } from '@/lib/main-session'
 import {
+  assetNotFoundResponse,
+  countOwnedGenerationAssetsForProject,
   projectNotFoundResponse,
   unauthorizedResponse,
   userOwnsProject,
@@ -21,6 +23,11 @@ interface FoldersRouteDeps {
   getDb?: typeof getDb
   getAuthenticatedUser?: typeof getAuthenticatedUser
   createFolderId?: () => string
+}
+
+function normalizeAssetIds(assetIds: unknown): string[] {
+  if (!Array.isArray(assetIds)) return []
+  return [...new Set(assetIds.filter((assetId): assetId is string => typeof assetId === 'string' && assetId.length > 0))]
 }
 
 export function createFoldersRouteHandlers(deps: FoldersRouteDeps = {}) {
@@ -121,15 +128,23 @@ export function createFoldersRouteHandlers(deps: FoldersRouteDeps = {}) {
           return projectNotFoundResponse()
         }
 
+        const normalizedAssetIds = normalizeAssetIds(assetIds)
+        if (
+          normalizedAssetIds.length > 0 &&
+          (await countOwnedGenerationAssetsForProject(sql, user.id, projectId, normalizedAssetIds)) !== normalizedAssetIds.length
+        ) {
+          return assetNotFoundResponse()
+        }
+
         const id = createFolderId()
-        console.log('[folders] POST creating', { id, name, type, projectId, assetCount: assetIds.length })
+        console.log('[folders] POST creating', { id, name, type, projectId, assetCount: normalizedAssetIds.length })
 
         await sql`
           INSERT INTO asset_folders (id, project_id, type, name, description)
           VALUES (${id}, ${projectId}, ${type}, ${name}, ${description || null})
         `
 
-        for (const assetId of assetIds) {
+        for (const assetId of normalizedAssetIds) {
           if (!assetId) continue
           await sql`
             INSERT INTO asset_folder_items (folder_id, asset_id)

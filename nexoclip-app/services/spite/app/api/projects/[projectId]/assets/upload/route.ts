@@ -3,6 +3,7 @@ import { getR2Client } from '@/lib/r2-upload'
 import { getDb } from '@/lib/db'
 import { getAuthenticatedUser } from '@/lib/main-session'
 import {
+  assetNotFoundResponse,
   projectNotFoundResponse,
   unauthorizedResponse,
   userOwnsProject,
@@ -14,6 +15,19 @@ interface ProjectAssetUploadDeps {
   getDb?: typeof getDb
   getAuthenticatedUser?: typeof getAuthenticatedUser
   getR2Client?: typeof getR2Client
+}
+
+function storedAssetKey(asset: { url?: string | null; metadata?: { filename?: unknown } | null }): string | null {
+  if (typeof asset.metadata?.filename === 'string' && asset.metadata.filename) {
+    return asset.metadata.filename
+  }
+
+  if (typeof asset.url === 'string') {
+    const proxyMatch = asset.url.match(/\/api\/r2-image\/(.+)$/)
+    if (proxyMatch) return proxyMatch[1] ?? null
+  }
+
+  return null
 }
 
 export function createProjectAssetUploadHandlers(deps: ProjectAssetUploadDeps = {}) {
@@ -87,16 +101,36 @@ export function createProjectAssetUploadHandlers(deps: ProjectAssetUploadDeps = 
           return projectNotFoundResponse()
         }
 
-        const { assetId, filename } = await request.json()
+        const { assetId } = await request.json()
 
-        await r2Client().send(
-          new DeleteObjectCommand({
-            Bucket: process.env.R2_BUCKET_NAME!,
-            Key: filename,
-          })
-        )
+        const assets = await sql`
+          SELECT id, projectid, url, metadata
+          FROM assets
+          WHERE id = ${assetId} AND projectid = ${projectId}
+          LIMIT 1
+        ` as Array<{
+          id: string
+          projectid: string
+          url: string | null
+          metadata: { filename?: unknown } | null
+        }>
 
-        await sql`DELETE FROM assets WHERE id = ${assetId} AND projectId = ${projectId}`
+        const asset = assets[0]
+        if (!asset) {
+          return assetNotFoundResponse()
+        }
+
+        const key = storedAssetKey(asset)
+        if (key) {
+          await r2Client().send(
+            new DeleteObjectCommand({
+              Bucket: process.env.R2_BUCKET_NAME!,
+              Key: key,
+            })
+          )
+        }
+
+        await sql`DELETE FROM assets WHERE id = ${assetId} AND projectid = ${projectId}`
 
         return NextResponse.json({ success: true })
       } catch (error) {
