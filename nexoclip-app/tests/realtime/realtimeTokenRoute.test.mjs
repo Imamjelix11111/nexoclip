@@ -106,6 +106,77 @@ test('returns 502 without leaking internal details when Canvas Auth fails upstre
   assert.equal(body.includes('upstream exploded'), false);
 });
 
+test('returns 502 safe JSON when session lookup rejects', async () => {
+  const handler = createRealtimeTokenHandler({
+    getSession: async () => {
+      throw new Error('session backend broke for token=session-token');
+    },
+    fetchFn: async () => { throw new Error('should not be called'); },
+    issueToken: async () => { throw new Error('should not be called'); },
+  });
+
+  const response = await handler(postRequest({ projectId: PROJECT_ID }));
+  const body = await response.text();
+
+  assert.equal(response.status, 502);
+  assert.equal(response.headers.get('content-type')?.includes('application/json'), true);
+  assert.equal(body.includes('session backend broke'), false);
+  assert.equal(body.includes('session-token'), false);
+});
+
+test('returns 502 safe JSON when Canvas Auth signing throws', async () => {
+  const handler = createRealtimeTokenHandler({
+    getSession: async () => ({ user_id: SESSION_USER_ID }),
+    fetchFn: async () => { throw new Error('should not be called'); },
+    issueToken: async () => { throw new Error('should not be called'); },
+    env: {
+      CANVAS_AUTH_URL: 'http://canvas-auth.internal/authorize',
+      CANVAS_AUTH_SECRET: 'canvas-secret',
+      REALTIME_TOKEN_SECRET: 'jwt-secret',
+    },
+    createNonce: () => 'nonce-123',
+    now: () => 1700000000,
+    signAuthorization: () => {
+      throw new Error('cannot sign with canvas-secret');
+    },
+  });
+
+  const response = await handler(postRequest({ projectId: PROJECT_ID }));
+  const body = await response.text();
+
+  assert.equal(response.status, 502);
+  assert.equal(response.headers.get('content-type')?.includes('application/json'), true);
+  assert.equal(body.includes('cannot sign'), false);
+  assert.equal(body.includes('canvas-secret'), false);
+});
+
+test('returns 500 safe JSON when JWT issuance throws', async () => {
+  const handler = createRealtimeTokenHandler({
+    getSession: async () => ({ user_id: SESSION_USER_ID }),
+    fetchFn: async () => Response.json({ authorized: true }, { status: 200 }),
+    issueToken: async () => {
+      throw new Error('jwt signing failed with REALTIME_TOKEN_SECRET=jwt-secret');
+    },
+    env: {
+      CANVAS_AUTH_URL: 'http://canvas-auth.internal/authorize',
+      CANVAS_AUTH_SECRET: 'canvas-secret',
+      REALTIME_TOKEN_SECRET: 'jwt-secret',
+    },
+    createNonce: () => 'nonce-123',
+    now: () => 1700000000,
+    signAuthorization: () => 'signed-value',
+  });
+
+  const response = await handler(postRequest({ projectId: PROJECT_ID }));
+  const body = await response.text();
+
+  assert.equal(response.status, 500);
+  assert.equal(response.headers.get('content-type')?.includes('application/json'), true);
+  assert.equal(body.includes('jwt signing failed'), false);
+  assert.equal(body.includes('REALTIME_TOKEN_SECRET'), false);
+  assert.equal(body.includes('jwt-secret'), false);
+});
+
 test('ignores browser userId, signs the trusted auth payload, and issues a JWT only after explicit authorization', async () => {
   const signedPayloads = [];
   let sawAuthorization = false;

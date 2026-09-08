@@ -803,3 +803,24 @@ git commit -m "test(spite): verify realtime CRDT canvas"
   - mismatch at last byte
 - Portability preserved: helper stays Web-Crypto-compatible string/byte comparison (no Node-only `timingSafeEqual` swap).
 - Intentional duplication remains in place for service isolation; shared package extraction is deferred as minor follow-up by design.
+
+## 2026-09-08 Task 8 Round 1 error-boundary follow-up
+
+- Added failing-first route tests for three unhandled throw/reject paths in `nexoclip-app/tests/realtime/realtimeTokenRoute.test.mjs`:
+  - `getSession` rejection
+  - `signAuthorization` throw
+  - `issueToken` throw
+- Added minimal catch boundaries in `nexoclip-app/app/api/auth/realtime-token/route.js`:
+  - Session lookup rejection -> safe JSON `502` (`Realtime authorization failed`)
+  - Canvas Auth signing failure -> safe JSON `502` (`Realtime authorization failed`)
+  - Local JWT issuance failure -> safe JSON `500` (`Realtime token issuance failed`)
+- Preserved existing boundary statuses and behavior:
+  - unauthenticated `401`
+  - invalid `projectId` `400`
+  - missing config `503`
+  - authorization denied `403`
+  - upstream/non-OK Canvas Auth `502`
+- Verified no sensitive leakage in new failure paths (error strings/secrets/internal config not returned in body).
+- Verification run (focused + Task 7 suites):
+  - `cd nexoclip-app && node --test tests/realtime/realtimeTokenRoute.test.mjs tests/realtime/internalAuth.test.mjs`
+  - `cd nexoclip-app/services/spite && npx --yes tsx --test realtime/auth.test.ts`

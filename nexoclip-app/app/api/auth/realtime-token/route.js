@@ -36,7 +36,12 @@ export function createRealtimeTokenHandler({
   issueToken = issueRealtimeToken,
 } = {}) {
   return async function POST(request) {
-    const session = await getSession(request.cookies?.get(SESSION_COOKIE)?.value);
+    let session;
+    try {
+      session = await getSession(request.cookies?.get(SESSION_COOKIE)?.value);
+    } catch {
+      return Response.json({ error: 'Realtime authorization failed' }, { status: 502 });
+    }
     if (!session?.user_id) {
       return Response.json({ error: 'Not authenticated' }, { status: 401 });
     }
@@ -59,7 +64,12 @@ export function createRealtimeTokenHandler({
       nonce: createNonce(),
     };
 
-    const signature = signAuthorization(payload, env.CANVAS_AUTH_SECRET);
+    let signature;
+    try {
+      signature = signAuthorization(payload, env.CANVAS_AUTH_SECRET);
+    } catch {
+      return Response.json({ error: 'Realtime authorization failed' }, { status: 502 });
+    }
 
     let authResponse;
     try {
@@ -91,7 +101,12 @@ export function createRealtimeTokenHandler({
       return Response.json({ error: 'Realtime authorization denied' }, { status: 403 });
     }
 
-    const issued = await issueToken({ userId: session.user_id, projectId }, env.REALTIME_TOKEN_SECRET);
+    let issued;
+    try {
+      issued = await issueToken({ userId: session.user_id, projectId }, env.REALTIME_TOKEN_SECRET);
+    } catch {
+      return Response.json({ error: 'Realtime token issuance failed' }, { status: 500 });
+    }
     return Response.json({ token: issued.token, expiresAt: issued.expiresAt });
   };
 }
