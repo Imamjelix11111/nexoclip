@@ -323,6 +323,12 @@ function findParticipantState(provider: HocuspocusProvider, participantId: strin
   ) as Record<string, any> | undefined
 }
 
+function findParticipantStates(provider: HocuspocusProvider, participantId: string) {
+  return Array.from(provider.awareness?.getStates().values() ?? []).filter(
+    (state) => state && typeof state === 'object' && state.participantId === participantId,
+  ) as Array<Record<string, any>>
+}
+
 function setAwarenessState(
   client: ProviderClient,
   state: Record<string, unknown>,
@@ -456,6 +462,114 @@ test('awareness sanitizes trusted user data, allocates room-scoped Guest N label
     }
   } finally {
     beta.provider.destroy()
+    await waitFor(() => server.getConnectionCount() === 0)
+    await server.destroy()
+  }
+})
+
+test('two sockets forging the same participantId get distinct Guests, independent lock expiry, and isolated cleanup', async () => {
+  const repository = new FakeRealtimeRepository()
+  repository.setOwner(PROJECT_ID, OWNER_USER_ID)
+  repository.setDocument(PROJECT_ID, createCanvasDocument())
+
+  const clock = new FakeClock()
+  clock.now = 1_000
+
+  const server = createRealtimeServer({
+    address: '127.0.0.1',
+    port: 0,
+    env: {
+      REALTIME_TOKEN_SECRET: JWT_SECRET,
+      CANVAS_AUTH_SECRET,
+    },
+    repository,
+    database: new FakeAuthorizationDatabase(),
+    clock,
+    awarenessLockTtlMs: LOCK_TTL_MS,
+    createRuntime: ({ doc }) => new StaticReadOnlyRuntime(),
+  })
+
+  const token = (await issueRealtimeToken({ userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
+  await server.listen()
+
+  const alpha = await connectProvider({ url: server.wsUrl, name: roomName(), token })
+  const beta = await connectProvider({ url: server.wsUrl, name: roomName(), token })
+  const observer = await connectProvider({ url: server.wsUrl, name: roomName(), token })
+
+  try {
+    await Promise.all([alpha.synced, beta.synced, observer.synced])
+
+    setAwarenessState(alpha, {
+      participantId: 'shared-participant',
+      userId: 'forged-alpha',
+      name: 'Mallory',
+      lock: {
+        nodeId: 'node-alpha',
+      },
+    })
+
+    await waitFor(() => findParticipantStates(observer.provider, 'shared-participant').length === 1)
+    clock.now += 1_000
+
+    setAwarenessState(beta, {
+      participantId: 'shared-participant',
+      userId: 'forged-beta',
+      name: 'Eve',
+      lock: {
+        nodeId: 'node-beta',
+      },
+    })
+
+    await waitFor(() => findParticipantStates(observer.provider, 'shared-participant').length === 2)
+
+    const initialStatesByName = new Map(
+      findParticipantStates(observer.provider, 'shared-participant').map((state) => [state.name, state]),
+    )
+
+    assert.deepEqual([...initialStatesByName.keys()].sort(), ['Guest 1', 'Guest 2'])
+    assert.equal(initialStatesByName.get('Guest 1')?.userId, OWNER_USER_ID)
+    assert.equal(initialStatesByName.get('Guest 1')?.lock?.nodeId, 'node-alpha')
+    assert.equal(initialStatesByName.get('Guest 1')?.lock?.expiresAt, 6_000)
+    assert.equal(initialStatesByName.get('Guest 2')?.userId, OWNER_USER_ID)
+    assert.equal(initialStatesByName.get('Guest 2')?.lock?.nodeId, 'node-beta')
+    assert.equal(initialStatesByName.get('Guest 2')?.lock?.expiresAt, 7_000)
+
+    await clock.advanceBy(LOCK_TTL_MS - 1_000)
+    await waitFor(() => {
+      const statesByName = new Map(
+        findParticipantStates(observer.provider, 'shared-participant').map((state) => [state.name, state]),
+      )
+      return statesByName.get('Guest 1')?.lock?.nodeId === undefined && statesByName.get('Guest 2')?.lock?.nodeId === 'node-beta'
+    })
+
+    beta.provider.destroy()
+    await waitFor(() => server.getConnectionCount() === 2)
+    await waitFor(() => findParticipantStates(observer.provider, 'shared-participant').length === 1)
+    assert.equal(findParticipantStates(observer.provider, 'shared-participant')[0]?.name, 'Guest 1')
+
+    const delta = await connectProvider({ url: server.wsUrl, name: roomName(), token })
+    try {
+      await delta.synced
+      setAwarenessState(delta, {
+        participantId: 'shared-participant',
+        userId: 'forged-delta',
+        name: 'Oscar',
+      })
+
+      await waitFor(() => findParticipantStates(observer.provider, 'shared-participant').length === 2)
+      assert.deepEqual(
+        findParticipantStates(observer.provider, 'shared-participant')
+          .map((state) => state.name)
+          .sort(),
+        ['Guest 1', 'Guest 2'],
+      )
+    } finally {
+      delta.provider.destroy()
+      await waitFor(() => server.getConnectionCount() === 2)
+    }
+  } finally {
+    alpha.provider.destroy()
+    observer.provider.destroy()
     await waitFor(() => server.getConnectionCount() === 0)
     await server.destroy()
   }

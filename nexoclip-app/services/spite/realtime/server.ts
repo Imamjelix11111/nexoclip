@@ -653,17 +653,18 @@ function sanitizeAwarenessStates(
 ): void {
   for (const [clientId, state] of payload.states) {
     const participantId = normalizeParticipantId(state.participantId)
+    const participantKey = createParticipantKey(payload.socketId, clientId)
     const sanitized: Record<string, unknown> = {
       ...state,
       userId,
     }
 
+    rememberSocketParticipant(room, payload.socketId, participantKey)
+    rememberParticipantClientId(room, participantKey, clientId)
+
     if (participantId) {
-      const guestName = allocateGuestName(room, participantId)
-      rememberSocketParticipant(room, payload.socketId, participantId)
-      rememberParticipantClientId(room, participantId, clientId)
       sanitized.participantId = participantId
-      sanitized.name = guestName
+      sanitized.name = allocateGuestName(room, participantKey)
     } else {
       delete sanitized.participantId
       delete sanitized.name
@@ -672,14 +673,10 @@ function sanitizeAwarenessStates(
     const lock = sanitizeLock(state.lock, awarenessLockTtlMs, clock)
     if (lock) {
       sanitized.lock = lock
-      if (participantId) {
-        scheduleParticipantLockExpiry(room, participantId, clock, awarenessLockTtlMs)
-      }
+      scheduleParticipantLockExpiry(room, participantKey, clock, awarenessLockTtlMs)
     } else {
       delete sanitized.lock
-      if (participantId) {
-        clearParticipantLockTimer(room, participantId, clock)
-      }
+      clearParticipantLockTimer(room, participantKey, clock)
     }
 
     payload.states.set(clientId, sanitized)
@@ -711,29 +708,29 @@ function sanitizeLock(
 
 function scheduleParticipantLockExpiry(
   room: RoomState,
-  participantId: string,
+  participantKey: string,
   clock: RoomLifecycleClock,
   awarenessLockTtlMs: number,
 ): void {
-  clearParticipantLockTimer(room, participantId, clock)
+  clearParticipantLockTimer(room, participantKey, clock)
   room.lockTimers.set(
-    participantId,
+    participantKey,
     clock.setTimeout(() => {
-      room.lockTimers.delete(participantId)
-      expireParticipantLock(room, participantId, clock)
+      room.lockTimers.delete(participantKey)
+      expireParticipantLock(room, participantKey, clock)
     }, awarenessLockTtlMs),
   )
 }
 
-function expireParticipantLock(room: RoomState, participantId: string, clock: RoomLifecycleClock): void {
-  const clientIds = room.participantClientIds.get(participantId)
+function expireParticipantLock(room: RoomState, participantKey: string, clock: RoomLifecycleClock): void {
+  const clientIds = room.participantClientIds.get(participantKey)
   if (!clientIds || clientIds.size === 0) {
     return
   }
 
   for (const clientId of clientIds) {
     const state = room.doc.awareness.states.get(clientId)
-    if (!state || state.participantId !== participantId || !state.lock) {
+    if (!state || !state.lock) {
       continue
     }
 
@@ -743,7 +740,7 @@ function expireParticipantLock(room: RoomState, participantId: string, clock: Ro
       source: 'local',
       reason: 'lock-expired',
       observedAt: readClockNow(clock),
-    })
+    }, clock)
   }
 }
 
@@ -752,6 +749,7 @@ function replaceAwarenessState(
   clientId: number,
   nextState: Record<string, unknown> | null,
   origin: unknown,
+  clock: RoomLifecycleClock,
 ): void {
   const previousState = doc.awareness.states.get(clientId)
   const meta = doc.awareness.meta.get(clientId)
@@ -759,7 +757,7 @@ function replaceAwarenessState(
     return
   }
 
-  const clock = meta.clock + 1
+  const nextClock = meta.clock + 1
   if (nextState === null) {
     doc.awareness.states.delete(clientId)
   } else {
@@ -767,8 +765,8 @@ function replaceAwarenessState(
   }
 
   doc.awareness.meta.set(clientId, {
-    clock,
-    lastUpdated: Date.now(),
+    clock: nextClock,
+    lastUpdated: readClockNow(clock),
   })
 
   const added: number[] = []
@@ -795,8 +793,8 @@ function replaceAwarenessState(
   }
 }
 
-function allocateGuestName(room: RoomState, participantId: string): string {
-  const existing = room.guestNumbers.get(participantId)
+function allocateGuestName(room: RoomState, participantKey: string): string {
+  const existing = room.guestNumbers.get(participantKey)
   if (existing) {
     return guestName(existing)
   }
@@ -807,23 +805,23 @@ function allocateGuestName(room: RoomState, participantId: string): string {
     nextNumber += 1
   }
 
-  room.guestNumbers.set(participantId, nextNumber)
+  room.guestNumbers.set(participantKey, nextNumber)
   return guestName(nextNumber)
 }
 
-function rememberSocketParticipant(room: RoomState, socketId: string, participantId: string): void {
+function rememberSocketParticipant(room: RoomState, socketId: string, participantKey: string): void {
   const participants = room.socketParticipants.get(socketId) ?? new Set<string>()
-  if (!participants.has(participantId)) {
-    participants.add(participantId)
+  if (!participants.has(participantKey)) {
+    participants.add(participantKey)
     room.socketParticipants.set(socketId, participants)
-    room.participantRefCounts.set(participantId, (room.participantRefCounts.get(participantId) ?? 0) + 1)
+    room.participantRefCounts.set(participantKey, (room.participantRefCounts.get(participantKey) ?? 0) + 1)
   }
 }
 
-function rememberParticipantClientId(room: RoomState, participantId: string, clientId: number): void {
-  const clientIds = room.participantClientIds.get(participantId) ?? new Set<number>()
+function rememberParticipantClientId(room: RoomState, participantKey: string, clientId: number): void {
+  const clientIds = room.participantClientIds.get(participantKey) ?? new Set<number>()
   clientIds.add(clientId)
-  room.participantClientIds.set(participantId, clientIds)
+  room.participantClientIds.set(participantKey, clientIds)
 }
 
 function releaseSocketParticipants(
@@ -841,31 +839,31 @@ function releaseSocketParticipants(
   }
 
   room.socketParticipants.delete(socketId)
-  for (const participantId of participants) {
-    const remainingRefs = (room.participantRefCounts.get(participantId) ?? 1) - 1
+  for (const participantKey of participants) {
+    const remainingRefs = (room.participantRefCounts.get(participantKey) ?? 1) - 1
     if (remainingRefs > 0) {
-      room.participantRefCounts.set(participantId, remainingRefs)
+      room.participantRefCounts.set(participantKey, remainingRefs)
       continue
     }
 
-    room.participantRefCounts.delete(participantId)
-    room.guestNumbers.delete(participantId)
-    room.participantClientIds.delete(participantId)
-    clearParticipantLockTimer(room, participantId, clock)
+    room.participantRefCounts.delete(participantKey)
+    room.guestNumbers.delete(participantKey)
+    room.participantClientIds.delete(participantKey)
+    clearParticipantLockTimer(room, participantKey, clock)
   }
 }
 
-function clearParticipantLockTimer(room: RoomState, participantId: string, clock: RoomLifecycleClock): void {
-  const timer = room.lockTimers.get(participantId)
+function clearParticipantLockTimer(room: RoomState, participantKey: string, clock: RoomLifecycleClock): void {
+  const timer = room.lockTimers.get(participantKey)
   if (timer) {
-    room.lockTimers.delete(participantId)
+    room.lockTimers.delete(participantKey)
     clock.clearTimeout(timer)
   }
 }
 
 function clearRoomTimers(room: RoomState, clock: RoomLifecycleClock): void {
-  for (const participantId of room.lockTimers.keys()) {
-    clearParticipantLockTimer(room, participantId, clock)
+  for (const participantKey of room.lockTimers.keys()) {
+    clearParticipantLockTimer(room, participantKey, clock)
   }
 }
 
@@ -931,6 +929,10 @@ function normalizeParticipantId(value: unknown): string | undefined {
 
   const trimmed = value.trim()
   return trimmed.length > 0 ? trimmed : undefined
+}
+
+function createParticipantKey(socketId: string, clientId: number): string {
+  return `${socketId}:${clientId}`
 }
 
 function guestName(number: number): string {

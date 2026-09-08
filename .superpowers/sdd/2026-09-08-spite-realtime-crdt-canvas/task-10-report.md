@@ -24,3 +24,28 @@ Implemented Hocuspocus lifecycle coverage for Awareness sanitization, durable st
 
 ## Commit
 - `feat(spite): manage realtime room lifecycle`
+
+## Retry Round 1: Awareness collision hardening
+
+### Status
+Hardened Task 10 awareness ownership so server-side participant bookkeeping is keyed by authenticated `socketId + awareness clientId`, while client `participantId` stays a continuity hint only.
+
+### Files
+- Modified: `nexoclip-app/services/spite/realtime/server.ts`
+- Modified: `nexoclip-app/services/spite/realtime/server-lifecycle.test.ts`
+
+### Verification
+- `cd nexoclip-app/services/spite && rtk proxy npx tsx --test realtime/server-core.test.ts realtime/server-lifecycle.test.ts realtime/project-runtime.test.ts`
+- `cd nexoclip-app/services/spite && rtk tsc --noEmit`
+
+### Guarantees covered
+- Two sockets forging the same client `participantId` now receive distinct `Guest N` labels because allocation is keyed by authenticated connection identity plus awareness client ID.
+- Refcounts, disconnect cleanup, and lock timers no longer collide across forged `participantId` reuse, so one socket cannot clear or extend another socket's lock.
+- Awareness metadata updates triggered by server-side lock expiry now use the injected lifecycle clock instead of wall-clock `Date.now()`.
+- Task 11 ownership files/routes remain untouched; the diff stays inside Task 10 realtime lifecycle files.
+
+### Concerns
+- The focused collision test relies on the provider-level async awareness propagation path, so it still carries the existing localStorage experimental warning noise from the test environment.
+
+### Commit
+- `fix(spite): harden awareness participant keys`
