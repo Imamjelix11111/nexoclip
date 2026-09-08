@@ -21,6 +21,7 @@ interface RecoveryItem {
 
 interface RecoveryResult {
   requestId: string
+  projectId: string
   nodeId?: string
   status: 'recovered' | 'still_pending' | 'failed' | 'not_found' | 'error'
   assetUrl?: string
@@ -72,10 +73,15 @@ function extractOutputUrl(result: any): { url: string | null; isVideo: boolean }
 
 function createRecoverOne(deps: Required<Pick<GenerateRecoverDeps, 'fetchFalStatus' | 'fetchFalResult' | 'rehostToR2' | 'recordAsset'>>) {
   return async function recoverOne(item: RecoveryItem, falKey: string): Promise<RecoveryResult> {
+    const responseBase = {
+      requestId: item.requestId,
+      projectId: item.projectId,
+      nodeId: item.nodeId,
+    }
+
     if (!isValidFalModel(item.modelEndpoint) || !isValidFalRequestId(item.requestId)) {
       return {
-        requestId: item.requestId,
-        nodeId: item.nodeId,
+        ...responseBase,
         status: 'error',
         message: 'Invalid modelEndpoint or requestId — refusing to fetch.',
       }
@@ -84,8 +90,7 @@ function createRecoverOne(deps: Required<Pick<GenerateRecoverDeps, 'fetchFalStat
     const statusRes = await deps.fetchFalStatus(item.requestId, item.modelEndpoint, falKey)
     if (statusRes.status === 404) {
       return {
-        requestId: item.requestId,
-        nodeId: item.nodeId,
+        ...responseBase,
         status: 'not_found',
         message: 'fal says this request does not exist (may have expired after 24h).',
       }
@@ -93,8 +98,7 @@ function createRecoverOne(deps: Required<Pick<GenerateRecoverDeps, 'fetchFalStat
     if (!statusRes.ok) {
       const text = await statusRes.text().catch(() => '')
       return {
-        requestId: item.requestId,
-        nodeId: item.nodeId,
+        ...responseBase,
         status: 'error',
         message: `status check failed: ${statusRes.status} ${text.slice(0, 200)}`,
       }
@@ -104,24 +108,21 @@ function createRecoverOne(deps: Required<Pick<GenerateRecoverDeps, 'fetchFalStat
     const falStatus = statusData.status as string | undefined
     if (falStatus === 'IN_QUEUE' || falStatus === 'IN_PROGRESS') {
       return {
-        requestId: item.requestId,
-        nodeId: item.nodeId,
+        ...responseBase,
         status: 'still_pending',
         message: `fal says ${falStatus}.`,
       }
     }
     if (falStatus === 'FAILED') {
       return {
-        requestId: item.requestId,
-        nodeId: item.nodeId,
+        ...responseBase,
         status: 'failed',
         message: 'fal reports the job failed.',
       }
     }
     if (falStatus !== 'COMPLETED') {
       return {
-        requestId: item.requestId,
-        nodeId: item.nodeId,
+        ...responseBase,
         status: 'error',
         message: `unexpected fal status: ${falStatus}`,
       }
@@ -130,8 +131,7 @@ function createRecoverOne(deps: Required<Pick<GenerateRecoverDeps, 'fetchFalStat
     const resultRes = await deps.fetchFalResult(item.requestId, item.modelEndpoint, falKey)
     if (!resultRes.ok) {
       return {
-        requestId: item.requestId,
-        nodeId: item.nodeId,
+        ...responseBase,
         status: 'error',
         message: `result fetch failed: ${resultRes.status}`,
       }
@@ -141,8 +141,7 @@ function createRecoverOne(deps: Required<Pick<GenerateRecoverDeps, 'fetchFalStat
     const { url, isVideo: detectedVideo } = extractOutputUrl(result)
     if (!url) {
       return {
-        requestId: item.requestId,
-        nodeId: item.nodeId,
+        ...responseBase,
         status: 'error',
         message: 'fal returned no usable output URL.',
       }
@@ -168,8 +167,7 @@ function createRecoverOne(deps: Required<Pick<GenerateRecoverDeps, 'fetchFalStat
     } catch (err) {
       console.error('[recover] recordAsset failed:', err)
       return {
-        requestId: item.requestId,
-        nodeId: item.nodeId,
+        ...responseBase,
         status: 'error',
         message: 'Output retrieved but failed to record in assets library.',
         assetUrl: storedUrl,
@@ -177,8 +175,7 @@ function createRecoverOne(deps: Required<Pick<GenerateRecoverDeps, 'fetchFalStat
     }
 
     return {
-      requestId: item.requestId,
-      nodeId: item.nodeId,
+      ...responseBase,
       status: 'recovered',
       assetUrl: storedUrl,
       message: `Saved as ${isVideo ? 'video' : 'image'} in your assets library.`,
@@ -287,7 +284,6 @@ export function createGenerateRecoverHandler(deps: GenerateRecoverDeps = {}) {
       })
     }
 
-    const rowMetaByNodeId = new Map<string, { projectId: string }>()
     const results: RecoveryResult[] = []
     for (const row of rows as any[]) {
       const data = (row.data || {}) as any
@@ -295,7 +291,6 @@ export function createGenerateRecoverHandler(deps: GenerateRecoverDeps = {}) {
       const modelEndpoint = String(data.pendingFalEndpoint)
       const projectId = String(row.projectid ?? row.projectId)
       const nodeId = String(row.nodeid ?? row.nodeId)
-      rowMetaByNodeId.set(nodeId, { projectId })
       const hintedType = row.type === 'videoGen' ? 'video' : row.type === 'imageGen' ? 'image' : undefined
       results.push(
         await recoverOne(
@@ -317,7 +312,7 @@ export function createGenerateRecoverHandler(deps: GenerateRecoverDeps = {}) {
       if (!result.nodeId || !['recovered', 'failed', 'not_found'].includes(result.status)) {
         continue
       }
-      const projectId = rowMetaByNodeId.get(result.nodeId)?.projectId
+      const projectId = result.projectId
       if (!projectId) continue
       if (!clearedByProject.has(projectId)) clearedByProject.set(projectId, [])
       clearedByProject.get(projectId)!.push(result.nodeId)

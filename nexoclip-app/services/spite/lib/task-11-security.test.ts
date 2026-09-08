@@ -337,6 +337,70 @@ test('generate/recover cleanup scopes pending marker removal by authorized proje
   assert.equal(sawScopedCleanup, true)
 })
 
+test('generate/recover bulk cleanup uses projectId+nodeId pair when node ids repeat across owned projects', async () => {
+  const secondProjectId = '550e8400-e29b-41d4-a716-4466554400aa'
+  const cleanupCalls: Array<{ projectId: string; nodeIds: string[] }> = []
+
+  const sql = async (strings: TemplateStringsArray, ...values: unknown[]) => {
+    const normalized = strings.join(' ? ').replace(/\s+/g, ' ').trim().toLowerCase()
+
+    if (normalized.includes('select c.projectid, c.nodeid, c.data, c.type from canvas_nodes c join projects p on p.id::text = c.projectid') && normalized.includes('where p.userid = ?') && normalized.includes("c.data->>'pendingrequestid' is not null") && normalized.includes("c.data->>'pendingfalendpoint' is not null")) {
+      return [
+        {
+          projectid: OWNER_PROJECT_ID,
+          nodeid: 'shared-node',
+          type: 'imageGen',
+          data: {
+            pendingRequestId: 'req-owner-failed',
+            pendingFalEndpoint: 'fal-ai/flux/dev',
+            prompt: 'owner node',
+          },
+        },
+        {
+          projectid: secondProjectId,
+          nodeid: 'shared-node',
+          type: 'imageGen',
+          data: {
+            pendingRequestId: 'req-second-pending',
+            pendingFalEndpoint: 'fal-ai/flux/dev',
+            prompt: 'second node',
+          },
+        },
+      ]
+    }
+
+    if (normalized.includes("update canvas_nodes set data = data - 'pendingrequestid' - 'pendingfalendpoint' - 'pendingstartedat' where projectid = ?") && normalized.includes('nodeid = any(')) {
+      cleanupCalls.push({
+        projectId: String(values[0]),
+        nodeIds: [...(values[1] as string[])],
+      })
+      return []
+    }
+
+    throw new Error(`Unhandled SQL in repeated nodeId cleanup test: ${normalized}`)
+  }
+
+  const handler = createGenerateRecoverHandler({
+    getDb: () => sql as any,
+    getAuthenticatedUser: async () => ({ id: OWNER_ID }),
+    falKey: 'test-fal-key',
+    fetchFalStatus: async (requestId) => {
+      if (requestId === 'req-owner-failed') return Response.json({ status: 'FAILED' })
+      if (requestId === 'req-second-pending') return Response.json({ status: 'IN_PROGRESS' })
+      throw new Error(`unexpected requestId: ${requestId}`)
+    },
+    fetchFalResult: async () => Response.json({}),
+  })
+
+  const response = await handler(makeRequest('http://spite.local/api/generate/recover', {
+    method: 'POST',
+    body: {},
+  }) as any)
+
+  assert.equal(response.status, 200)
+  assert.deepEqual(cleanupCalls, [{ projectId: OWNER_PROJECT_ID, nodeIds: ['shared-node'] }])
+})
+
 test('auth/check reports authenticated for trusted main sessions as well as legacy spite sessions', async () => {
   const trusted = createAuthCheckHandler({
     getAuthenticatedUser: async () => ({ id: OWNER_ID }),

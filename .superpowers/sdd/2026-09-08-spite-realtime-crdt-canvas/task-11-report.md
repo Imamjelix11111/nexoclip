@@ -152,3 +152,45 @@ Result:
 - Existing ownership/session tests passed
 - Full Spite test suite passed (`91` passed, `5` skipped because `SPITE_TEST_DATABASE_URL` is unset, `0` failed)
 - TypeScript emitted no errors
+
+## Retry Round 2: recover bulk cleanup key collision on repeated nodeId
+
+### Problem
+
+`generate/recover` bulk cleanup built metadata as `Map<nodeId, {projectId}>`.
+When two owned projects contain the same `nodeId`, later rows overwrite earlier metadata.
+Cleanup could then clear pending markers on the wrong project.
+
+### Fix
+
+Modified `app/api/generate/recover/route.ts`:
+- `RecoveryResult` now carries `projectId` from each recovery item.
+- `recoverOne(...)` returns a shared base payload with `requestId + projectId + nodeId` in all status branches.
+- Bulk cleanup grouping now uses `result.projectId` with `result.nodeId` (exact pair), instead of looking up `projectId` from a `nodeId`-keyed metadata map.
+
+### Regression coverage added
+
+Modified `lib/task-11-security.test.ts`:
+- Added failing-first test:
+  - `generate/recover bulk cleanup uses projectId+nodeId pair when node ids repeat across owned projects`
+- Scenario:
+  - two authorized projects share `nodeId = shared-node`
+  - project A status is terminal (`FAILED`) and should be cleaned
+  - project B status is `IN_PROGRESS` and must not be cleaned
+- Assertion:
+  - cleanup runs only for `{ projectId: projectA, nodeIds: ['shared-node'] }`
+
+### Verification
+
+Commands run:
+
+```bash
+cd nexoclip-app/services/spite && rtk npx --yes tsx --test lib/task-11-security.test.ts
+cd nexoclip-app/services/spite && rtk npx --yes tsx --test "lib/**/*.test.ts" "realtime/**/*.test.ts"
+cd nexoclip-app/services/spite && rtk tsc --noEmit
+```
+
+Result:
+- Focused security regression suite passed (`7` passed, `0` failed)
+- Full Spite suite passed (`92` passed, `5` skipped, `0` failed)
+- TypeScript emitted no errors
