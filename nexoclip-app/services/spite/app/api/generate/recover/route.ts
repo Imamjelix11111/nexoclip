@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
 import { recordAsset, rehostToR2 } from '@/lib/r2-upload'
 import { isValidFalModel, isValidFalRequestId } from '@/lib/fal-validate'
+import { getAuthenticatedUser } from '@/lib/main-session'
+import {
+  projectNotFoundResponse,
+  unauthorizedResponse,
+  userOwnsProject,
+} from '@/lib/project-ownership'
 
 // Recovery endpoint. fal keeps job results around for ~24h after completion,
 // so a generation that "disappeared" from SPITE — because polling failed,
@@ -209,6 +215,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'FAL_KEY not configured' }, { status: 500 })
   }
 
+  const user = await getAuthenticatedUser(request)
+  if (!user) {
+    return unauthorizedResponse()
+  }
+
   const body = await request.json().catch(() => ({}))
 
   // Backfill mode: mark every asset in the recent window as recovered
@@ -217,6 +228,10 @@ export async function POST(request: NextRequest) {
   // hours" but the caller can pass `withinHours` to widen it.
   if (body.mode === 'backfill-recent') {
     const sql = getDb()
+    const scopedProjectId = body.projectId ? String(body.projectId) : null
+    if (scopedProjectId && !(await userOwnsProject(sql, user.id, scopedProjectId))) {
+      return projectNotFoundResponse()
+    }
     await sql`ALTER TABLE generation_history ADD COLUMN IF NOT EXISTS recovered boolean DEFAULT false`
     const hours = Math.max(0.25, Math.min(72, Number(body.withinHours) || 2))
     const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000)
@@ -225,7 +240,7 @@ export async function POST(request: NextRequest) {
       SET recovered = true
       WHERE created_at > ${cutoff.toISOString()}
         AND COALESCE(recovered, false) = false
-        ${body.projectId ? sql`AND project_id = ${String(body.projectId)}` : sql``}
+        ${scopedProjectId ? sql`AND project_id = ${scopedProjectId}` : sql`AND project_id IN (SELECT id FROM projects WHERE userid = ${user.id})`}
         ${body.modelLike ? sql`AND model ILIKE ${String(body.modelLike)}` : sql``}
       RETURNING id, model, prompt, created_at
     `
@@ -244,6 +259,9 @@ export async function POST(request: NextRequest) {
         { error: 'projectId is required so we know where to file the recovered asset.' },
         { status: 400 },
       )
+    }
+    if (!(await userOwnsProject(getDb(), user.id, String(body.projectId)))) {
+      return projectNotFoundResponse()
     }
     // Validate before either reaches the fal URL interpolation.
     // Without this an attacker can pass modelEndpoint="../@evil/path"
@@ -272,6 +290,9 @@ export async function POST(request: NextRequest) {
   // Bulk mode — scan canvas_nodes for any node holding a pendingRequestId.
   const sql = getDb()
   const projectFilter = body.projectId ? String(body.projectId) : null
+  if (projectFilter && !(await userOwnsProject(sql, user.id, projectFilter))) {
+    return projectNotFoundResponse()
+  }
   const rows = await (projectFilter
     ? sql`
         SELECT projectId, nodeId, data, type
@@ -281,10 +302,12 @@ export async function POST(request: NextRequest) {
           AND data->>'pendingFalEndpoint' IS NOT NULL
       `
     : sql`
-        SELECT projectId, nodeId, data, type
-        FROM canvas_nodes
-        WHERE data->>'pendingRequestId' IS NOT NULL
-          AND data->>'pendingFalEndpoint' IS NOT NULL
+        SELECT c.projectId, c.nodeId, c.data, c.type
+        FROM canvas_nodes c
+        JOIN projects p ON p.id::text = c.projectId
+        WHERE p.userid = ${user.id}
+          AND c.data->>'pendingRequestId' IS NOT NULL
+          AND c.data->>'pendingFalEndpoint' IS NOT NULL
       `)
 
   if (rows.length === 0) {
@@ -336,6 +359,7 @@ export async function POST(request: NextRequest) {
           - 'pendingFalEndpoint'
           - 'pendingStartedAt'
         WHERE nodeId = ANY(${cleared}::text[])
+          AND projectId IN (SELECT id::text FROM projects WHERE userid = ${user.id})
       `
     } catch (err) {
       console.error('[recover] failed to clear pending markers:', err)

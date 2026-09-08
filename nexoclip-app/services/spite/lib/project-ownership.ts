@@ -1,0 +1,58 @@
+import { NextResponse } from 'next/server'
+
+import type { Sql } from '@/lib/db'
+import type { AuthenticatedUser } from '@/lib/main-session'
+
+export function unauthorizedResponse() {
+  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+}
+
+export function projectNotFoundResponse() {
+  return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+}
+
+export function folderNotFoundResponse() {
+  return NextResponse.json({ error: 'Folder not found' }, { status: 404 })
+}
+
+export function assetNotFoundResponse() {
+  return NextResponse.json({ error: 'Asset not found' }, { status: 404 })
+}
+
+export async function requireAuthenticatedUser(
+  request: Request,
+  getAuthenticatedUser: (request: Request) => Promise<AuthenticatedUser | null>,
+) {
+  const user = await getAuthenticatedUser(request)
+  return user ?? null
+}
+
+export async function userOwnsProject(sql: Sql, userId: string, projectId: string): Promise<boolean> {
+  const rows = await sql`
+    SELECT 1 FROM projects WHERE id = ${projectId} AND userid = ${userId} LIMIT 1
+  `
+  return rows.length > 0
+}
+
+export async function userOwnsFolder(sql: Sql, userId: string, folderId: string): Promise<boolean> {
+  const rows = await sql`
+    SELECT 1
+    FROM asset_folders f
+    JOIN projects p ON p.id = f.project_id
+    WHERE f.id = ${folderId} AND p.userid = ${userId}
+    LIMIT 1
+  `
+  return rows.length > 0
+}
+
+export async function findOwnedGenerationAsset(sql: Sql, userId: string, assetId: string) {
+  const rows = await sql`
+    SELECT g.id, g.project_id, g.r2_url
+    FROM generation_history g
+    JOIN projects p ON p.id = g.project_id
+    WHERE g.id = ${assetId} AND p.userid = ${userId}
+    LIMIT 1
+  ` as Array<{ id: string; project_id: string; r2_url: string | null }>
+
+  return rows[0] ?? null
+}

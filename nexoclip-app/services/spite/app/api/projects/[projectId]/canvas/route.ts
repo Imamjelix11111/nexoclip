@@ -1,5 +1,16 @@
 import { getDb, CANVAS_SAVE_LOCK_NS } from '@/lib/db'
+import { getAuthenticatedUser } from '@/lib/main-session'
+import {
+  projectNotFoundResponse,
+  unauthorizedResponse,
+  userOwnsProject,
+} from '@/lib/project-ownership'
 import { NextRequest, NextResponse } from 'next/server'
+
+interface CanvasRouteDependencies {
+  getDb?: typeof getDb
+  getAuthenticatedUser?: typeof getAuthenticatedUser
+}
 
 // Self-bootstraps the rolling-backup table. Snapshots are tiny insurance
 // against an autosave race or accidental wipe: the last ~50 minutes of
@@ -27,11 +38,22 @@ async function ensureSceneColumns(sql: any) {
   await sql`ALTER TABLE projects ADD COLUMN IF NOT EXISTS active_scene_id text`
 }
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
-  try {
-    const sql = getDb()
-    const { projectId } = await params
-    const { nodes, edges, scenes, activeSceneId } = await request.json()
+export function createCanvasRouteHandlers(dependencies: CanvasRouteDependencies = {}) {
+  const getSql = dependencies.getDb ?? getDb
+  const resolveUser = dependencies.getAuthenticatedUser ?? getAuthenticatedUser
+
+  return {
+    async POST(request: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
+      try {
+        const user = await resolveUser(request)
+        if (!user) return unauthorizedResponse()
+
+        const sql = getSql()
+        const { projectId } = await params
+        if (!(await userOwnsProject(sql, user.id, projectId))) {
+          return projectNotFoundResponse()
+        }
+        const { nodes, edges, scenes, activeSceneId } = await request.json()
 
     // FAILSAFE: never blow away a non-empty canvas with an empty payload.
     // The client has a matching guard but a stale request from a closed
@@ -245,17 +267,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       console.error('[canvas] Protection reconcile failed:', reconcileErr)
     }
 
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error('Error saving canvas:', error)
-    return NextResponse.json({ error: 'Failed to save canvas' }, { status: 500 })
-  }
-}
+        return NextResponse.json({ success: true })
+      } catch (error) {
+        console.error('Error saving canvas:', error)
+        return NextResponse.json({ error: 'Failed to save canvas' }, { status: 500 })
+      }
+    },
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
-  try {
-    const sql = getDb()
-    const { projectId } = await params
+    async GET(request: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
+      try {
+        const user = await resolveUser(request)
+        if (!user) return unauthorizedResponse()
+
+        const sql = getSql()
+        const { projectId } = await params
+        if (!(await userOwnsProject(sql, user.id, projectId))) {
+          return projectNotFoundResponse()
+        }
 
     // Make sure the scene columns exist before we read them. Idempotent
     // ALTER — no-op after the first cold start of this serverless
@@ -316,9 +344,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       data: row.data || {},
     }))
 
-    return NextResponse.json({ nodes, edges, scenes, activeSceneId })
-  } catch (error) {
-    console.error('Error loading canvas:', error)
-    return NextResponse.json({ error: 'Failed to load canvas' }, { status: 500 })
+        return NextResponse.json({ nodes, edges, scenes, activeSceneId })
+      } catch (error) {
+        console.error('Error loading canvas:', error)
+        return NextResponse.json({ error: 'Failed to load canvas' }, { status: 500 })
+      }
+    },
   }
 }
+
+const handlers = createCanvasRouteHandlers()
+
+export const POST = handlers.POST
+export const GET = handlers.GET
