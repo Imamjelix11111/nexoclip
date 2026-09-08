@@ -222,3 +222,10 @@
   - Current runtime is Node 20 in Docker, not Node 22.
   - Current Spite auth is a standalone password/session system, not main-session introspection.
   - Current projection tables are still authoritative and directly mutated by both browser and server paths.
+
+## Appendix: 2026-09-08 Task 5 interface refinement
+
+- Approved architecture unchanged: persisted Yjs remains authoritative and relational tables remain projection-only compatibility outputs.
+- Implementation artifact: Task 5 now exposes `captureProjectionPayload(doc): CanvasProjection` so Task 6 can snapshot an immutable projection payload exactly at the durable sequence boundary.
+- `projectDocument(projectId, projectionPayload, targetSeq)` now consumes only that detached payload; it no-ops when `targetSeq <= projected_seq`, rejects only when `targetSeq > durable_seq`, and still permits idempotent replay of an exact older captured payload when `targetSeq < durable_seq`.
+- Rationale: projecting from a live mutable `Y.Doc` couples slow compatibility writes to live mutation timing, which can turn a coalesced stale target into a false retry error or a drifting projection payload.

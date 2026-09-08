@@ -285,11 +285,12 @@ Run unit tests; run integration tests when `SPITE_TEST_DATABASE_URL` exists. Com
 - Create: `nexoclip-app/services/spite/realtime/projector.test.ts`
 
 **Interfaces:**
-- Produces `projectDocument(projectId, doc, targetSeq): Promise<void>`.
+- Produces `captureProjectionPayload(doc): CanvasProjection`.
+- Produces `projectDocument(projectId, projectionPayload, targetSeq): Promise<void>`.
 
 - [ ] **Step 1: Write failing projection tests**
 
-Assert one transaction replaces/upserts nodes and edges, updates scenes/active scene/project timestamp, and advances `projected_seq` only on success. Assert stale target sequences no-op and projection does not mutate encoded Yjs state.
+Assert one transaction replaces/upserts nodes and edges, updates scenes/active scene/project timestamp, and advances `projected_seq` only on success. Assert stale target sequences no-op, immutable captured payloads do not drift while projection waits on slow database work, coalesced older exact payloads may still project while `durable_seq` is newer, and capture does not mutate encoded Yjs state.
 
 - [ ] **Step 2: Verify RED**
 
@@ -297,7 +298,7 @@ Run the focused test.
 
 - [ ] **Step 3: Implement projection**
 
-Use `readCanvasProjection`; lock the document row; compare `targetSeq` to `projected_seq`; rewrite compatibility tables and metadata transactionally; update `projected_seq` last within the same transaction.
+Expose immutable capture separately with `captureProjectionPayload(doc)` at the durable boundary. `projectDocument(projectId, projectionPayload, targetSeq)` locks the document row, no-ops when `targetSeq <= projected_seq`, rejects only when `targetSeq > durable_seq`, permits idempotent projection of an exact older captured payload when `targetSeq < durable_seq`, rewrites compatibility tables and metadata transactionally, and updates `projected_seq` last within the same transaction.
 
 - [ ] **Step 4: Verify GREEN and commit**
 
@@ -311,6 +312,7 @@ Commit as `feat(spite): project Yjs canvas state`.
 
 **Interfaces:**
 - Produces `ProjectRuntime` methods `enqueue`, `canAcceptMutation`, `flush`, `scheduleProjection`, `compact`, and `shutdown`; emits `SYNCED | PERSISTING | PERSISTED | DEGRADED | READ_ONLY`.
+- `scheduleProjection` captures an immutable `CanvasProjection` payload at the exact durable sequence boundary before any slow projection work.
 
 - [ ] **Step 1: Write failing runtime tests with injected clock/repository**
 

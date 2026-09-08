@@ -1,6 +1,6 @@
 import * as Y from 'yjs'
 
-import { readCanvasProjection } from '../lib/realtime/document'
+import { readCanvasProjection, type CanvasProjection } from '../lib/realtime/document'
 import {
   createDatabaseAdapter,
   DEFAULT_REALTIME_ADVISORY_LOCK_NAMESPACE,
@@ -18,13 +18,12 @@ export type ProjectDocumentOptions = {
 }
 
 /**
- * Caller contract: Task 6 serializes active Y.Doc mutations around this call.
- * This function validates the durable sequence boundary first, then snapshots an
- * immutable projection payload from the supplied doc before any compatibility writes.
+ * Caller contract: Task 6 serializes active Y.Doc mutations and captures an
+ * immutable projection payload at the exact durable boundary before calling this.
  */
 export async function projectDocument(
   projectId: string,
-  doc: Y.Doc,
+  projection: CanvasProjection,
   targetSeq: number,
   {
     database = createDatabaseAdapter(),
@@ -63,14 +62,6 @@ export async function projectDocument(
         `Cannot project project ${projectId} beyond durable sequence ${durableSeq}`,
       )
     }
-
-    if (targetSeq !== durableSeq) {
-      throw new Error(
-        `Projection target sequence ${targetSeq} must equal durable sequence ${durableSeq} for project ${projectId}`,
-      )
-    }
-
-    const projection = captureProjectionPayload(doc)
 
     await tx.query(`DELETE FROM canvas_nodes WHERE projectId = $1::text`, [projectId])
     await tx.query(`DELETE FROM canvas_edges WHERE projectId = $1::text`, [projectId])
@@ -146,7 +137,7 @@ export async function projectDocument(
   })
 }
 
-function captureProjectionPayload(doc: Y.Doc) {
+export function captureProjectionPayload(doc: Y.Doc): CanvasProjection {
   return structuredClone(readCanvasProjection(doc))
 }
 

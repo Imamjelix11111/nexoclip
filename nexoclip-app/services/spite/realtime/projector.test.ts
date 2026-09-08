@@ -3,7 +3,7 @@ import test from 'node:test'
 import * as Y from 'yjs'
 
 import { createCanvasDocument, importLegacyCanvas, patchNode } from '../lib/realtime/document'
-import { projectDocument } from './projector'
+import { captureProjectionPayload, projectDocument } from './projector'
 import type { DatabaseAdapter, QueryResult } from './db'
 import type { Queryable } from './db'
 
@@ -117,17 +117,6 @@ function createProjectionDocument(): Y.Doc {
   return doc
 }
 
-function createProjectionTrapDocument(message: string): Y.Doc {
-  const doc = createProjectionDocument()
-  Object.defineProperty(doc, 'getMap', {
-    configurable: true,
-    value: () => {
-      throw new Error(message)
-    },
-  })
-  return doc
-}
-
 test('projectDocument rewrites compatibility tables, project metadata, and projected_seq in one transaction', async () => {
   const projectId = '550e8400-e29b-41d4-a716-446655440000'
   const doc = createProjectionDocument()
@@ -176,7 +165,7 @@ test('projectDocument rewrites compatibility tables, project metadata, and proje
     },
   ])
 
-  await projectDocument(projectId, doc, 9, { database })
+  await projectDocument(projectId, captureProjectionPayload(doc), 9, { database })
 
   assert.deepEqual(database.queryCalls, [])
   assert.deepEqual(database.txQueryCalls.map((call) => call.params), [
@@ -204,7 +193,7 @@ test('projectDocument rewrites compatibility tables, project metadata, and proje
   )
 })
 
-test('projectDocument no-ops for stale target sequences before deriving a projection payload', async () => {
+test('projectDocument no-ops for stale target sequences without rewriting projection tables', async () => {
   const projectId = '550e8400-e29b-41d4-a716-446655440000'
   const database = new ScriptedDatabaseAdapter([
     { includes: 'select pg_advisory_xact_lock' },
@@ -218,12 +207,9 @@ test('projectDocument no-ops for stale target sequences before deriving a projec
     },
   ])
 
-  await projectDocument(
-    projectId,
-    createProjectionTrapDocument('stale target should not derive projection'),
-    9,
-    { database },
-  )
+  await projectDocument(projectId, captureProjectionPayload(createProjectionDocument()), 9, {
+    database,
+  })
 
   assert.equal(database.txQueryCalls.length, 2)
   assert.equal(
@@ -234,7 +220,7 @@ test('projectDocument no-ops for stale target sequences before deriving a projec
   )
 })
 
-test('projectDocument rejects future target sequences before deriving a projection payload', async () => {
+test('projectDocument rejects future target sequences before compatibility writes', async () => {
   const projectId = '550e8400-e29b-41d4-a716-446655440000'
   const database = new ScriptedDatabaseAdapter([
     { includes: 'select pg_advisory_xact_lock' },
@@ -249,19 +235,16 @@ test('projectDocument rejects future target sequences before deriving a projecti
   ])
 
   await assert.rejects(
-    projectDocument(
-      projectId,
-      createProjectionTrapDocument('future target should not derive projection'),
-      10,
-      { database },
-    ),
+    projectDocument(projectId, captureProjectionPayload(createProjectionDocument()), 10, {
+      database,
+    }),
     /cannot project .* beyond durable sequence 9/i,
   )
 
   assert.equal(database.txQueryCalls.length, 2)
 })
 
-test('projectDocument rejects non-durable boundary targets before deriving a projection payload', async () => {
+test('projectDocument allows an exact older payload when durable_seq has already advanced', async () => {
   const projectId = '550e8400-e29b-41d4-a716-446655440000'
   const database = new ScriptedDatabaseAdapter([
     { includes: 'select pg_advisory_xact_lock' },
@@ -273,24 +256,26 @@ test('projectDocument rejects non-durable boundary targets before deriving a pro
         rowCount: 1,
       },
     },
+    { includes: 'delete from canvas_nodes where projectid = \\$1::text' },
+    { includes: 'delete from canvas_edges where projectid = \\$1::text' },
+    { includes: 'insert into canvas_nodes' },
+    { includes: 'insert into canvas_nodes' },
+    { includes: 'insert into canvas_edges' },
+    { includes: 'update projects set updatedat = now\(\), scenes = \\$2::jsonb, active_scene_id = \\$3 where id = \\$1' },
+    { includes: 'update canvas_yjs_documents set projected_seq = \\$2, updated_at = now\(\) where project_id = \\$1' },
   ])
 
-  await assert.rejects(
-    projectDocument(
-      projectId,
-      createProjectionTrapDocument('non-durable boundary target should not derive projection'),
-      8,
-      { database },
-    ),
-    /must equal durable sequence 9/i,
-  )
+  await projectDocument(projectId, captureProjectionPayload(createProjectionDocument()), 8, {
+    database,
+  })
 
-  assert.equal(database.txQueryCalls.length, 2)
+  assert.deepEqual(database.txQueryCalls.at(-1)?.params, [projectId, 8])
 })
 
-test('projectDocument captures projection only after lock and sequence boundary validation', async () => {
+test('captured projection payload does not drift while projection waits on the database', async () => {
   const projectId = '550e8400-e29b-41d4-a716-446655440000'
   const doc = createProjectionDocument()
+  const payload = captureProjectionPayload(doc)
   const txQueryCalls: QueryCall[] = []
   let releaseLock!: () => void
   let resolveLockRequested!: () => void
@@ -335,7 +320,7 @@ test('projectDocument captures projection only after lock and sequence boundary 
     async close(): Promise<void> {},
   }
 
-  const projectionPromise = projectDocument(projectId, doc, 9, { database })
+  const projectionPromise = projectDocument(projectId, payload, 8, { database })
   await lockRequested
 
   patchNode(doc, 'node-2', {
@@ -356,40 +341,36 @@ test('projectDocument captures projection only after lock and sequence boundary 
       projectId,
       'node-2',
       'image',
-      300,
-      400,
-      JSON.stringify({ label: 'Image v2', assetId: 'asset-2' }),
+      30,
+      40,
+      JSON.stringify({ label: 'Image', assetId: 'asset-1' }),
     ],
   )
 })
 
-test('projectDocument never mutates the input Y.Doc while projecting', async () => {
-  const projectId = '550e8400-e29b-41d4-a716-446655440000'
+test('captureProjectionPayload leaves the Y.Doc untouched and detached from later mutations', () => {
   const doc = createProjectionDocument()
   const before = Buffer.from(Y.encodeStateAsUpdate(doc))
-  const database = new ScriptedDatabaseAdapter([
-    { includes: 'select pg_advisory_xact_lock' },
+
+  const payload = captureProjectionPayload(doc)
+
+  const afterCapture = Buffer.from(Y.encodeStateAsUpdate(doc))
+  assert.deepEqual(afterCapture, before)
+
+  patchNode(doc, 'node-2', {
+    position: { x: 300, y: 400 },
+    data: { label: 'Image v2', assetId: 'asset-2' },
+  })
+
+  assert.deepEqual(
+    payload.nodes.find((node) => node.id === 'node-2'),
     {
-      includes:
-        'select durable_seq, projected_seq from canvas_yjs_documents where project_id = \\$1 for update',
-      result: {
-        rows: [{ durable_seq: 5, projected_seq: 1 }],
-        rowCount: 1,
-      },
+      id: 'node-2',
+      type: 'image',
+      position: { x: 30, y: 40 },
+      data: { label: 'Image', assetId: 'asset-1' },
     },
-    { includes: 'delete from canvas_nodes where projectid = \\$1::text' },
-    { includes: 'delete from canvas_edges where projectid = \\$1::text' },
-    { includes: 'insert into canvas_nodes' },
-    { includes: 'insert into canvas_nodes' },
-    { includes: 'insert into canvas_edges' },
-    { includes: 'update projects set updatedat = now\(\), scenes = \\$2::jsonb, active_scene_id = \\$3 where id = \\$1' },
-    { includes: 'update canvas_yjs_documents set projected_seq = \\$2, updated_at = now\(\) where project_id = \\$1' },
-  ])
-
-  await projectDocument(projectId, doc, 5, { database })
-
-  const after = Buffer.from(Y.encodeStateAsUpdate(doc))
-  assert.deepEqual(after, before)
+  )
 })
 
 test('projectDocument never advances projected_seq when compatibility projection fails', async () => {
@@ -417,7 +398,7 @@ test('projectDocument never advances projected_seq when compatibility projection
   ])
 
   await assert.rejects(
-    projectDocument(projectId, createProjectionDocument(), 9, { database }),
+    projectDocument(projectId, captureProjectionPayload(createProjectionDocument()), 9, { database }),
     /forced projection failure/,
   )
 
