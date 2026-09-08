@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
+import { resolve } from 'node:path'
 import test from 'node:test'
 
-import { applyRealtimeSchema } from '../../scripts/migrate-realtime.mjs'
+import { applyRealtimeSchema, isDirectExecution } from '../../scripts/migrate-realtime.mjs'
 
 type FakeClient = {
   query: (sql: string) => Promise<void>
@@ -12,6 +13,20 @@ type FakePool = {
   connect: () => Promise<FakeClient>
   end: () => Promise<void>
 }
+
+test('isDirectExecution treats relative CLI paths as direct execution', () => {
+  const moduleUrl = new URL('file:///tmp/spite/scripts/migrate-realtime.mjs')
+  const relativeArgv = 'scripts/migrate-realtime.mjs'
+
+  assert.equal(
+    isDirectExecution({
+      moduleUrl,
+      argv1: relativeArgv,
+      resolvePath: (value) => resolve('/tmp/spite', value),
+    }),
+    true,
+  )
+})
 
 test('applyRealtimeSchema wraps schema execution in explicit transaction and releases client', async () => {
   const calls: string[] = []

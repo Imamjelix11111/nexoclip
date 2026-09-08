@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { readFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Pool } from '@neondatabase/serverless'
 
@@ -49,9 +49,19 @@ async function main() {
   console.log('Realtime schema migration applied successfully.')
 }
 
-const isDirectExecution = process.argv[1] != null && fileURLToPath(import.meta.url) === process.argv[1]
+export function isDirectExecution({
+  moduleUrl = import.meta.url,
+  argv1 = process.argv[1],
+  resolvePath = resolve,
+} = {}) {
+  if (argv1 == null) {
+    return false
+  }
 
-if (isDirectExecution) {
+  return fileURLToPath(moduleUrl) === resolvePath(argv1)
+}
+
+if (isDirectExecution()) {
   main().catch((error) => {
     console.error('Realtime schema migration failed.')
     console.error(error instanceof Error ? error.stack || error.message : error)
