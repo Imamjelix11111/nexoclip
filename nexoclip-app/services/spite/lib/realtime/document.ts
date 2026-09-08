@@ -93,10 +93,7 @@ export function importLegacyCanvas(doc: Y.Doc, input: LegacyCanvasInput): void {
   const nodes = Array.isArray(input.nodes) ? input.nodes : []
   const edges = Array.isArray(input.edges) ? input.edges : []
   const scenes = sanitizeScenes(input.scenes)
-  const activeSceneId =
-    typeof input.activeSceneId === 'string' && input.activeSceneId
-      ? input.activeSceneId
-      : scenes[0]?.id || DEFAULT_SCENES[0].id
+  const activeSceneId = resolveActiveSceneId(scenes, input.activeSceneId)
 
   doc.transact(() => {
     const nodeMap = doc.getMap<Y.Map<unknown>>('nodes')
@@ -136,11 +133,7 @@ export function readCanvasProjection(doc: Y.Doc): CanvasProjection {
     .sort((a, b) => a.id.localeCompare(b.id))
 
   const scenes = sanitizeScenes(meta.get('scenes'))
-  const activeSceneIdRaw = meta.get('activeSceneId')
-  const activeSceneId =
-    typeof activeSceneIdRaw === 'string' && activeSceneIdRaw
-      ? activeSceneIdRaw
-      : scenes[0]?.id || DEFAULT_SCENES[0].id
+  const activeSceneId = resolveActiveSceneId(scenes, meta.get('activeSceneId'))
 
   return {
     nodes,
@@ -156,14 +149,11 @@ export function migrateCanvasDocument(doc: Y.Doc, fromVersion: number): boolean 
     doc.getMap('nodes')
     doc.getMap('edges')
     const meta = doc.getMap('meta')
+    const scenes = sanitizeScenes(meta.get('scenes'))
+
     meta.set('schemaVersion', CURRENT_SCHEMA_VERSION)
-    if (!Array.isArray(meta.get('scenes'))) {
-      meta.set('scenes', DEFAULT_SCENES)
-    }
-    const activeSceneId = meta.get('activeSceneId')
-    if (typeof activeSceneId !== 'string' || !activeSceneId) {
-      meta.set('activeSceneId', DEFAULT_SCENES[0].id)
-    }
+    meta.set('scenes', scenes)
+    meta.set('activeSceneId', resolveActiveSceneId(scenes, meta.get('activeSceneId')))
   }, 'migrate-canvas-document')
   return true
 }
@@ -233,7 +223,10 @@ export function deleteEdge(doc: Y.Doc, edgeId: string): void {
 
 export function setScenes(doc: Y.Doc, scenes: SceneInput[]): void {
   doc.transact(() => {
-    doc.getMap('meta').set('scenes', sanitizeScenes(scenes))
+    const meta = doc.getMap('meta')
+    const nextScenes = sanitizeScenes(scenes)
+    meta.set('scenes', nextScenes)
+    meta.set('activeSceneId', resolveActiveSceneId(nextScenes, meta.get('activeSceneId')))
   }, 'set-scenes')
 }
 
@@ -355,6 +348,13 @@ function sanitizeScenes(raw: unknown): SceneInput[] {
     .map((scene) => ({ id: scene.id, name: scene.name }))
 
   return scenes.length > 0 ? scenes : [...DEFAULT_SCENES]
+}
+
+function resolveActiveSceneId(scenes: SceneInput[], candidate: unknown): string {
+  if (typeof candidate === 'string' && scenes.some((scene) => scene.id === candidate)) {
+    return candidate
+  }
+  return scenes[0]?.id || DEFAULT_SCENES[0].id
 }
 
 function asNumber(value: unknown): number {

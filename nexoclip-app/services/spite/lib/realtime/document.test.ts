@@ -5,8 +5,10 @@ import * as Y from 'yjs'
 import {
   CURRENT_SCHEMA_VERSION,
   createCanvasDocument,
+  deleteEdge,
   deleteNode,
   importLegacyCanvas,
+  migrateCanvasDocument,
   parseProjectDocumentName,
   patchNode,
   readCanvasProjection,
@@ -68,6 +70,20 @@ test('upsert operations store nodes and edges as nested Y.Map with granular posi
   assert.equal((rawNode as Y.Map<unknown>).get('measured'), undefined)
 
   assert.equal((rawEdge as Y.Map<unknown>).get('selected'), undefined)
+})
+
+test('deleteEdge removes edge entry', () => {
+  const doc = createCanvasDocument()
+
+  upsertEdge(doc, {
+    id: 'edge-1',
+    source: 'node-1',
+    target: 'node-2',
+    data: { label: 'flow' },
+  })
+  deleteEdge(doc, 'edge-1')
+
+  assert.equal(doc.getMap('edges').get('edge-1'), undefined)
 })
 
 test('importLegacyCanvas round-trips to projection and keeps scene metadata', () => {
@@ -137,6 +153,52 @@ test('scene metadata commands update projection meta', () => {
     { id: 'scene-b', name: 'B' },
   ])
   assert.equal(projection.activeSceneId, 'scene-b')
+})
+
+test('setScenes keeps activeSceneId valid with deterministic fallback', () => {
+  const doc = createCanvasDocument()
+
+  setScenes(doc, [
+    { id: 'scene-a', name: 'A' },
+    { id: 'scene-b', name: 'B' },
+  ])
+  setActiveSceneId(doc, 'scene-b')
+
+  setScenes(doc, [
+    { id: 'scene-c', name: 'C' },
+    { id: 'scene-d', name: 'D' },
+  ])
+
+  const projection = readCanvasProjection(doc)
+  assert.deepEqual(projection.scenes, [
+    { id: 'scene-c', name: 'C' },
+    { id: 'scene-d', name: 'D' },
+  ])
+  assert.equal(projection.activeSceneId, 'scene-c')
+})
+
+test('migrateCanvasDocument normalizes schema and active scene fallback', () => {
+  const doc = new Y.Doc()
+  const meta = doc.getMap('meta')
+  meta.set('schemaVersion', 0)
+  meta.set('scenes', [{ id: 'scene-z', name: 'Z' }])
+  meta.set('activeSceneId', 'missing-scene')
+
+  const changed = migrateCanvasDocument(doc, 0)
+  assert.equal(changed, true)
+
+  const projection = readCanvasProjection(doc)
+  assert.equal(doc.getMap('meta').get('schemaVersion'), CURRENT_SCHEMA_VERSION)
+  assert.deepEqual(projection.scenes, [{ id: 'scene-z', name: 'Z' }])
+  assert.equal(projection.activeSceneId, 'scene-z')
+})
+
+test('migrateCanvasDocument is a no-op for current schema', () => {
+  const doc = createCanvasDocument()
+
+  const changed = migrateCanvasDocument(doc, CURRENT_SCHEMA_VERSION)
+
+  assert.equal(changed, false)
 })
 
 test('independent concurrent edits converge with both changes preserved', () => {
@@ -224,4 +286,5 @@ test('delete-versus-edit concurrent race converges across replicas', () => {
   const nodesB = readCanvasProjection(docB).nodes
 
   assert.deepEqual(nodesA, nodesB)
+  assert.deepEqual(nodesA, [])
 })
