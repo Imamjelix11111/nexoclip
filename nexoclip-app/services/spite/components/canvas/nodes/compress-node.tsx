@@ -7,11 +7,13 @@ import { ArrowsInSimple, Image as ImageIcon, CircleNotch, CheckCircle, UploadSim
 import { memo, useState, useEffect, useRef, useCallback } from 'react'
 import { NodeActionToolbar } from './node-toolbar'
 import { encodeScaled, autoFitUnderBytes, formatBytes, KLING_MAX_BYTES } from '@/lib/image-compress'
+import { useCanvasCollaboration } from '../canvas-collaboration'
 
 function CompressNodeImpl({ id, data, selected }: NodeProps) {
   const params = useParams()
   const projectId = (params?.id as string) || ''
-  const { setNodes, getNodes } = useReactFlow()
+  const { getNodes } = useReactFlow()
+  const { patchNodeData } = useCanvasCollaboration()
 
   // Resolve the upstream image whenever the edges change.
   const edges = useStore((s) => s.edges)
@@ -44,6 +46,13 @@ function CompressNodeImpl({ id, data, selected }: NodeProps) {
   const outputUrl = data.outputUrl as string | undefined
   const fileInputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    setScalePct((data.scalePct as number) || 100)
+    setQuality((data.quality as number) || 82)
+    setResultBytes((data.compressedBytes as number) || null)
+    setStatus(data.outputUrl ? 'saved' : 'idle')
+  }, [data.scalePct, data.quality, data.compressedBytes, data.outputUrl])
 
   // A stable id for the current source, so we can tell a genuinely NEW image
   // from a remount of the same one. This is what stops the node recompressing
@@ -120,16 +129,20 @@ function CompressNodeImpl({ id, data, selected }: NodeProps) {
       setStatus('saving')
       const proxyUrl = await uploadBlob(blob)
       if (!proxyUrl) { setStatus('error'); setErrorMsg('Save failed — adjust to retry.'); return }
-      setNodes((ns) => ns.map((n) => n.id === id ? {
-        ...n,
-        data: { ...n.data, outputUrl: proxyUrl, thumbnail: proxyUrl, scalePct: sUsed, quality: qUsed, compressedBytes: blob.size, sourceKey },
-      } : n))
+      patchNodeData(id, {
+        outputUrl: proxyUrl,
+        thumbnail: proxyUrl,
+        scalePct: sUsed,
+        quality: qUsed,
+        compressedBytes: blob.size,
+        sourceKey,
+      })
       setStatus('saved')
     } catch (err) {
       console.error('[compress] compress/save failed:', err)
       setStatus('error'); setErrorMsg('Compression failed.')
     }
-  }, [loadBitmap, uploadBlob, scalePct, quality, id, setNodes, sourceKey])
+  }, [id, loadBitmap, patchNodeData, quality, scalePct, sourceKey, uploadBlob])
 
   // Auto-fit to 10 MB the moment a NEW source connects — but never on a remount
   // of a source we've already compressed (sourceKey matches what's saved).

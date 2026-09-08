@@ -19,6 +19,7 @@ import { estimateGenerationCost, formatUSD, COST_CONFIRM_THRESHOLD_USD } from '@
 import { resolveNodeMediaUrl } from '@/lib/node-media'
 import { completeGenerationNode } from '@/lib/generation-node'
 import { ConnectedInputs } from '../connected-inputs'
+import { useCanvasCollaboration } from '../canvas-collaboration'
 
 const IMAGE_MODELS = getImageModels()
 
@@ -177,8 +178,13 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
   // status check can't reschedule itself or apply a late result.
   const stopRef = useRef(false)
   const resizeStartRef = useRef<{ x: number; width: number } | null>(null)
-  const { setNodes, getEdges, getNodes } = useReactFlow()
+  const { getEdges, getNodes } = useReactFlow()
+  const { allNodes, addEdges, addNodes, commands, createNextShot, patchNodeData, replaceShot } = useCanvasCollaboration()
   const updateNodeInternals = useUpdateNodeInternals()
+  const currentNodeData = useMemo(
+    () => ((allNodes.find((node) => node.id === id)?.data as Record<string, unknown>) || (data as Record<string, unknown>)),
+    [allNodes, data, id],
+  )
   
   // Check if there are any connected prompt nodes - compute fresh on each render
   // Accept edges that either have targetHandle='prompt-in' OR no targetHandle (for backward compatibility)
@@ -213,24 +219,28 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
       setIsResizing(false)
       resizeStartRef.current = null
       // Persist the width change
-      setNodes(ns => ns.map(n => n.id === id ? { 
-        ...n, 
-        data: { ...n.data, width: nodeWidth } 
-      } : n))
+      patchNodeData(id, { width: nodeWidth })
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
     }
     
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('mouseup', handleMouseUp)
-  }, [nodeWidth, id, setNodes])
+  }, [id, nodeWidth, patchNodeData])
 
-  // Sync outputUrl from data prop (for loaded canvases)
   useEffect(() => {
-    if (data.outputUrl && data.outputUrl !== outputUrl) {
-      setOutputUrl(withBasePath(data.outputUrl as string))
-    }
-  }, [data.outputUrl])
+    setPrompt((data.prompt as string) || '')
+    setMentions((data.mentions as Mention[]) || [])
+    setModelId((data.modelId as string) || 'nano-banana-pro')
+    setAspectRatio((data.aspectRatio as string) || '')
+    setResolution((data.resolution as string) || '')
+    setNumImages((data.numImages as number) || 1)
+    setStatus((data.status as GenerationStatus) || ((data.outputUrl as string | undefined) ? 'completed' : 'idle'))
+    setError((data.error as string) || null)
+    setSubmittedAt((data.submittedAt as number) || undefined)
+    setNodeWidth((data.width as number) || 320)
+    setOutputUrl(resolveNodeMediaUrl({ outputUrl: data.outputUrl }) || null)
+  }, [data.aspectRatio, data.error, data.mentions, data.modelId, data.numImages, data.outputUrl, data.prompt, data.resolution, data.status, data.submittedAt, data.width])
 
   // Recover a result when the provider/R2 request succeeded but the browser
   // lost the submit response before it could attach the URL to this node.
@@ -248,10 +258,9 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
         setOutputUrl(completedUrl)
         setStatus('completed')
         setRequestId(null)
-        setNodes(ns => ns.map(n => n.id === id ? {
-          ...n,
-          data: completeGenerationNode(n.data as Record<string, unknown>, completedUrl),
-        } : n))
+        commands.patchNode(id, {
+          data: completeGenerationNode(currentNodeData, completedUrl),
+        })
       })
       .catch(() => {})
     return () => { cancelled = true }
@@ -288,11 +297,9 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
   // Sync outputUrl TO node data when it changes (for connected nodes to read)
   useEffect(() => {
     if (outputUrl && outputUrl !== data.outputUrl) {
-      setNodes(nodes => nodes.map(n => 
-        n.id === id ? { ...n, data: { ...n.data, outputUrl } } : n
-      ))
+      patchNodeData(id, { outputUrl })
     }
-  }, [outputUrl, id, setNodes, data.outputUrl])
+  }, [data.outputUrl, id, outputUrl, patchNodeData])
 
   // Get current model config
   const currentModel = useMemo(() => getModelById(modelId), [modelId])
@@ -334,26 +341,13 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     // Storing undefined keeps the data object clean (no stray empty
     // strings ending up in exports/snapshots) and matches every other
     // code path that checks for shotId via truthiness.
-    setNodes(ns => ns.map(n => n.id === id ? {
-      ...n,
-      data: { ...n.data, shotId: shotId || undefined },
-    } : n))
+    patchNodeData(id, { shotId: shotId || undefined })
   }
 
   // Take a shot over exclusively: assign it here and unassign whatever other
   // node in the SAME scene currently holds it (shotId or legacy selectedShotId).
   const handleShotReplace = (shotId: string) => {
-    setNodes(ns => {
-      const self = ns.find(n => n.id === id)
-      const sceneId = (self?.data as any)?.sceneId as string | undefined
-      return ns.map(n => {
-        if (n.id === id) return { ...n, data: { ...n.data, shotId, selectedShotId: undefined } }
-        if (sceneId && (n.data as any)?.sceneId !== sceneId) return n
-        const sid = ((n.data as any)?.shotId || (n.data as any)?.selectedShotId) as string | undefined
-        if (sid === shotId) return { ...n, data: { ...n.data, shotId: undefined, selectedShotId: undefined } }
-        return n
-      })
-    })
+    replaceShot(id, shotId)
   }
 
   const handleNewShot = () => {
@@ -361,27 +355,13 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     // scene — so shots monotonically increase (shot 99 → New Shot creates
     // shot 100). Gaps between numbers are intentional and shown as empty
     // placeholders in the timeline.
-    setNodes(ns => {
-      const self = ns.find(n => n.id === id)
-      const sceneId = self?.data?.sceneId
-      let maxNum = 0
-      for (const n of ns) {
-        if (sceneId && n.data?.sceneId !== sceneId) continue
-        const m = String(n.data?.shotId || '').match(/^shot-(\d+)$/)
-        if (m) maxNum = Math.max(maxNum, parseInt(m[1]))
-      }
-      const next = maxNum + 1
-      return ns.map(n => n.id === id ? { ...n, data: { ...n.data, shotId: `shot-${next}` } } : n)
-    })
+    createNextShot(id)
   }
 
   // Persist state changes to node data
   useEffect(() => {
-    setNodes(ns => ns.map(n => n.id === id ? {
-      ...n,
-      data: { ...n.data, prompt, modelId, aspectRatio, resolution, numImages, outputUrl, mentions, status, error, submittedAt }
-    } : n))
-  }, [prompt, modelId, aspectRatio, resolution, numImages, outputUrl, mentions, status, error, submittedAt, id, setNodes])
+    patchNodeData(id, { prompt, modelId, aspectRatio, resolution, numImages, outputUrl, mentions, status, error, submittedAt })
+  }, [aspectRatio, error, id, mentions, modelId, numImages, outputUrl, patchNodeData, prompt, resolution, status, submittedAt])
 
   // Auto-name: once a generation completes, replace the default
   // "Image Generator #N" label with the first few words of the prompt.
@@ -392,8 +372,8 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     if (current && !DEFAULT_IMAGE_LABEL.test(current)) return
     const derived = labelFromPrompt(prompt)
     if (!derived || derived === current) return
-    setNodes(ns => ns.map(n => n.id === id ? { ...n, data: { ...n.data, label: derived } } : n))
-  }, [outputUrl, prompt, data.label, id, setNodes])
+    patchNodeData(id, { label: derived })
+  }, [data.label, id, outputUrl, patchNodeData, prompt])
 
   const handleRename = () => {
     setLabelDraft((data.label as string) || '')
@@ -403,18 +383,21 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     const next = labelDraft.trim()
     setIsRenaming(false)
     if (!next) return
-    setNodes(ns => ns.map(n => n.id === id ? { ...n, data: { ...n.data, label: next } } : n))
+    patchNodeData(id, { label: next })
   }
 
   // Drop the persisted in-flight job marker once a generation resolves
   // (success / failure / cancel) so a future refresh doesn't try to
   // resume a completed job.
   const clearPending = useCallback(() => {
-    setNodes(ns => ns.map(n => n.id === id ? {
-      ...n,
-      data: { ...n.data, pendingRequestId: undefined, pendingProvider: undefined, pendingProviderModel: undefined, pendingFalEndpoint: undefined, pendingStartedAt: undefined },
-    } : n))
-  }, [id, setNodes])
+    patchNodeData(id, {
+      pendingRequestId: undefined,
+      pendingProvider: undefined,
+      pendingProviderModel: undefined,
+      pendingFalEndpoint: undefined,
+      pendingStartedAt: undefined,
+    })
+  }, [id, patchNodeData])
 
   // Poll for status
   const pollStatus = useCallback(async (reqId: string, providerId: string) => {
@@ -452,10 +435,9 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
           setOutputUrl(completedUrl)
           setStatus('completed')
           setRequestId(null)
-          setNodes(ns => ns.map(n => n.id === id ? {
-            ...n,
-            data: completeGenerationNode(n.data as Record<string, unknown>, completedUrl),
-          } : n))
+          commands.patchNode(id, {
+            data: completeGenerationNode(currentNodeData, completedUrl),
+          })
           clearPending()
           // For batch generations, drop the extra results as duplicate nodes
           // laid out in a neat grid next to this one.
@@ -481,15 +463,14 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
                 data: { ...restData, outputUrl: withBasePath(url), width: w },
               }
             })
-            setNodes(ns => [...ns, ...(newNodes as any)])
-            // Mirror this node's incoming connections onto each duplicate
-            // (routed through the canvas, which owns the edge state).
+            addNodes(newNodes as any)
+            // Mirror this node's incoming connections onto each duplicate.
             const incoming = getEdges().filter(e => e.target === id)
             if (incoming.length) {
               const newEdges = newNodes.flatMap((nn, ni) =>
-                incoming.map((e, ei) => ({ ...e, id: `${nn.id}-e${ei}-${stamp}-${ni}`, target: nn.id }))
+                incoming.map((e, ei) => ({ ...e, id: `${nn.id}-e${ei}-${stamp}-${ni}`, target: nn.id, data: { ...(e.data as Record<string, unknown> | undefined) } }))
               )
-              window.dispatchEvent(new CustomEvent('frame-add-edges', { detail: { edges: newEdges } }))
+              addEdges(newEdges as any)
             }
           }
         } else {
@@ -598,10 +579,9 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
         setStatus('completed')
         setRequestId(null)
         setProgress(undefined)
-        setNodes(ns => ns.map(n => n.id === id ? {
-          ...n,
-          data: completeGenerationNode(n.data as Record<string, unknown>, completedUrl),
-        } : n))
+        commands.patchNode(id, {
+          data: completeGenerationNode(currentNodeData, completedUrl),
+        })
         clearPending()
         toast.success('Result is ready — saved to your library.', { id: toastId })
         return
@@ -866,10 +846,9 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
         const completedUrl = withBasePath(completed[0].output.url)
         setOutputUrl(completedUrl)
         setStatus('completed')
-        setNodes(ns => ns.map(n => n.id === id ? {
-          ...n,
-          data: completeGenerationNode(n.data as Record<string, unknown>, completedUrl),
-        } : n))
+        commands.patchNode(id, {
+          data: completeGenerationNode(currentNodeData, completedUrl),
+        })
         clearPending()
       }
       const firstEndpoint = ok[0].model || currentModel.providerModel
@@ -879,16 +858,12 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
       if (!completed.length) setStatus('in_queue')
       startTimeRef.current = startedAt
 
-      setNodes(ns => ns.map(n => n.id === id ? {
-        ...n,
-        data: {
-          ...n.data,
-          pendingRequestId: completed.length ? undefined : ok[0].request_id,
-          pendingProvider: completed.length ? undefined : (ok[0].provider || currentModel.provider),
-          pendingProviderModel: firstEndpoint,
-          pendingStartedAt: startedAt,
-        },
-      } : n))
+      patchNodeData(id, {
+        pendingRequestId: completed.length ? undefined : ok[0].request_id,
+        pendingProvider: completed.length ? undefined : (ok[0].provider || currentModel.provider),
+        pendingProviderModel: firstEndpoint,
+        pendingStartedAt: startedAt,
+      })
 
       // Extra jobs spawn duplicate image nodes in a 3-column grid that each
       // poll their own request and fill in when done.
@@ -929,14 +904,14 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
             },
           }
         })
-        setNodes(ns => [...ns, ...(newNodes as any)])
+        addNodes(newNodes as any)
         // Mirror this node's incoming connections onto the duplicates.
         const incoming = getEdges().filter(e => e.target === id)
         if (incoming.length) {
           const newEdges = newNodes.flatMap((nn, ni) =>
-            incoming.map((e, ei) => ({ ...e, id: `${nn.id}-e${ei}-${stamp}-${ni}`, target: nn.id }))
+            incoming.map((e, ei) => ({ ...e, id: `${nn.id}-e${ei}-${stamp}-${ni}`, target: nn.id, data: { ...(e.data as Record<string, unknown> | undefined) } }))
           )
-          window.dispatchEvent(new CustomEvent('frame-add-edges', { detail: { edges: newEdges } }))
+          addEdges(newEdges as any)
         }
       }
     } catch (err: any) {

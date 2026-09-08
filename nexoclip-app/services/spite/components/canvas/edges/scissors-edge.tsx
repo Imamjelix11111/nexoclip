@@ -3,11 +3,11 @@
 import { useState, useMemo } from 'react'
 import {
   EdgeLabelRenderer,
-  useReactFlow,
   Position,
   type EdgeProps,
 } from '@xyflow/react'
 import { Scissors } from '@phosphor-icons/react'
+import { useCanvasCollaboration } from '../canvas-collaboration'
 
 // ---------------------------------------------------------------------------
 // Braided "cord" edge — the landing-page manifesto connectors, in the canvas.
@@ -156,7 +156,7 @@ export function ScissorsEdge({
   data,
 }: EdgeProps) {
   const [hovered, setHovered] = useState(false)
-  const { setEdges } = useReactFlow()
+  const { commands } = useCanvasCollaboration()
 
   const d = data as
     | { active?: boolean; empty?: boolean; animMode?: 'auto' | 'on' | 'off'; activeCount?: number; edgeCount?: number }
@@ -228,7 +228,7 @@ export function ScissorsEdge({
 
   const handleCut = (e: React.MouseEvent) => {
     e.stopPropagation()
-    setEdges((edges) => edges.filter((edge) => edge.id !== id))
+    commands.deleteEdge(id)
   }
 
   return (

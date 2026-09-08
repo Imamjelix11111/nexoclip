@@ -42,6 +42,7 @@ type NodePatch = Partial<Omit<NodeInput, 'id'>>
 type RawBindingMutations = {
   createNode: (node: NodeInput) => void
   patchNode: (nodeId: string, patch: NodePatch) => void
+  patchNodeData: (nodeId: string, patch: JsonRecord) => void
   deleteNode: (nodeId: string) => void
   createEdge: (edge: EdgeInput) => void
   deleteEdge: (edgeId: string) => void
@@ -53,6 +54,8 @@ type RawBindingMutations = {
 export type RealtimeCanvasBindingSnapshot = {
   nodes: CanvasNodeProjection[]
   edges: CanvasEdgeProjection[]
+  allNodes: CanvasNodeProjection[]
+  allEdges: CanvasEdgeProjection[]
   scenes: CanvasScene[]
   activeSceneId: string
 }
@@ -110,6 +113,11 @@ export function createReactFlowBinding(
     patchNode(nodeId, patch) {
       if (!nodeId) return
       patchNodeRecord(doc, nodeId, patch)
+    },
+
+    patchNodeData(nodeId, patch) {
+      if (!nodeId) return
+      patchNodeDataRecord(doc, nodeId, patch)
     },
 
     deleteNode(nodeId) {
@@ -253,6 +261,12 @@ export function createReactFlowBinding(
       })
     },
 
+    patchNodeData(nodeId, patch) {
+      runLocalTransaction(doc, () => {
+        rawMutations.patchNodeData(nodeId, patch)
+      })
+    },
+
     deleteNode(nodeId) {
       runLocalTransaction(doc, () => {
         rawMutations.deleteNode(nodeId)
@@ -379,15 +393,19 @@ export function createReactFlowBinding(
 function deriveSnapshot(doc: Y.Doc): RealtimeCanvasBindingSnapshot {
   const projection = readCanvasProjection(doc)
   const activeSceneId = projection.activeSceneId
-  const nodes = projection.nodes.filter((node) => readNodeSceneId(node) === activeSceneId)
+  const allNodes = projection.nodes.map((node) => ({ ...node, data: { ...ensureRecord(node.data) } }))
+  const allEdges = projection.edges.map((edge) => ({ ...edge, data: { ...ensureRecord(edge.data) } }))
+  const nodes = allNodes.filter((node) => readNodeSceneId(node) === activeSceneId)
   const visibleNodeIds = new Set(nodes.map((node) => node.id))
-  const edges = projection.edges.filter(
+  const edges = allEdges.filter(
     (edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target),
   )
 
   return {
     nodes,
     edges,
+    allNodes,
+    allEdges,
     scenes: projection.scenes.map((scene) => ({ ...scene })),
     activeSceneId,
   }
@@ -434,6 +452,19 @@ function patchNodeRecord(doc: Y.Doc, nodeId: string, patch: NodePatch): void {
     }
     setOrDelete(existing, key, value)
   }
+}
+
+function patchNodeDataRecord(doc: Y.Doc, nodeId: string, patch: JsonRecord): void {
+  const nodes = doc.getMap<Y.Map<unknown>>('nodes')
+  const existing = nodes.get(nodeId)
+  if (!(existing instanceof Y.Map)) return
+
+  const nextData = ensureRecord(existing.get('data'))
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) delete nextData[key]
+    else nextData[key] = value
+  }
+  existing.set('data', nextData)
 }
 
 function deleteNodeRecord(doc: Y.Doc, nodeId: string): void {

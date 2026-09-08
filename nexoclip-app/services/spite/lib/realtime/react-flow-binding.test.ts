@@ -190,6 +190,132 @@ test('binding writes local React Flow changes into Yjs while retaining hidden-sc
   binding.destroy()
 })
 
+test('binding supports every durable canvas mutation category on the authoritative Yjs document', () => {
+  const doc = createCanvasDocument()
+  setScenes(doc, [
+    { id: 'scene-1', name: 'Scene 1' },
+    { id: 'scene-2', name: 'Scene 2' },
+  ])
+  setActiveSceneId(doc, 'scene-1')
+
+  upsertNode(doc, {
+    id: 'source',
+    type: 'imageGen',
+    position: { x: 10, y: 20 },
+    data: { sceneId: 'scene-1', label: 'Source', shotId: 'shot-1' },
+  })
+  upsertNode(doc, {
+    id: 'target',
+    type: 'videoGen',
+    position: { x: 200, y: 120 },
+    data: { sceneId: 'scene-1', label: 'Target' },
+  })
+  upsertNode(doc, {
+    id: 'hidden',
+    type: 'reference',
+    position: { x: 20, y: 30 },
+    data: { sceneId: 'scene-2', label: 'Hidden', shotId: 'shot-2' },
+  })
+
+  const binding = createReactFlowBinding(doc, {
+    createId: (() => {
+      let i = 0
+      return () => `generated-${++i}`
+    })(),
+    duplicateOffset: { x: 40, y: 40 },
+  })
+
+  const initial = binding.getSnapshot()
+  assert.deepEqual(initial.nodes.map((node) => node.id).sort(), ['source', 'target'])
+  assert.deepEqual(initial.allNodes.map((node) => node.id).sort(), ['hidden', 'source', 'target'])
+  assert.deepEqual(initial.allEdges, [])
+
+  binding.applyNodeChanges([
+    { type: 'position', id: 'source', position: { x: 70, y: 90 }, dragging: true },
+    { type: 'dimensions', id: 'source', dimensions: { width: 480, height: 320 }, setAttributes: true },
+  ] as any)
+  binding.createNode({
+    id: 'comment-1',
+    type: 'comment',
+    position: { x: 400, y: 240 },
+    data: { sceneId: 'scene-1', text: 'hello' },
+  })
+  const connectedEdgeId = binding.connect({
+    source: 'source',
+    sourceHandle: 'image-out',
+    target: 'target',
+    targetHandle: 'image-in',
+  })
+  assert.equal(typeof connectedEdgeId, 'string')
+
+  binding.patchNodeData('source', {
+    outputUrl: '/image.png',
+    status: 'completed',
+  })
+
+  binding.batch(({ patchNodeData, createNode, createEdge, deleteEdge }) => {
+    patchNodeData('target', { shotId: 'shot-3' })
+    patchNodeData('source', { shotId: 'shot-3', selectedShotId: undefined })
+    createNode({
+      id: 'clipboard-copy',
+      type: 'comment',
+      position: { x: 440, y: 280 },
+      data: { sceneId: 'scene-1', text: 'pasted' },
+    })
+    createEdge({
+      id: 'clipboard-edge',
+      source: 'clipboard-copy',
+      target: 'target',
+      sourceHandle: 'prompt-out',
+      targetHandle: 'prompt-in',
+      data: {},
+    })
+    if (connectedEdgeId) {
+      deleteEdge(connectedEdgeId)
+    }
+  })
+
+  const duplicateIds = binding.duplicateNodes(['source', 'target'])
+  assert.equal(duplicateIds.length, 2)
+
+  binding.createEdge({
+    id: 'cut-me',
+    source: 'source',
+    target: 'comment-1',
+    sourceHandle: 'image-out',
+    targetHandle: 'image-in',
+    data: {},
+  })
+  binding.deleteEdge('cut-me')
+  binding.deleteNode('comment-1')
+  binding.deleteScene('scene-2')
+
+  const projection = readCanvasProjection(doc)
+  assert.deepEqual(projection.scenes.map((scene) => scene.id), ['scene-1'])
+  assert.equal(projection.nodes.some((node) => node.id === 'hidden'), false)
+  assert.equal(findNode(projection, 'source').position.x, 70)
+  assert.equal(findNode(projection, 'source').position.y, 90)
+  assert.equal(findNode(projection, 'source').width, 480)
+  assert.equal(findNode(projection, 'source').height, 320)
+  assert.equal(findNode(projection, 'source').data.outputUrl, '/image.png')
+  assert.equal(findNode(projection, 'source').data.status, 'completed')
+  assert.equal(findNode(projection, 'source').data.shotId, 'shot-3')
+  assert.equal(findNode(projection, 'target').data.shotId, 'shot-3')
+  assert.equal(projection.nodes.some((node) => node.id === 'clipboard-copy'), true)
+  assert.equal(projection.nodes.some((node) => node.id === 'comment-1'), false)
+  assert.equal(projection.edges.some((edge) => edge.id === 'clipboard-edge'), true)
+  assert.equal(projection.edges.some((edge) => edge.id === 'cut-me'), false)
+  assert.equal(projection.edges.some((edge) => edge.id === connectedEdgeId), false)
+
+  const latest = binding.getSnapshot()
+  assert.deepEqual(latest.nodes.map((node) => node.id).sort(), ['clipboard-copy', ...duplicateIds, 'source', 'target'].sort())
+  assert.equal(latest.edges.some((edge) => edge.id === 'clipboard-edge'), true)
+  assert.equal(latest.allNodes.some((node) => node.id === 'hidden'), false)
+  assert.equal(latest.allEdges.some((edge) => edge.id === 'cut-me'), false)
+
+  binding.destroy()
+})
+
 test('binding observers publish remote updates without writing them back', () => {
   const doc = createCanvasDocument()
   const binding = createReactFlowBinding(doc)

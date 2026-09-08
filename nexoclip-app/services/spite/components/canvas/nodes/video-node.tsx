@@ -20,6 +20,7 @@ import { resolveNodeMediaUrl } from '@/lib/node-media'
 import { completeGenerationNode } from '@/lib/generation-node'
 import { ConnectedInputs } from '../connected-inputs'
 import { captureVideoThumbnail } from '@/lib/video-thumbnail'
+import { useCanvasCollaboration } from '../canvas-collaboration'
 
 const VIDEO_MODELS = getVideoModels()
 
@@ -188,8 +189,13 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
   // Set true to immediately stop polling (cancel / unmount).
   const stopRef = useRef(false)
-  const { setNodes, getEdges, getNodes } = useReactFlow()
+  const { getEdges, getNodes } = useReactFlow()
+  const { allNodes, addEdges, addNodes, commands, createNextShot, patchNodeData, replaceShot } = useCanvasCollaboration()
   const updateNodeInternals = useUpdateNodeInternals()
+  const currentNodeData = useMemo(
+    () => ((allNodes.find((node) => node.id === id)?.data as Record<string, unknown>) || (data as Record<string, unknown>)),
+    [allNodes, data, id],
+  )
   
   // Check connection states fresh on each render
   let hasConnectedPrompts = false
@@ -234,6 +240,25 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     currentModel?.category,
   ])
 
+  useEffect(() => {
+    setPrompt((data.prompt as string) || '')
+    setUpscaleMode((data.upscaleMode as 'standard' | 'creative') || 'standard')
+    setColormap((data.colormap as string) || 'grayscale')
+    setMentions((data.mentions as Mention[]) || [])
+    setModelId((data.modelId as string) || 'seedance-1.5')
+    setDuration((data.duration as string) || '')
+    setAspectRatio((data.aspectRatio as string) || '')
+    setResolution((data.resolution as string) || '')
+    setEnableAudio((data.enableAudio as boolean) || false)
+    setEnableLoop((data.enableLoop as boolean) || false)
+    setVoiceIds((data.voiceIds as string) || '')
+    setNumVideos((data.numVideos as number) || 1)
+    setStatus((data.status as GenerationStatus) || ((data.outputUrl as string | undefined) ? 'completed' : 'idle'))
+    setError((data.error as string) || null)
+    setSubmittedAt((data.submittedAt as number) || undefined)
+    setOutputUrl(resolveNodeMediaUrl({ outputUrl: data.outputUrl }) || null)
+  }, [data.aspectRatio, data.colormap, data.duration, data.enableAudio, data.enableLoop, data.error, data.mentions, data.modelId, data.numVideos, data.outputUrl, data.prompt, data.resolution, data.status, data.submittedAt, data.upscaleMode, data.voiceIds])
+
   // Kling v3 references ride the image-to-video endpoint, which requires a
   // first frame. Block generation (with a clear message) when refs are
   // connected but no first frame, so the user gets a helpful error not a
@@ -269,26 +294,13 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
 
   const handleShotSelect = (shotId: string) => {
     // Empty string from the selector means "unassign from this shot".
-    setNodes(ns => ns.map(n => n.id === id ? {
-      ...n,
-      data: { ...n.data, shotId: shotId || undefined },
-    } : n))
+    patchNodeData(id, { shotId: shotId || undefined })
   }
 
   // Take a shot over exclusively: assign it here and unassign whatever other
   // node in the SAME scene currently holds it (shotId or legacy selectedShotId).
   const handleShotReplace = (shotId: string) => {
-    setNodes(ns => {
-      const self = ns.find(n => n.id === id)
-      const sceneId = (self?.data as any)?.sceneId as string | undefined
-      return ns.map(n => {
-        if (n.id === id) return { ...n, data: { ...n.data, shotId, selectedShotId: undefined } }
-        if (sceneId && (n.data as any)?.sceneId !== sceneId) return n
-        const sid = ((n.data as any)?.shotId || (n.data as any)?.selectedShotId) as string | undefined
-        if (sid === shotId) return { ...n, data: { ...n.data, shotId: undefined, selectedShotId: undefined } }
-        return n
-      })
-    })
+    replaceShot(id, shotId)
   }
 
   const handleNewShot = () => {
@@ -296,27 +308,13 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     // scene — so shots monotonically increase (shot 99 → New Shot creates
     // shot 100). Gaps between numbers are intentional and shown as empty
     // placeholders in the timeline.
-    setNodes(ns => {
-      const self = ns.find(n => n.id === id)
-      const sceneId = self?.data?.sceneId
-      let maxNum = 0
-      for (const n of ns) {
-        if (sceneId && n.data?.sceneId !== sceneId) continue
-        const m = String(n.data?.shotId || '').match(/^shot-(\d+)$/)
-        if (m) maxNum = Math.max(maxNum, parseInt(m[1]))
-      }
-      const next = maxNum + 1
-      return ns.map(n => n.id === id ? { ...n, data: { ...n.data, shotId: `shot-${next}` } } : n)
-    })
+    createNextShot(id)
   }
 
   // Persist state changes to node data
   useEffect(() => {
-    setNodes(ns => ns.map(n => n.id === id ? {
-      ...n,
-      data: { ...n.data, prompt, modelId, duration, aspectRatio, resolution, enableAudio, enableLoop, numVideos, outputUrl, mentions, upscaleMode, colormap, voiceIds, status, error, submittedAt }
-    } : n))
-  }, [prompt, modelId, duration, aspectRatio, resolution, enableAudio, enableLoop, numVideos, outputUrl, mentions, upscaleMode, colormap, voiceIds, status, error, submittedAt, id, setNodes])
+    patchNodeData(id, { prompt, modelId, duration, aspectRatio, resolution, enableAudio, enableLoop, numVideos, outputUrl, mentions, upscaleMode, colormap, voiceIds, status, error, submittedAt })
+  }, [aspectRatio, colormap, duration, enableAudio, enableLoop, error, id, mentions, modelId, numVideos, outputUrl, patchNodeData, prompt, resolution, status, submittedAt, upscaleMode, voiceIds])
 
   // Auto-name: once a generation completes, replace the default
   // "Video Generator #N" label with the first few words of the prompt.
@@ -327,8 +325,8 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     if (current && !DEFAULT_VIDEO_LABEL.test(current)) return
     const derived = labelFromPrompt(prompt)
     if (!derived || derived === current) return
-    setNodes(ns => ns.map(n => n.id === id ? { ...n, data: { ...n.data, label: derived } } : n))
-  }, [outputUrl, prompt, data.label, id, setNodes])
+    patchNodeData(id, { label: derived })
+  }, [data.label, id, outputUrl, patchNodeData, prompt])
 
   const handleRename = () => {
     setLabelDraft((data.label as string) || '')
@@ -338,7 +336,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     const next = labelDraft.trim()
     setIsRenaming(false)
     if (!next) return
-    setNodes(ns => ns.map(n => n.id === id ? { ...n, data: { ...n.data, label: next } } : n))
+    patchNodeData(id, { label: next })
   }
 
   // Capture a freeze-frame from the rendered video so the scene-shot bar
@@ -351,13 +349,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     let cancelled = false
     captureVideoThumbnail(outputUrl).then(thumb => {
       if (cancelled || !thumb) return
-      setNodes(ns => ns.map(n => n.id === id ? {
-        ...n,
-        data: { ...n.data, videoThumbnail: thumb, videoThumbnailFor: outputUrl }
-      } : n))
+      patchNodeData(id, { videoThumbnail: thumb, videoThumbnailFor: outputUrl })
     })
     return () => { cancelled = true }
-  }, [outputUrl, data.videoThumbnail, data.videoThumbnailFor, id, setNodes])
+  }, [data.videoThumbnail, data.videoThumbnailFor, id, outputUrl, patchNodeData])
 
   // Resume polling on mount when this node has an in-flight job recorded —
   // either because it was spawned for a batch generation, or because the
@@ -382,11 +377,14 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
 
   // Clear the persisted in-flight job marker when the generation resolves.
   const clearPending = useCallback(() => {
-    setNodes(ns => ns.map(n => n.id === id ? {
-      ...n,
-      data: { ...n.data, pendingRequestId: undefined, pendingProvider: undefined, pendingProviderModel: undefined, pendingFalEndpoint: undefined, pendingStartedAt: undefined },
-    } : n))
-  }, [id, setNodes])
+    patchNodeData(id, {
+      pendingRequestId: undefined,
+      pendingProvider: undefined,
+      pendingProviderModel: undefined,
+      pendingFalEndpoint: undefined,
+      pendingStartedAt: undefined,
+    })
+  }, [id, patchNodeData])
 
   // 10-minute soft timeout. Stops polling and marks the node failed, but
   // does NOT clear pendingRequestId — the user can click "Re-check
@@ -432,10 +430,9 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           setOutputUrl(completedUrl)
           setStatus('completed')
           setRequestId(null)
-          setNodes(ns => ns.map(n => n.id === id ? {
-            ...n,
-            data: completeGenerationNode(n.data as Record<string, unknown>, completedUrl),
-          } : n))
+          commands.patchNode(id, {
+            data: completeGenerationNode(currentNodeData, completedUrl),
+          })
           clearPending()
         } else {
           setStatus('failed')
@@ -546,10 +543,9 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
         setStatus('completed')
         setRequestId(null)
         setProgress(undefined)
-        setNodes(ns => ns.map(n => n.id === id ? {
-          ...n,
-          data: completeGenerationNode(n.data as Record<string, unknown>, completedUrl),
-        } : n))
+        commands.patchNode(id, {
+          data: completeGenerationNode(currentNodeData, completedUrl),
+        })
         clearPending()
         toast.success('Result is ready — saved to your library.', { id: toastId })
         return
@@ -882,16 +878,12 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
 
       // Persist the in-flight job onto the node so polling can resume
       // after a page refresh. Cleared when the generation resolves.
-      setNodes(ns => ns.map(n => n.id === id ? {
-        ...n,
-        data: {
-          ...n.data,
-          pendingRequestId: ok[0].request_id,
-          pendingProvider: ok[0].provider || currentModel.provider,
-          pendingProviderModel: firstEndpoint,
-          pendingStartedAt: startedAt,
-        },
-      } : n))
+      patchNodeData(id, {
+        pendingRequestId: ok[0].request_id,
+        pendingProvider: ok[0].provider || currentModel.provider,
+        pendingProviderModel: firstEndpoint,
+        pendingStartedAt: startedAt,
+      })
 
       // Extra jobs become duplicate video nodes (in a grid) that each poll
       // their own request and fill in when done.
@@ -927,15 +919,14 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
             },
           }
         })
-        setNodes(ns => [...ns, ...(newNodes as any)])
-        // Mirror this node's incoming connections onto each duplicate
-        // (routed through the canvas, which owns the edge state).
+        addNodes(newNodes as any)
+        // Mirror this node's incoming connections onto each duplicate.
         const incoming = getEdges().filter(e => e.target === id)
         if (incoming.length) {
           const newEdges = newNodes.flatMap((nn, ni) =>
-            incoming.map((e, ei) => ({ ...e, id: `${nn.id}-e${ei}-${stamp}-${ni}`, target: nn.id }))
+            incoming.map((e, ei) => ({ ...e, id: `${nn.id}-e${ei}-${stamp}-${ni}`, target: nn.id, data: { ...(e.data as Record<string, unknown> | undefined) } }))
           )
-          window.dispatchEvent(new CustomEvent('frame-add-edges', { detail: { edges: newEdges } }))
+          addEdges(newEdges as any)
         }
       }
     } catch (err: any) {
