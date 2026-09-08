@@ -18,6 +18,9 @@ type AwarenessLike = {
   on?: (event: 'change' | 'update', listener: () => void) => void
   off?: (event: 'change' | 'update', listener: () => void) => void
   getStates: () => Map<number, Record<string, unknown>>
+  getLocalState?: () => Record<string, unknown> | null
+  setLocalState?: (state: Record<string, unknown> | null) => void
+  setLocalStateField?: (field: string, value: unknown) => void
   destroy?: () => void
 }
 
@@ -69,6 +72,7 @@ export type RealtimeCanvasCommands = Pick<
 >
 
 export type UseRealtimeCanvasResult = RealtimeCanvasRoomSnapshot & {
+  awareness: AwarenessLike | null
   commands: RealtimeCanvasCommands
   undo: () => void
   redo: () => void
@@ -103,6 +107,7 @@ const EMPTY_RESULT: UseRealtimeCanvasResult = {
   activeSceneId: 'scene-1',
   peers: [],
   persistenceStatus: 'SYNCED',
+  awareness: null,
   commands: EMPTY_COMMANDS,
   undo: () => {},
   redo: () => {},
@@ -143,6 +148,7 @@ export function useRealtimeCanvas(
 
   return {
     ...snapshot,
+    awareness: room.provider.awareness,
     commands: room.commands,
     undo: room.undo,
     redo: room.redo,

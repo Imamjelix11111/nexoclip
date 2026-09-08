@@ -30,6 +30,12 @@ import {
 } from '@/lib/connector-animation'
 import '@xyflow/react/dist/style.css'
 import { useCanvasAutoSave } from '@/hooks/use-canvas-auto-save'
+import { useRealtimeCanvas } from '@/hooks/use-realtime-canvas'
+import {
+  createPresenceController,
+  getOrCreateParticipantHint,
+  projectRemotePresence,
+} from '@/lib/realtime/presence'
 import { CanvasToolbar } from './canvas-toolbar'
 import { nodeHasNoMedia } from '@/lib/node-media'
 import { OnboardingTour } from '@/components/onboarding/use-onboarding-tour'
@@ -47,6 +53,7 @@ import { ReferenceNode } from './nodes/reference-node'
 import { CommentNode } from './nodes/comment-node'
 import { StickerNode, getLastSticker } from './nodes/sticker-node'
 import { CompressNode } from './nodes/compress-node'
+import { RealtimePresenceOverlay } from './realtime-presence'
 
 const NODE_TYPES: NodeTypes = {
   imageGen: ImageNode,
@@ -259,10 +266,27 @@ function StickerGhost({ containerRef }: { containerRef: React.RefObject<HTMLDivE
   )
 }
 
+function isTextEditingTarget(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null
+  if (!el || !el.tagName) return false
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return true
+  if (el.isContentEditable) return true
+  if (el.closest?.('[contenteditable="true"]')) return true
+  return false
+}
+
+function findClosestFlowNodeId(target: EventTarget | null): string | null {
+  const el = target as HTMLElement | null
+  return el?.closest?.('.react-flow__node')?.getAttribute('data-id') ?? null
+}
+
 function CanvasInner({ projectId }: { projectId: string }) {
   const [projectName, setProjectName] = useState('Untitled Project')
   const [nodes, setNodes, onNodesChange] = useNodesState([] as Node[])
   const [edges, setEdges, onEdgesChange] = useEdgesState([] as Edge[])
+  const { peers: realtimePeers, awareness } = useRealtimeCanvas(projectId)
+  const presenceControllerRef = useRef<ReturnType<typeof createPresenceController> | null>(null)
+  const [presenceNow, setPresenceNow] = useState(() => Date.now())
   // Connector-animation preference (Settings → Performance). Read on mount and
   // kept live via the broadcast event so toggling it reflects without reload.
   const [connectorAnim, setConnectorAnim] = useState<ConnectorAnimation>('auto')
@@ -276,6 +300,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
   // React Flow's separate hook for forcing a node's handle re-measurement.
   // Declared here near the top because onConnect (below) depends on it.
   const updateNodeInternals = useUpdateNodeInternals()
+  const viewport = useViewport()
   
   // Simple undo/redo using state
   const [past, setPast] = useState<{ nodes: Node[]; edges: Edge[] }[]>([])
@@ -309,6 +334,41 @@ function CanvasInner({ projectId }: { projectId: string }) {
   
   // Active tool state
   const [activeTool, setActiveTool] = useState<'select' | 'cut' | 'sticker' | 'comment'>('select')
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setPresenceNow(Date.now())
+    }, 1_000)
+
+    return () => {
+      window.clearInterval(timer)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!awareness) {
+      presenceControllerRef.current?.destroy()
+      presenceControllerRef.current = null
+      return
+    }
+
+    const controller = createPresenceController({
+      awareness,
+      participantId: getOrCreateParticipantHint(),
+    })
+
+    presenceControllerRef.current = controller
+    return () => {
+      controller.publishCursor(null)
+      controller.publishEditing(null)
+      controller.publishSelection([])
+      controller.stopDragLock()
+      controller.destroy()
+      if (presenceControllerRef.current === controller) {
+        presenceControllerRef.current = null
+      }
+    }
+  }, [awareness])
 
   // Auto-save hook
   const { saveCanvas, saveStatus } = useCanvasAutoSave(projectId, nodes, edges, scenes, activeSceneId)
@@ -1007,6 +1067,20 @@ function CanvasInner({ projectId }: { projectId: string }) {
     horizontal: [],
   })
 
+  const remotePresence = useMemo(
+    () => projectRemotePresence(realtimePeers, { now: presenceNow }),
+    [realtimePeers, presenceNow],
+  )
+  const lockedNodeIds = useMemo(() => {
+    const locks = new Set<string>()
+    for (const peer of remotePresence) {
+      if (peer.lock?.nodeId) {
+        locks.add(peer.lock.nodeId)
+      }
+    }
+    return locks
+  }, [remotePresence])
+
   const onNodeDrag = useCallback((_event: any, node: Node) => {
     const others = (nodes as Node[]).filter(n => n.id !== node.id)
     const guides = computeAlignmentGuides(node, others)
@@ -1023,17 +1097,82 @@ function CanvasInner({ projectId }: { projectId: string }) {
     })
   }, [nodes])
 
+  const onNodeDragStart = useCallback((_event: any, node: Node) => {
+    presenceControllerRef.current?.startDragLock(node.id)
+  }, [])
+
   const onNodeDragStop = useCallback(() => {
     setDragGuides({ vertical: [], horizontal: [] })
+    presenceControllerRef.current?.stopDragLock()
+  }, [])
+
+  const handlePresencePointerMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    presenceControllerRef.current?.publishCursor(
+      screenToFlowPosition({ x: event.clientX, y: event.clientY }),
+    )
+  }, [screenToFlowPosition])
+
+  const handlePresencePointerLeave = useCallback(() => {
+    presenceControllerRef.current?.publishCursor(null)
   }, [])
 
   // Memoize the scene-filtered nodes/edges so they don't get a fresh
   // array reference on every unrelated re-render (which would force
   // React Flow to re-diff the whole graph each time).
   const sceneNodes = useMemo(
-    () => (nodes as Node[]).filter(n => n.data.sceneId === activeSceneId),
-    [nodes, activeSceneId],
+    () =>
+      (nodes as Node[])
+        .filter(n => n.data.sceneId === activeSceneId)
+        .map((node) => {
+          if (!lockedNodeIds.has(node.id)) {
+            return node
+          }
+
+          return {
+            ...node,
+            draggable: false,
+            className: `${node.className ?? ''} ring-2 ring-amber-400/70 ring-offset-1 ring-offset-[#080A0C]`,
+          }
+        }),
+    [nodes, activeSceneId, lockedNodeIds],
   )
+  const selectedSceneNodeIds = useMemo(
+    () => sceneNodes.filter(node => node.selected).map(node => node.id),
+    [sceneNodes],
+  )
+
+  useEffect(() => {
+    presenceControllerRef.current?.publishSelection(selectedSceneNodeIds)
+  }, [selectedSceneNodeIds])
+
+  useEffect(() => {
+    const syncEditingPresence = (target: EventTarget | null) => {
+      if (!isTextEditingTarget(target)) {
+        presenceControllerRef.current?.publishEditing(null)
+        return
+      }
+
+      presenceControllerRef.current?.publishEditing(findClosestFlowNodeId(target))
+    }
+
+    const handleFocusIn = (event: FocusEvent) => {
+      syncEditingPresence(event.target)
+    }
+    const handleFocusOut = () => {
+      window.setTimeout(() => {
+        syncEditingPresence(document.activeElement)
+      }, 0)
+    }
+
+    document.addEventListener('focusin', handleFocusIn)
+    document.addEventListener('focusout', handleFocusOut)
+
+    return () => {
+      document.removeEventListener('focusin', handleFocusIn)
+      document.removeEventListener('focusout', handleFocusOut)
+    }
+  }, [])
+
   const sceneEdges = useMemo(() => {
     const sceneNodeIds = new Set(sceneNodes.map(n => n.id))
     return (edges as Edge[]).filter(e => sceneNodeIds.has(e.source) && sceneNodeIds.has(e.target))
@@ -1118,7 +1257,15 @@ function CanvasInner({ projectId }: { projectId: string }) {
           clicks so the user can pan/zoom/edit while it stays open. */}
       <JobsPanel open={jobsPanelOpen} onClose={() => setJobsPanelOpen(false)} />
 
-      <div className="flex-1 relative" ref={flowRef} onDragOver={handleDragOver} onDrop={handleDrop} onDragLeave={handleDragLeave}>
+      <div
+        className="flex-1 relative"
+        ref={flowRef}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        onDragLeave={handleDragLeave}
+        onMouseMove={handlePresencePointerMove}
+        onMouseLeave={handlePresencePointerLeave}
+      >
         {isDragOver && (
           <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center border-2 border-dashed border-accent/60 bg-accent/5 rounded-lg">
             <div className="flex flex-col items-center gap-2 text-accent/80">
@@ -1146,6 +1293,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
               isValidConnection={isValidConnection}
+              onNodeDragStart={onNodeDragStart}
               onNodeDrag={onNodeDrag}
               onNodeDragStop={onNodeDragStop}
               onNodeClick={() => {
@@ -1227,6 +1375,12 @@ function CanvasInner({ projectId }: { projectId: string }) {
             </ReactFlow>
           )
         })()}
+
+        <RealtimePresenceOverlay
+          peers={realtimePeers}
+          nodes={sceneNodes}
+          viewport={viewport}
+        />
 
         {/* Unified left toolbar with assets */}
         <LeftToolbar 
