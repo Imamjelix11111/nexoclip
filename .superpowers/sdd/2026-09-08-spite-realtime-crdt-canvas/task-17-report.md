@@ -126,5 +126,58 @@ Modified:
 
 ## Concerns
 
-- `POST /internal/document` currently shares the same HMAC + ownership envelope as `/internal/authorize`; it authenticates the caller and project but does not separately sign the action payload. This matches the current internal-network trust model, but a future hardening pass could include the action body in the MAC.
 - The realtime test runner needed `--test-force-exit` for direct CLI verification because the Hocuspocus suite leaves open handles long enough to stall a plain one-shot `tsx --test` process, even though the suite itself passes cleanly.
+
+## Retry Round 1: bind internal document actions into the HMAC
+
+### Problem
+
+`POST /internal/document` originally reused the `/internal/authorize` HMAC envelope but signed only `{ userId, projectId, timestamp, nonce }`.
+That meant the caller and project were authenticated, but the action payload itself (`action`, `nodeId`, `set`, `unset`, `projection`) was not bound into the MAC.
+A body changed after signing could still be accepted.
+
+### Fix
+
+Modified:
+- `nexoclip-app/services/spite/realtime/internal-auth.ts`
+- `nexoclip-app/services/spite/lib/realtime/internal-client.ts`
+- `nexoclip-app/services/spite/realtime/server.ts`
+
+Behavior:
+- internal auth payloads now optionally include `actionDigest`
+- `actionDigest` is a SHA-256 digest of a canonicalized JSON form of the signed action body
+- internal realtime client signs `{ action, ...body }` for every `/internal/document` request
+- realtime server recomputes that digest from the received action payload before nonce insertion / ownership lookup
+- tampered action bodies now fail closed with `403` and do not mutate authoritative Yjs state
+
+### Regression coverage added
+
+Modified:
+- `nexoclip-app/services/spite/realtime/auth.test.ts`
+- `nexoclip-app/services/spite/realtime/server-core.test.ts`
+
+Added failing-first coverage for:
+- `verifyCanvasAuthorization binds optional action digests into the signature`
+- `private /internal/document rejects action bodies that do not match the signed payload`
+
+Assertions cover:
+- changing `actionDigest` invalidates the signature
+- a request signed for one action body cannot be replayed with a different `/internal/document` action body
+- rejected tampering leaves the authoritative document unchanged
+
+### Verification
+
+Commands run successfully:
+
+```bash
+rtk proxy bash -lc 'cd nexoclip-app/services/spite && npx tsx --test --test-force-exit realtime/auth.test.ts realtime/server-core.test.ts'
+rtk proxy bash -lc 'cd nexoclip-app/services/spite && npx tsx --test --test-force-exit "lib/**/*.test.ts" "realtime/**/*.test.ts"'
+rtk npx --prefix nexoclip-app/services/spite tsc -p nexoclip-app/services/spite/tsconfig.json --noEmit
+rtk npm --prefix nexoclip-app/services/spite run build
+```
+
+Results:
+- focused auth + server-core verification passed (`13` passed, `0` failed)
+- full Spite test suite passed (`123` passed, `5` skipped because `SPITE_TEST_DATABASE_URL` is unset, `0` failed)
+- TypeScript emitted `0` errors
+- production build completed successfully

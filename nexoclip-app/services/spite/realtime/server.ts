@@ -11,6 +11,7 @@ import {
 import { verifyRealtimeToken } from './auth'
 import { createDatabaseAdapter, type DatabaseAdapter } from './db'
 import {
+  createCanvasAuthorizationActionDigest,
   verifyCanvasAuthorization,
   type CanvasAuthorizationPayload,
 } from './internal-auth'
@@ -496,6 +497,9 @@ async function handleHttpRequest(
     projectId: body.projectId,
     timestamp: body.timestamp,
     nonce: body.nonce,
+    ...(requestUrl.pathname === '/internal/document'
+      ? { actionDigest: createCanvasAuthorizationActionDigest(extractSignedActionPayload(body)) }
+      : {}),
   }
 
   emit({
@@ -1206,6 +1210,24 @@ function forbidden(reason: string): Error & { reason: string } {
   const error = new Error(reason) as Error & { reason: string }
   error.reason = reason
   return error
+}
+
+function extractSignedActionPayload(body: Record<string, unknown>): Record<string, unknown> {
+  const payload: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(body)) {
+    if (
+      key === 'userId'
+      || key === 'projectId'
+      || key === 'timestamp'
+      || key === 'nonce'
+      || key === 'actionDigest'
+      || key === 'signature'
+    ) {
+      continue
+    }
+    payload[key] = value
+  }
+  return payload
 }
 
 function stringOrUndefined(value: unknown): string | undefined {

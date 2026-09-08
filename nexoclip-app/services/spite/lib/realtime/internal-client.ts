@@ -7,7 +7,10 @@ import {
   readCanvasProjection,
   type CanvasProjection,
 } from '@/lib/realtime/document'
-import { signCanvasAuthorization } from '@/realtime/internal-auth'
+import {
+  createCanvasAuthorizationActionDigest,
+  signCanvasAuthorization,
+} from '@/realtime/internal-auth'
 
 type InternalClientEnv = Partial<Pick<NodeJS.ProcessEnv,
   'CANVAS_AUTH_URL'
@@ -70,11 +73,16 @@ export function createInternalRealtimeClient(options: InternalRequestFactoryOpti
   async function request<T>(input: InternalRequestInput): Promise<T> {
     const url = resolveDocumentUrl(env)
     const secret = resolveAuthorizationSecret(env)
+    const actionBody = {
+      action: input.action,
+      ...(input.body ?? {}),
+    }
     const payload = {
       userId: input.userId,
       projectId: input.projectId,
       timestamp: now(),
       nonce: createNonce(),
+      actionDigest: createCanvasAuthorizationActionDigest(actionBody),
     }
 
     const response = await fetchFn(url, {
@@ -83,8 +91,7 @@ export function createInternalRealtimeClient(options: InternalRequestFactoryOpti
       body: JSON.stringify({
         ...payload,
         signature: signAuthorization(payload, secret),
-        action: input.action,
-        ...(input.body ?? {}),
+        ...actionBody,
       }),
     })
 

@@ -20,6 +20,7 @@ function authPayload(overrides: Partial<{
   projectId: string
   timestamp: number
   nonce: string
+  actionDigest: string
 }> = {}) {
   return {
     userId: USER_ID,
@@ -80,6 +81,17 @@ test('verifyCanvasAuthorization rejects altered payloads and malformed signature
   )
   assert.equal(verifyCanvasAuthorization(payload, `${signature.slice(0, -1)}0`, INTERNAL_SECRET), false)
   assert.equal(verifyCanvasAuthorization(payload, `${signature}extra`, INTERNAL_SECRET), false)
+})
+
+test('verifyCanvasAuthorization binds optional action digests into the signature', () => {
+  const payload = authPayload({ actionDigest: 'digest-a' })
+  const signature = signCanvasAuthorization(payload, INTERNAL_SECRET)
+
+  assert.equal(verifyCanvasAuthorization(payload, signature, INTERNAL_SECRET), true)
+  assert.equal(
+    verifyCanvasAuthorization({ ...payload, actionDigest: 'digest-b' }, signature, INTERNAL_SECRET),
+    false,
+  )
 })
 
 test('verifyCanvasAuthorization rejects stale and future timestamps', () => {

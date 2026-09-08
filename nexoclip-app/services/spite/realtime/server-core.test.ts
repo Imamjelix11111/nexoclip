@@ -6,7 +6,10 @@ import { SignJWT } from 'jose'
 import * as Y from 'yjs'
 
 import { issueRealtimeToken, REALTIME_TOKEN_AUDIENCE, REALTIME_TOKEN_ALGORITHM, REALTIME_TOKEN_ISSUER } from './auth'
-import { signCanvasAuthorization } from './internal-auth'
+import {
+  createCanvasAuthorizationActionDigest,
+  signCanvasAuthorization,
+} from './internal-auth'
 import { createRealtimeServer } from './server'
 import { createCanvasDocument, readCanvasProjection, upsertNode } from '../lib/realtime/document'
 import type { DatabaseAdapter, QueryResult } from './db'
@@ -413,17 +416,21 @@ test('private /internal/document exports and patches authoritative documents', a
   await server.listen()
 
   const createBody = (nonce: string, action: Record<string, unknown>) => {
+    const actionPayload = {
+      ...action,
+    }
     const payload = {
       userId: OWNER_USER_ID,
       projectId: PROJECT_ID,
       timestamp: Math.floor(Date.now() / 1000),
       nonce,
+      actionDigest: createCanvasAuthorizationActionDigest(actionPayload),
     }
 
     return {
       ...payload,
       signature: signCanvasAuthorization(payload, CANVAS_AUTH_SECRET),
-      ...action,
+      ...actionPayload,
     }
   }
 
@@ -466,6 +473,99 @@ test('private /internal/document exports and patches authoritative documents', a
     assert.equal(afterBody.projection.nodes[0].data.outputUrl, '/uploads/generated.png')
     assert.equal('pendingRequestId' in afterBody.projection.nodes[0].data, false)
     assert.equal(afterBody.durableSeq, 1)
+  } finally {
+    await server.destroy()
+  }
+})
+
+test('private /internal/document rejects action bodies that do not match the signed payload', async () => {
+  const repository = new FakeRealtimeRepository()
+  repository.setOwner(PROJECT_ID, OWNER_USER_ID)
+
+  const seededDoc = createCanvasDocument()
+  upsertNode(seededDoc, {
+    id: 'seed-node',
+    type: 'imageGen',
+    position: { x: 10, y: 20 },
+    data: {
+      pendingRequestId: 'req-123',
+      pendingFalEndpoint: 'fal-ai/flux/dev',
+      prompt: 'hello',
+    },
+  })
+  repository.setDocument(PROJECT_ID, seededDoc)
+
+  const database = new FakeAuthorizationDatabase()
+  database.allow(PROJECT_ID, OWNER_USER_ID)
+
+  const server = createRealtimeServer({
+    address: '127.0.0.1',
+    port: 0,
+    env: {
+      REALTIME_TOKEN_SECRET: JWT_SECRET,
+      CANVAS_AUTH_SECRET,
+    },
+    repository,
+    database,
+  })
+
+  await server.listen()
+
+  const signedAction = {
+    action: 'export-document',
+  }
+  const signedPayload = {
+    userId: OWNER_USER_ID,
+    projectId: PROJECT_ID,
+    timestamp: Math.floor(Date.now() / 1000),
+    nonce: 'nonce-tampered-action',
+    actionDigest: createCanvasAuthorizationActionDigest(signedAction),
+  }
+
+  try {
+    const tamperedResponse = await fetch(`${server.httpUrl}/internal/document`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        ...signedPayload,
+        signature: signCanvasAuthorization(signedPayload, CANVAS_AUTH_SECRET),
+        action: 'patch-node-data',
+        nodeId: 'seed-node',
+        set: {
+          outputUrl: '/uploads/tampered.png',
+        },
+      }),
+    })
+
+    assert.equal(tamperedResponse.status, 403)
+    assert.deepEqual(await tamperedResponse.json(), { authorized: false })
+    assert.deepEqual(database.operations, [])
+
+    const afterResponse = await fetch(`${server.httpUrl}/internal/document`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify((() => {
+        const action = { action: 'export-document' }
+        const payload = {
+          userId: OWNER_USER_ID,
+          projectId: PROJECT_ID,
+          timestamp: Math.floor(Date.now() / 1000),
+          nonce: 'nonce-export-after-tamper',
+          actionDigest: createCanvasAuthorizationActionDigest(action),
+        }
+
+        return {
+          ...payload,
+          signature: signCanvasAuthorization(payload, CANVAS_AUTH_SECRET),
+          ...action,
+        }
+      })()),
+    })
+
+    assert.equal(afterResponse.status, 200)
+    const afterBody = await afterResponse.json()
+    assert.equal(afterBody.projection.nodes[0].data.outputUrl, undefined)
+    assert.equal(afterBody.durableSeq, 0)
   } finally {
     await server.destroy()
   }
