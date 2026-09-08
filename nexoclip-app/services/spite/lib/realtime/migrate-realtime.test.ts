@@ -15,7 +15,7 @@ type FakePool = {
 }
 
 test('isDirectExecution treats relative CLI paths as direct execution', () => {
-  const moduleUrl = new URL('file:///tmp/spite/scripts/migrate-realtime.mjs')
+  const moduleUrl = new URL('file:///tmp/spite/scripts/migrate-realtime.mjs').toString()
   const relativeArgv = 'scripts/migrate-realtime.mjs'
 
   assert.equal(
@@ -54,7 +54,7 @@ test('applyRealtimeSchema wraps schema execution in explicit transaction and rel
   await applyRealtimeSchema({
     databaseUrl: 'postgres://example',
     loadSetupSql: async () => 'SELECT 1;',
-    createPool: () => pool,
+    createPool: (() => pool) as any,
   })
 
   assert.deepEqual(calls, ['BEGIN', "SET LOCAL lock_timeout = '5s'", 'SELECT 1;', 'COMMIT'])
@@ -92,7 +92,7 @@ test('applyRealtimeSchema rolls back on error and still releases client/pool', a
     applyRealtimeSchema({
       databaseUrl: 'postgres://example',
       loadSetupSql: async () => 'SELECT broken;',
-      createPool: () => pool,
+      createPool: (() => pool) as any,
     }),
     /boom/,
   )
