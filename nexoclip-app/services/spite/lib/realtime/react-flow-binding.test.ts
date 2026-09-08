@@ -38,19 +38,17 @@ class FakeAwareness {
 
   setState(clientId: number, state: Record<string, unknown>): void {
     this.states.set(clientId, state)
-    this.emit('change')
-    this.emit('update')
+  }
+
+  emit(event: 'change' | 'update'): void {
+    for (const listener of this.listeners.get(event) ?? []) {
+      listener()
+    }
   }
 
   destroy(): void {
     this.listeners.clear()
     this.states.clear()
-  }
-
-  private emit(event: 'change' | 'update'): void {
-    for (const listener of this.listeners.get(event) ?? []) {
-      listener()
-    }
   }
 }
 
@@ -65,10 +63,25 @@ class FakeProvider {
     document: Y.Doc
     token: string | (() => Promise<string>) | null
     onStateless: (event: { payload: string }) => void
+    onAwarenessChange?: () => void
+    onAwarenessUpdate?: () => void
   }) {
     this.document = configuration.document
     this.token = configuration.token
     this.onStateless = configuration.onStateless
+    if (configuration.onAwarenessChange) {
+      this.awareness.on('change', configuration.onAwarenessChange)
+    }
+    if (configuration.onAwarenessUpdate) {
+      this.awareness.on('update', configuration.onAwarenessUpdate)
+    }
+  }
+
+  async requestToken(): Promise<string | null> {
+    if (typeof this.token === 'function') {
+      return this.token()
+    }
+    return this.token
   }
 
   emitStateless(payload: string): void {
@@ -251,11 +264,44 @@ test('undo manager tracks only local binding origin', () => {
   binding.destroy()
 })
 
-test('realtime room caches one doc/provider per project, refreshes tokens, and parses durable status messages', async () => {
+test('realtime room emits one awareness update per awareness event', () => {
+  const awarenessProjectId = '550e8400-e29b-41d4-a716-446655440001'
+  const createdProviders: FakeProvider[] = []
+  const room = getOrCreateRealtimeCanvasRoom(awarenessProjectId, {
+    websocketUrl: 'ws://127.0.0.1:3000/spite/ws',
+    fetchFn: async () => new Response(JSON.stringify({ token: 'unused' }), { status: 200 }),
+    createProvider: (configuration) => {
+      const provider = new FakeProvider(configuration as any)
+      createdProviders.push(provider)
+      return provider as any
+    },
+  })
+
+  let emissions = 0
+  const unsubscribe = room.subscribe(() => {
+    emissions += 1
+  })
+
+  createdProviders[0].awareness.setState(42, { name: 'Alice' })
+  createdProviders[0].awareness.emit('change')
+  assert.equal(emissions, 1)
+  assert.deepEqual(room.getSnapshot().peers, [{ clientId: 42, name: 'Alice' }])
+
+  createdProviders[0].awareness.emit('update')
+  assert.equal(emissions, 2)
+  assert.deepEqual(room.getSnapshot().peers, [{ clientId: 42, name: 'Alice' }])
+
+  unsubscribe()
+  room.retain()
+  releaseRealtimeCanvasRoom(awarenessProjectId)
+})
+
+test('realtime room caches one doc/provider per project, refreshes tokens through the provider callback, and parses durable status messages', async () => {
+  const tokenProjectId = '550e8400-e29b-41d4-a716-446655440002'
   const fetchCalls: Array<{ input: string; init: RequestInit | undefined }> = []
   const createdProviders: FakeProvider[] = []
 
-  const roomA = getOrCreateRealtimeCanvasRoom(PROJECT_ID, {
+  const roomA = getOrCreateRealtimeCanvasRoom(tokenProjectId, {
     websocketUrl: 'ws://127.0.0.1:3000/spite/ws',
     fetchFn: async (input, init) => {
       fetchCalls.push({ input: String(input), init })
@@ -270,7 +316,7 @@ test('realtime room caches one doc/provider per project, refreshes tokens, and p
       return provider as any
     },
   })
-  const roomB = getOrCreateRealtimeCanvasRoom(PROJECT_ID, {
+  const roomB = getOrCreateRealtimeCanvasRoom(tokenProjectId, {
     websocketUrl: 'ws://127.0.0.1:3000/spite/ws',
     fetchFn: async () => {
       throw new Error('cached room should reuse the original fetcher')
@@ -283,8 +329,8 @@ test('realtime room caches one doc/provider per project, refreshes tokens, and p
   assert.equal(roomA, roomB)
   assert.equal(createdProviders.length, 1)
 
-  const tokenOne = await roomA.getToken()
-  const tokenTwo = await roomA.getToken()
+  const tokenOne = await createdProviders[0].requestToken()
+  const tokenTwo = await createdProviders[0].requestToken()
   assert.equal(tokenOne, 'realtime-token')
   assert.equal(tokenTwo, 'realtime-token')
   assert.deepEqual(
@@ -297,20 +343,20 @@ test('realtime room caches one doc/provider per project, refreshes tokens, and p
   )
 
   createdProviders[0].emitStateless(
-    JSON.stringify({ type: 'STATUS', projectId: PROJECT_ID, status: 'DEGRADED' }),
+    JSON.stringify({ type: 'STATUS', projectId: tokenProjectId, status: 'DEGRADED' }),
   )
   assert.equal(roomA.getSnapshot().persistenceStatus, 'DEGRADED')
 
   createdProviders[0].emitStateless(
-    JSON.stringify({ type: 'ACK', projectId: PROJECT_ID, status: 'PERSISTED', seq: 7 }),
+    JSON.stringify({ type: 'ACK', projectId: tokenProjectId, status: 'PERSISTED', seq: 7 }),
   )
   assert.equal(roomA.getSnapshot().persistenceStatus, 'PERSISTED')
 
   roomA.retain()
   roomB.retain()
-  releaseRealtimeCanvasRoom(PROJECT_ID)
+  releaseRealtimeCanvasRoom(tokenProjectId)
   assert.equal(createdProviders[0].destroyed, false)
-  releaseRealtimeCanvasRoom(PROJECT_ID)
+  releaseRealtimeCanvasRoom(tokenProjectId)
   assert.equal(createdProviders[0].destroyed, true)
 }
 )

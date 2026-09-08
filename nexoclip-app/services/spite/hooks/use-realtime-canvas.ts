@@ -265,12 +265,6 @@ export class RealtimeCanvasRoom {
       onStateless: ({ payload }) => {
         this.handleStateless(payload)
       },
-      onAwarenessChange: () => {
-        this.handleAwarenessChange()
-      },
-      onAwarenessUpdate: () => {
-        this.handleAwarenessChange()
-      },
     } as HocuspocusProviderConfiguration)
 
     const awareness = this.provider.awareness
