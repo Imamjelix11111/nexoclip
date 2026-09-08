@@ -19,15 +19,7 @@ const PUBLIC_PATHS = [
   '/api/r2-image',
 ]
 
-function sanitizedHeaders(headers: Headers) {
-  const nextHeaders = new Headers(headers)
-  nextHeaders.delete('x-nexoclip-user-id')
-  nextHeaders.delete('x-nexoclip-user-verified')
-  return nextHeaders
-}
-
 export async function middleware(request: NextRequest) {
-  const forwardedHeaders = sanitizedHeaders(request.headers)
   const { pathname } = request.nextUrl
   const basePath = (process.env.NEXT_PUBLIC_BASE_PATH || '').replace(/\/$/, '')
   const appPath = basePath && (pathname === basePath || pathname.startsWith(`${basePath}/`))
@@ -39,14 +31,10 @@ export async function middleware(request: NextRequest) {
   // self-hoster sees clear instructions instead of a broken-looking
   // login screen. The /setup page itself, and Next.js static asset
   // requests, are allowed through so the page can render.
-  if (appPath.startsWith('/api/internal/')) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  }
-
   const envCheck = checkRequiredEnv()
   if (!envCheck.ok) {
     if (appPath === '/setup' || appPath.startsWith('/_next/')) {
-      return NextResponse.next({ request: { headers: forwardedHeaders } })
+      return NextResponse.next()
     }
     if (appPath.startsWith('/api/')) {
       return NextResponse.json(
@@ -73,12 +61,12 @@ export async function middleware(request: NextRequest) {
     if (appPath === '/login' || appPath === '/setup') {
       return NextResponse.redirect(new URL(withBasePath('/', basePath), request.url))
     }
-    return NextResponse.next({ request: { headers: forwardedHeaders } })
+    return NextResponse.next()
   }
 
   // Not logged in:
   if (isPublic) {
-    return NextResponse.next({ request: { headers: forwardedHeaders } })
+    return NextResponse.next()
   }
 
   // Block API routes with a clear 401 (no HTML redirect for data calls).
