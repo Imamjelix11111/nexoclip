@@ -5,6 +5,10 @@ import {
   unauthorizedResponse,
   userOwnsProject,
 } from '@/lib/project-ownership'
+import {
+  createInternalRealtimeClient,
+  type InternalRealtimeClient,
+} from '@/lib/realtime/internal-client'
 import { NextRequest, NextResponse } from 'next/server'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -15,12 +19,14 @@ interface DuplicateProjectDeps {
   getDb?: typeof getDb
   getAuthenticatedUser?: typeof getAuthenticatedUser
   createProjectId?: () => string
+  createInternalRealtimeClient?: () => InternalRealtimeClient
 }
 
 export function createDuplicateProjectHandler(deps: DuplicateProjectDeps = {}) {
   const db = deps.getDb ?? getDb
   const resolveUser = deps.getAuthenticatedUser ?? getAuthenticatedUser
   const createProjectId = deps.createProjectId ?? uuidv4
+  const internalRealtime = deps.createInternalRealtimeClient ?? createInternalRealtimeClient
 
   return async function POST(
     request: Request,
@@ -63,21 +69,16 @@ export function createDuplicateProjectHandler(deps: DuplicateProjectDeps = {}) {
         RETURNING id, name, description, thumbnail, origin, createdat, updatedat
       `
 
-      // Copy canvas in one shot per table — the (projectId, nodeId/edgeId)
-      // composite PK already includes the new projectId, so collisions are
-      // impossible and we keep the original node/edge ids for in-data references.
-      await sql`
-        INSERT INTO canvas_nodes (projectId, nodeId, type, position_x, position_y, data)
-        SELECT ${newId}::text, nodeId, type, position_x, position_y, data
-        FROM canvas_nodes
-        WHERE projectId = ${projectId}::text
-      `
-      await sql`
-        INSERT INTO canvas_edges (projectId, edgeId, source, target, sourceHandle, targetHandle, animated, data)
-        SELECT ${newId}::text, edgeId, source, target, sourceHandle, targetHandle, animated, data
-        FROM canvas_edges
-        WHERE projectId = ${projectId}::text
-      `
+      const projection = await internalRealtime().exportDocument({
+        userId: user.id,
+        projectId,
+      })
+
+      await internalRealtime().replaceDocument({
+        userId: user.id,
+        projectId: newId,
+        projection: projection.projection,
+      })
 
       return NextResponse.json(inserted[0])
     } catch (error) {

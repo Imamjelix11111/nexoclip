@@ -6,6 +6,11 @@ import {
   unauthorizedResponse,
   userOwnsProject,
 } from '@/lib/project-ownership'
+import {
+  createInternalRealtimeClient,
+  projectionHasMediaReference,
+  type InternalRealtimeClient,
+} from '@/lib/realtime/internal-client'
 import { NextRequest, NextResponse } from 'next/server'
 import { DeleteObjectCommand } from '@aws-sdk/client-s3'
 
@@ -34,11 +39,56 @@ async function deleteR2Key(key: string) {
 interface ProjectRouteDeps {
   getDb?: typeof getDb
   getAuthenticatedUser?: typeof getAuthenticatedUser
+  createInternalRealtimeClient?: () => InternalRealtimeClient
+}
+
+async function loadLaggingAuthoritativeReferrers({
+  sql,
+  userId,
+  projectId,
+  urls,
+  client,
+}: {
+  sql: ReturnType<typeof getDb>
+  userId: string
+  projectId: string
+  urls: string[]
+  client: InternalRealtimeClient
+}): Promise<Map<string, string>> {
+  const matches = new Map<string, string>()
+  if (urls.length === 0) {
+    return matches
+  }
+
+  const laggingProjects = await sql`
+    SELECT d.project_id
+    FROM canvas_yjs_documents d
+    JOIN projects p ON p.id::text = d.project_id
+    WHERE p.userid = ${userId}
+      AND d.project_id <> ${projectId}
+      AND d.projected_seq < d.durable_seq
+  ` as Array<{ project_id: string }>
+
+  for (const row of laggingProjects) {
+    const authoritative = await client.exportDocument({
+      userId,
+      projectId: row.project_id,
+    })
+
+    for (const url of urls) {
+      if (!matches.has(url) && projectionHasMediaReference(authoritative.projection, { url })) {
+        matches.set(url, row.project_id)
+      }
+    }
+  }
+
+  return matches
 }
 
 export function createProjectRouteHandlers(deps: ProjectRouteDeps = {}) {
   const db = deps.getDb ?? getDb
   const resolveUser = deps.getAuthenticatedUser ?? getAuthenticatedUser
+  const internalRealtime = deps.createInternalRealtimeClient ?? createInternalRealtimeClient
 
   return {
     async GET(request: Request, { params }: { params: Promise<{ projectId: string }> }) {
@@ -121,6 +171,21 @@ export function createProjectRouteHandlers(deps: ProjectRouteDeps = {}) {
           WHERE project_id = ${projectId}
         ` as { id: string; r2_url: string | null }[]
 
+        const uploadRows = await sql`
+          SELECT id, url FROM assets WHERE projectid = ${projectId}
+        ` as { id: string; url: string | null }[]
+        const candidateUrls = Array.from(new Set([
+          ...assets.map((asset) => asset.r2_url).filter((value): value is string => !!value),
+          ...uploadRows.map((row) => row.url).filter((value): value is string => !!value),
+        ]))
+        const laggingAuthoritativeReferrers = await loadLaggingAuthoritativeReferrers({
+          sql,
+          userId: user.id,
+          projectId,
+          urls: candidateUrls,
+          client: internalRealtime(),
+        })
+
         const exclusiveAssetIds: string[] = []
         const exclusiveKeys: string[] = []
 
@@ -130,8 +195,6 @@ export function createProjectRouteHandlers(deps: ProjectRouteDeps = {}) {
             exclusiveAssetIds.push(asset.id)
             continue
           }
-          // Look for the URL in any OTHER project's canvas_nodes data — either
-          // as the generated outputUrl or the reference/upload thumbnail.
           const referrer = await sql`
             SELECT projectid
             FROM canvas_nodes
@@ -139,16 +202,16 @@ export function createProjectRouteHandlers(deps: ProjectRouteDeps = {}) {
               AND (data->>'outputUrl' = ${url} OR data->>'thumbnail' = ${url})
             LIMIT 1
           ` as { projectid: string }[]
+          const resolvedReferrer = referrer[0]?.projectid ?? laggingAuthoritativeReferrers.get(url) ?? null
 
-          if (referrer.length === 0) {
+          if (!resolvedReferrer) {
             const key = keyFromUrl(url)
             if (key) exclusiveKeys.push(key)
             exclusiveAssetIds.push(asset.id)
           } else {
-            // Shared — keep the file, transfer the DB row to the other project.
             await sql`
               UPDATE generation_history
-              SET project_id = ${referrer[0].projectid}
+              SET project_id = ${resolvedReferrer}
               WHERE id = ${asset.id}
             `
           }
@@ -172,10 +235,6 @@ export function createProjectRouteHandlers(deps: ProjectRouteDeps = {}) {
         // each file too — unless another project's canvas still references the same
         // r2_url (a duplicate shares it via copied canvas_nodes), in which case the
         // file must stay. Mirrors the generation_history exclusivity check above.
-        const uploadRows = await sql`
-          SELECT id, url FROM assets WHERE projectid = ${projectId}
-        ` as { id: string; url: string | null }[]
-
         const uploadKeys: string[] = []
         for (const row of uploadRows) {
           const url = row.url
@@ -187,7 +246,8 @@ export function createProjectRouteHandlers(deps: ProjectRouteDeps = {}) {
               AND (data->>'outputUrl' = ${url} OR data->>'thumbnail' = ${url})
             LIMIT 1
           ` as { projectid: string }[]
-          if (referrer.length === 0) {
+          const resolvedReferrer = referrer[0]?.projectid ?? laggingAuthoritativeReferrers.get(url) ?? null
+          if (!resolvedReferrer) {
             const key = keyFromUrl(url)
             if (key) uploadKeys.push(key)
           }

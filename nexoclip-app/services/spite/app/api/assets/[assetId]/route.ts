@@ -8,6 +8,11 @@ import {
   findOwnedGenerationAsset,
   unauthorizedResponse,
 } from '@/lib/project-ownership'
+import {
+  createInternalRealtimeClient,
+  projectionHasMediaReference,
+  type InternalRealtimeClient,
+} from '@/lib/realtime/internal-client'
 import { getR2Client } from '@/lib/r2-upload'
 
 function assetKeyFromUrl(url: string | null): string | null {
@@ -26,12 +31,14 @@ interface AssetRouteDeps {
   getDb?: typeof getDb
   getAuthenticatedUser?: typeof getAuthenticatedUser
   getR2Client?: typeof getR2Client
+  createInternalRealtimeClient?: () => InternalRealtimeClient
 }
 
 export function createAssetRouteHandlers(deps: AssetRouteDeps = {}) {
   const db = deps.getDb ?? getDb
   const resolveUser = deps.getAuthenticatedUser ?? getAuthenticatedUser
   const r2Client = deps.getR2Client ?? getR2Client
+  const internalRealtime = deps.createInternalRealtimeClient ?? createInternalRealtimeClient
 
   return {
     async GET(
@@ -120,25 +127,47 @@ export function createAssetRouteHandlers(deps: AssetRouteDeps = {}) {
         ` as { folder_id: string }[]
         const removedFromFolders = removedRows.length
 
-        const canvasRefs = asset.r2_url
-          ? await sql`
-              SELECT 1 FROM canvas_nodes
-              WHERE projectId = ${asset.project_id}
-                AND (
-                  data->>'assetId' = ${assetId}
-                  OR data->>'outputUrl' = ${asset.r2_url}
-                  OR data->>'thumbnail' = ${asset.r2_url}
-                )
-              LIMIT 1
-            `
-          : await sql`
-              SELECT 1 FROM canvas_nodes
-              WHERE projectId = ${asset.project_id}
-                AND data->>'assetId' = ${assetId}
-              LIMIT 1
-            `
+        const projectionSequence = await sql`
+          SELECT durable_seq, projected_seq
+          FROM canvas_yjs_documents
+          WHERE project_id = ${asset.project_id}
+        ` as Array<{ durable_seq: number; projected_seq: number }>
 
-        if (canvasRefs.length > 0) {
+        let assetStillReferenced = false
+        const projectionIsCurrent = projectionSequence.length > 0
+          && Number(projectionSequence[0].durable_seq) === Number(projectionSequence[0].projected_seq)
+
+        if (projectionIsCurrent) {
+          const canvasRefs = asset.r2_url
+            ? await sql`
+                SELECT 1 FROM canvas_nodes
+                WHERE projectId = ${asset.project_id}
+                  AND (
+                    data->>'assetId' = ${assetId}
+                    OR data->>'outputUrl' = ${asset.r2_url}
+                    OR data->>'thumbnail' = ${asset.r2_url}
+                  )
+                LIMIT 1
+              `
+            : await sql`
+                SELECT 1 FROM canvas_nodes
+                WHERE projectId = ${asset.project_id}
+                  AND data->>'assetId' = ${assetId}
+                LIMIT 1
+              `
+          assetStillReferenced = canvasRefs.length > 0
+        } else {
+          const authoritative = await internalRealtime().exportDocument({
+            userId: user.id,
+            projectId: asset.project_id,
+          })
+          assetStillReferenced = projectionHasMediaReference(authoritative.projection, {
+            assetId,
+            url: asset.r2_url,
+          })
+        }
+
+        if (assetStillReferenced) {
           await sql`
             UPDATE generation_history
             SET used_in_canvas = true, expires_at = NULL

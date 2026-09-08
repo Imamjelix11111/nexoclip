@@ -43,9 +43,11 @@ export function createGenerateSubmitHandler(deps: GenerateSubmitDeps = {}) {
     try {
       const body = await request.json()
       const projectId = typeof body.projectId === 'string' ? body.projectId : undefined
+      let authenticatedUserId: string | null = null
       if (projectId) {
         const user = await resolveUser(request)
         if (!user) return unauthorizedResponse()
+        authenticatedUserId = user.id
         const sql = db()
         if (!(await userOwnsProject(sql, user.id, projectId))) {
           return projectNotFoundResponse()
@@ -91,7 +93,14 @@ export function createGenerateSubmitHandler(deps: GenerateSubmitDeps = {}) {
         stored.push(url)
         if (projectId) await record('image', model.providerModel, body.prompt, url, projectId)
       }
-      if (stored[0]) await attach(projectId, nodeId, stored[0])
+      if (stored[0] && authenticatedUserId) {
+        await attach({
+          userId: authenticatedUserId,
+          projectId,
+          nodeId,
+          url: stored[0],
+        })
+      }
       return NextResponse.json({
         request_id: crypto.randomUUID(),
         provider: model.provider,

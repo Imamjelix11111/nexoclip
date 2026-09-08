@@ -36,6 +36,7 @@ function makeRequest(url: string, {
 test('assets/[assetId] hides foreign assets and only deletes owned stored keys', async () => {
   const r2Deletes: string[] = []
   let deleteRowCalled = false
+  let sawProjectionLagCheck = false
 
   const sql = async (strings: TemplateStringsArray, ...values: unknown[]) => {
     const normalized = strings.join(' ? ').replace(/\s+/g, ' ').trim().toLowerCase()
@@ -51,6 +52,12 @@ test('assets/[assetId] hides foreign assets and only deletes owned stored keys',
 
     if (normalized.startsWith('delete from asset_folder_items where asset_id = ? returning folder_id')) {
       return []
+    }
+
+    if (normalized.startsWith('select durable_seq, projected_seq from canvas_yjs_documents where project_id = ?')) {
+      sawProjectionLagCheck = true
+      assert.equal(String(values[0]), OWNER_PROJECT_ID)
+      return [{ durable_seq: 3, projected_seq: 3 }]
     }
 
     if (normalized.includes("select 1 from canvas_nodes where projectid = ?") && normalized.includes("data->>'assetid' = ?") && normalized.includes("data->>'outputurl' = ?") && normalized.includes("data->>'thumbnail' = ?")) {
@@ -91,6 +98,7 @@ test('assets/[assetId] hides foreign assets and only deletes owned stored keys',
     { params: Promise.resolve({ assetId: 'owned-asset' }) } as any,
   )
   assert.equal(ownedResponse.status, 200)
+  assert.equal(sawProjectionLagCheck, true)
   assert.equal(deleteRowCalled, true)
   assert.deepEqual(r2Deletes, ['uploads/owned.png'])
 })
@@ -288,7 +296,7 @@ test('folders reject foreign asset ids atomically on create and replace', async 
 })
 
 test('generate/recover cleanup scopes pending marker removal by authorized projectId', async () => {
-  let sawScopedCleanup = false
+  const cleanupCalls: Array<{ projectId: string; nodeId: string }> = []
 
   const sql = async (strings: TemplateStringsArray, ...values: unknown[]) => {
     const normalized = strings.join(' ? ').replace(/\s+/g, ' ').trim().toLowerCase()
@@ -310,13 +318,6 @@ test('generate/recover cleanup scopes pending marker removal by authorized proje
       }]
     }
 
-    if (normalized.includes("update canvas_nodes set data = data - 'pendingrequestid' - 'pendingfalendpoint' - 'pendingstartedat' where projectid = ?") && normalized.includes('nodeid = any(')) {
-      sawScopedCleanup = true
-      assert.equal(String(values[0]), OWNER_PROJECT_ID)
-      assert.deepEqual(values[1], ['node-1'])
-      return []
-    }
-
     throw new Error(`Unhandled SQL in recover cleanup test: ${normalized}`)
   }
 
@@ -326,6 +327,11 @@ test('generate/recover cleanup scopes pending marker removal by authorized proje
     falKey: 'test-fal-key',
     fetchFalStatus: async () => Response.json({ status: 'FAILED' }),
     fetchFalResult: async () => Response.json({}),
+    createInternalRealtimeClient: () => ({
+      patchNodeData: async ({ projectId, nodeId }: { projectId: string; nodeId: string }) => {
+        cleanupCalls.push({ projectId, nodeId })
+      },
+    }) as any,
   })
 
   const response = await handler(makeRequest('http://spite.local/api/generate/recover', {
@@ -334,12 +340,12 @@ test('generate/recover cleanup scopes pending marker removal by authorized proje
   }) as any)
 
   assert.equal(response.status, 200)
-  assert.equal(sawScopedCleanup, true)
+  assert.deepEqual(cleanupCalls, [{ projectId: OWNER_PROJECT_ID, nodeId: 'node-1' }])
 })
 
 test('generate/recover bulk cleanup uses projectId+nodeId pair when node ids repeat across owned projects', async () => {
   const secondProjectId = '550e8400-e29b-41d4-a716-4466554400aa'
-  const cleanupCalls: Array<{ projectId: string; nodeIds: string[] }> = []
+  const cleanupCalls: Array<{ projectId: string; nodeId: string }> = []
 
   const sql = async (strings: TemplateStringsArray, ...values: unknown[]) => {
     const normalized = strings.join(' ? ').replace(/\s+/g, ' ').trim().toLowerCase()
@@ -369,14 +375,6 @@ test('generate/recover bulk cleanup uses projectId+nodeId pair when node ids rep
       ]
     }
 
-    if (normalized.includes("update canvas_nodes set data = data - 'pendingrequestid' - 'pendingfalendpoint' - 'pendingstartedat' where projectid = ?") && normalized.includes('nodeid = any(')) {
-      cleanupCalls.push({
-        projectId: String(values[0]),
-        nodeIds: [...(values[1] as string[])],
-      })
-      return []
-    }
-
     throw new Error(`Unhandled SQL in repeated nodeId cleanup test: ${normalized}`)
   }
 
@@ -390,6 +388,11 @@ test('generate/recover bulk cleanup uses projectId+nodeId pair when node ids rep
       throw new Error(`unexpected requestId: ${requestId}`)
     },
     fetchFalResult: async () => Response.json({}),
+    createInternalRealtimeClient: () => ({
+      patchNodeData: async ({ projectId, nodeId }: { projectId: string; nodeId: string }) => {
+        cleanupCalls.push({ projectId, nodeId })
+      },
+    }) as any,
   })
 
   const response = await handler(makeRequest('http://spite.local/api/generate/recover', {
@@ -398,7 +401,7 @@ test('generate/recover bulk cleanup uses projectId+nodeId pair when node ids rep
   }) as any)
 
   assert.equal(response.status, 200)
-  assert.deepEqual(cleanupCalls, [{ projectId: OWNER_PROJECT_ID, nodeIds: ['shared-node'] }])
+  assert.deepEqual(cleanupCalls, [{ projectId: OWNER_PROJECT_ID, nodeId: 'shared-node' }])
 })
 
 test('auth/check reports authenticated for trusted main sessions as well as legacy spite sessions', async () => {

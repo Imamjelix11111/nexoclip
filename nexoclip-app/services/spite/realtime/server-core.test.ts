@@ -59,16 +59,39 @@ class FakeRealtimeRepository {
     this.loadCalls.push(projectId)
     const loaded = this.docs.get(projectId)
     assert.ok(loaded, `expected preloaded document for ${projectId}`)
-    return loaded
+    return {
+      doc: cloneDoc(loaded.doc),
+      snapshotSeq: loaded.snapshotSeq,
+      durableSeq: loaded.durableSeq,
+      projectedSeq: loaded.projectedSeq,
+    }
   }
 
-  async appendUpdate(): Promise<number> {
-    return 1
+  async appendUpdate(projectId: string, update: Uint8Array): Promise<number> {
+    const loaded = this.docs.get(projectId)
+    assert.ok(loaded, `expected preloaded document for ${projectId}`)
+    Y.applyUpdate(loaded.doc, update)
+    loaded.durableSeq += 1
+    return loaded.durableSeq
   }
 
-  async compact(): Promise<void> {}
+  async compact(projectId: string, snapshot: Uint8Array, includedSeq: number): Promise<void> {
+    const loaded = this.docs.get(projectId)
+    assert.ok(loaded, `expected preloaded document for ${projectId}`)
+    const doc = new Y.Doc()
+    Y.applyUpdate(doc, snapshot)
+    loaded.doc = doc
+    loaded.snapshotSeq = includedSeq
+    loaded.projectedSeq = Math.max(loaded.projectedSeq, includedSeq)
+  }
 
   async close(): Promise<void> {}
+}
+
+function cloneDoc(source: Y.Doc): Y.Doc {
+  const doc = new Y.Doc()
+  Y.applyUpdate(doc, Y.encodeStateAsUpdate(source))
+  return doc
 }
 
 class FakeRuntime {
@@ -351,6 +374,98 @@ test('GET /healthz returns ok without touching realtime authorization', async ()
     assert.deepEqual(await response.json(), { ok: true })
     assert.deepEqual(database.operations, [])
     assert.deepEqual(repository.loadCalls, [])
+  } finally {
+    await server.destroy()
+  }
+})
+
+test('private /internal/document exports and patches authoritative documents', async () => {
+  const repository = new FakeRealtimeRepository()
+  repository.setOwner(PROJECT_ID, OWNER_USER_ID)
+
+  const seededDoc = createCanvasDocument()
+  upsertNode(seededDoc, {
+    id: 'seed-node',
+    type: 'imageGen',
+    position: { x: 10, y: 20 },
+    data: {
+      pendingRequestId: 'req-123',
+      pendingFalEndpoint: 'fal-ai/flux/dev',
+      prompt: 'hello',
+    },
+  })
+  repository.setDocument(PROJECT_ID, seededDoc)
+
+  const database = new FakeAuthorizationDatabase()
+  database.allow(PROJECT_ID, OWNER_USER_ID)
+
+  const server = createRealtimeServer({
+    address: '127.0.0.1',
+    port: 0,
+    env: {
+      REALTIME_TOKEN_SECRET: JWT_SECRET,
+      CANVAS_AUTH_SECRET,
+    },
+    repository,
+    database,
+  })
+
+  await server.listen()
+
+  const createBody = (nonce: string, action: Record<string, unknown>) => {
+    const payload = {
+      userId: OWNER_USER_ID,
+      projectId: PROJECT_ID,
+      timestamp: Math.floor(Date.now() / 1000),
+      nonce,
+    }
+
+    return {
+      ...payload,
+      signature: signCanvasAuthorization(payload, CANVAS_AUTH_SECRET),
+      ...action,
+    }
+  }
+
+  try {
+    const beforeResponse = await fetch(`${server.httpUrl}/internal/document`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(createBody('nonce-export-before', { action: 'export-document' })),
+    })
+
+    assert.equal(beforeResponse.status, 200)
+    const beforeBody = await beforeResponse.json()
+    assert.equal(beforeBody.projection.nodes[0].data.pendingRequestId, 'req-123')
+
+    const patchResponse = await fetch(`${server.httpUrl}/internal/document`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(createBody('nonce-patch', {
+        action: 'patch-node-data',
+        nodeId: 'seed-node',
+        set: {
+          outputUrl: '/uploads/generated.png',
+          status: 'completed',
+          error: null,
+        },
+        unset: ['pendingRequestId', 'pendingFalEndpoint'],
+      })),
+    })
+
+    assert.equal(patchResponse.status, 200)
+
+    const afterResponse = await fetch(`${server.httpUrl}/internal/document`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(createBody('nonce-export-after', { action: 'export-document' })),
+    })
+
+    assert.equal(afterResponse.status, 200)
+    const afterBody = await afterResponse.json()
+    assert.equal(afterBody.projection.nodes[0].data.outputUrl, '/uploads/generated.png')
+    assert.equal('pendingRequestId' in afterBody.projection.nodes[0].data, false)
+    assert.equal(afterBody.durableSeq, 1)
   } finally {
     await server.destroy()
   }

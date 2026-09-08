@@ -1,0 +1,263 @@
+import { randomUUID } from 'node:crypto'
+
+import * as Y from 'yjs'
+
+import {
+  importLegacyCanvas,
+  readCanvasProjection,
+  type CanvasProjection,
+} from '@/lib/realtime/document'
+import { signCanvasAuthorization } from '@/realtime/internal-auth'
+
+type InternalClientEnv = Partial<Pick<NodeJS.ProcessEnv,
+  'CANVAS_AUTH_URL'
+  | 'CANVAS_AUTH_HMAC_SECRET'
+  | 'CANVAS_AUTH_SECRET'>>
+
+export type ExportDocumentInput = {
+  userId: string
+  projectId: string
+}
+
+export type ExportDocumentResult = {
+  projection: CanvasProjection
+  durableSeq: number
+  projectedSeq: number
+}
+
+export type PatchNodeDataInput = {
+  userId: string
+  projectId: string
+  nodeId: string
+  set?: Record<string, unknown>
+  unset?: string[]
+}
+
+export type ReplaceDocumentInput = {
+  userId: string
+  projectId: string
+  projection: CanvasProjection
+}
+
+type InternalRequestInput = {
+  userId: string
+  projectId: string
+  action: string
+  body?: Record<string, unknown>
+}
+
+type InternalRequestFactoryOptions = {
+  fetchFn?: typeof fetch
+  env?: InternalClientEnv
+  now?: () => number
+  createNonce?: () => string
+  signAuthorization?: typeof signCanvasAuthorization
+}
+
+export type InternalRealtimeClient = {
+  exportDocument(input: ExportDocumentInput): Promise<ExportDocumentResult>
+  patchNodeData(input: PatchNodeDataInput): Promise<void>
+  replaceDocument(input: ReplaceDocumentInput): Promise<void>
+}
+
+export function createInternalRealtimeClient(options: InternalRequestFactoryOptions = {}): InternalRealtimeClient {
+  const fetchFn = options.fetchFn ?? globalThis.fetch
+  const env = (options.env ?? process.env) as InternalClientEnv
+  const now = options.now ?? (() => Math.floor(Date.now() / 1000))
+  const createNonce = options.createNonce ?? randomUUID
+  const signAuthorization = options.signAuthorization ?? signCanvasAuthorization
+
+  async function request<T>(input: InternalRequestInput): Promise<T> {
+    const url = resolveDocumentUrl(env)
+    const secret = resolveAuthorizationSecret(env)
+    const payload = {
+      userId: input.userId,
+      projectId: input.projectId,
+      timestamp: now(),
+      nonce: createNonce(),
+    }
+
+    const response = await fetchFn(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        ...payload,
+        signature: signAuthorization(payload, secret),
+        action: input.action,
+        ...(input.body ?? {}),
+      }),
+    })
+
+    if (!response.ok) {
+      let message = `Realtime internal request failed with ${response.status}`
+      try {
+        const body = await response.json()
+        if (typeof body?.error === 'string' && body.error) {
+          message = body.error
+        }
+      } catch {}
+      throw new Error(message)
+    }
+
+    return response.json() as Promise<T>
+  }
+
+  return {
+    async exportDocument(input) {
+      return request<ExportDocumentResult>({
+        userId: input.userId,
+        projectId: input.projectId,
+        action: 'export-document',
+      })
+    },
+    async patchNodeData(input) {
+      await request({
+        userId: input.userId,
+        projectId: input.projectId,
+        action: 'patch-node-data',
+        body: {
+          nodeId: input.nodeId,
+          set: input.set ?? {},
+          unset: input.unset ?? [],
+        },
+      })
+    },
+    async replaceDocument(input) {
+      await request({
+        userId: input.userId,
+        projectId: input.projectId,
+        action: 'replace-document',
+        body: {
+          projection: input.projection,
+        },
+      })
+    },
+  }
+}
+
+export function applyInternalDocumentAction(
+  doc: Y.Doc,
+  action: string,
+  body: Record<string, unknown>,
+  origin: unknown = 'internal-document-action',
+): void {
+  if (action === 'patch-node-data') {
+    patchNodeData(doc, {
+      nodeId: typeof body.nodeId === 'string' ? body.nodeId : '',
+      set: isRecord(body.set) ? body.set : {},
+      unset: Array.isArray(body.unset) ? body.unset.filter((value): value is string => typeof value === 'string') : [],
+      origin,
+    })
+    return
+  }
+
+  if (action === 'replace-document') {
+    const projection = body.projection
+    if (!isCanvasProjection(projection)) {
+      throw new Error('projection is required')
+    }
+    importLegacyCanvas(doc, projection, origin)
+    return
+  }
+
+  if (action === 'export-document') {
+    return
+  }
+
+  throw new Error(`Unsupported internal document action: ${action}`)
+}
+
+export function buildInternalDocumentExport(doc: Y.Doc): { projection: CanvasProjection } {
+  return {
+    projection: readCanvasProjection(doc),
+  }
+}
+
+export function projectionHasMediaReference(
+  projection: CanvasProjection,
+  {
+    assetId,
+    url,
+  }: {
+    assetId?: string | null
+    url?: string | null
+  },
+): boolean {
+  return projection.nodes.some((node) => {
+    const data = isRecord(node.data) ? node.data : {}
+    return (
+      (assetId ? data.assetId === assetId : false)
+      || (url ? data.outputUrl === url || data.thumbnail === url : false)
+    )
+  })
+}
+
+function patchNodeData(
+  doc: Y.Doc,
+  {
+    nodeId,
+    set,
+    unset,
+    origin,
+  }: {
+    nodeId: string
+    set: Record<string, unknown>
+    unset: string[]
+    origin: unknown
+  },
+): void {
+  if (!nodeId) return
+
+  doc.transact(() => {
+    const node = doc.getMap<Y.Map<unknown>>('nodes').get(nodeId)
+    if (!(node instanceof Y.Map)) {
+      return
+    }
+
+    const nextData = {
+      ...coerceRecord(node.get('data')),
+      ...set,
+    }
+
+    for (const key of unset) {
+      delete nextData[key]
+    }
+
+    node.set('data', nextData)
+  }, origin)
+}
+
+function isCanvasProjection(value: unknown): value is CanvasProjection {
+  if (!value || typeof value !== 'object') return false
+  const candidate = value as Partial<CanvasProjection>
+  return Array.isArray(candidate.nodes)
+    && Array.isArray(candidate.edges)
+    && Array.isArray(candidate.scenes)
+    && typeof candidate.activeSceneId === 'string'
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function coerceRecord(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? { ...value } : {}
+}
+
+function resolveDocumentUrl(env: InternalClientEnv): string {
+  const authorizeUrl = env.CANVAS_AUTH_URL?.trim()
+  if (!authorizeUrl) {
+    throw new Error('CANVAS_AUTH_URL is required for internal realtime mutations')
+  }
+
+  return authorizeUrl.replace(/\/internal\/authorize\/?$/, '/internal/document')
+}
+
+function resolveAuthorizationSecret(env: InternalClientEnv): string {
+  const secret = env.CANVAS_AUTH_HMAC_SECRET?.trim() || env.CANVAS_AUTH_SECRET?.trim()
+  if (!secret) {
+    throw new Error('CANVAS_AUTH_HMAC_SECRET or CANVAS_AUTH_SECRET is required for internal realtime mutations')
+  }
+
+  return secret
+}

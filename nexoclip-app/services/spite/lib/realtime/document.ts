@@ -89,7 +89,11 @@ export function parseProjectDocumentName(name: string): string {
   return match[1]
 }
 
-export function importLegacyCanvas(doc: Y.Doc, input: LegacyCanvasInput): void {
+export function importLegacyCanvas(
+  doc: Y.Doc,
+  input: LegacyCanvasInput,
+  origin: unknown = 'import-legacy-canvas',
+): void {
   const nodes = Array.isArray(input.nodes) ? input.nodes : []
   const edges = Array.isArray(input.edges) ? input.edges : []
   const scenes = sanitizeScenes(input.scenes)
@@ -116,7 +120,7 @@ export function importLegacyCanvas(doc: Y.Doc, input: LegacyCanvasInput): void {
     meta.set('schemaVersion', CURRENT_SCHEMA_VERSION)
     meta.set('scenes', scenes)
     meta.set('activeSceneId', activeSceneId)
-  }, 'import-legacy-canvas')
+  }, origin)
 }
 
 export function readCanvasProjection(doc: Y.Doc): CanvasProjection {

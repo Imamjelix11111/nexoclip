@@ -9,6 +9,10 @@ import {
   userOwnsProject,
 } from '@/lib/project-ownership'
 import { recordAsset as persistAsset, rehostToR2 as rehostAssetToR2 } from '@/lib/r2-upload'
+import {
+  createInternalRealtimeClient,
+  type InternalRealtimeClient,
+} from '@/lib/realtime/internal-client'
 
 interface RecoveryItem {
   requestId: string
@@ -36,6 +40,7 @@ interface GenerateRecoverDeps {
   fetchFalResult?: (requestId: string, modelEndpoint: string, falKey: string) => Promise<Response>
   rehostToR2?: typeof rehostAssetToR2
   recordAsset?: typeof persistAsset
+  createInternalRealtimeClient?: () => InternalRealtimeClient
 }
 
 async function defaultFetchFalStatus(requestId: string, modelEndpoint: string, falKey: string) {
@@ -193,6 +198,7 @@ export function createGenerateRecoverHandler(deps: GenerateRecoverDeps = {}) {
     rehostToR2: deps.rehostToR2 ?? rehostAssetToR2,
     recordAsset: deps.recordAsset ?? persistAsset,
   })
+  const internalRealtime = deps.createInternalRealtimeClient ?? createInternalRealtimeClient
 
   return async function POST(request: Request | NextRequest) {
     if (!falKey) {
@@ -320,16 +326,16 @@ export function createGenerateRecoverHandler(deps: GenerateRecoverDeps = {}) {
 
     if (clearedByProject.size > 0) {
       try {
+        const client = internalRealtime()
         for (const [authorizedProjectId, nodeIds] of clearedByProject) {
-          await sql`
-            UPDATE canvas_nodes
-            SET data = data
-              - 'pendingRequestId'
-              - 'pendingFalEndpoint'
-              - 'pendingStartedAt'
-            WHERE projectId = ${authorizedProjectId}
-              AND nodeId = ANY(${nodeIds}::text[])
-          `
+          for (const nodeId of nodeIds) {
+            await client.patchNodeData({
+              userId: user.id,
+              projectId: authorizedProjectId,
+              nodeId,
+              unset: ['pendingRequestId', 'pendingFalEndpoint', 'pendingStartedAt'],
+            })
+          }
         }
       } catch (err) {
         console.error('[recover] failed to clear pending markers:', err)

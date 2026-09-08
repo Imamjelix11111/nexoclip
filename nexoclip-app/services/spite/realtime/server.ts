@@ -4,6 +4,10 @@ import { Server, type onAuthenticatePayload, type onRequestPayload } from '@hocu
 import * as Y from 'yjs'
 
 import { parseProjectDocumentName } from '../lib/realtime/document'
+import {
+  applyInternalDocumentAction,
+  buildInternalDocumentExport,
+} from '../lib/realtime/internal-client'
 import { verifyRealtimeToken } from './auth'
 import { createDatabaseAdapter, type DatabaseAdapter } from './db'
 import {
@@ -163,7 +167,16 @@ export function createRealtimeServer(options: RealtimeServerOptions = {}): Realt
     quiet: options.quiet ?? true,
     stopOnSignals: false,
     onRequest: async (payload) => {
-      if (await handleHttpRequest(payload, { env, database, verifyCanvasRequest, emit })) {
+      if (await handleHttpRequest(payload, {
+        env,
+        database,
+        repository,
+        verifyCanvasRequest,
+        emit,
+        rooms,
+        createRuntime: options.createRuntime ?? createProjectRuntime,
+        isShuttingDown: () => shuttingDown,
+      })) {
         throw undefined
       }
     },
@@ -276,6 +289,10 @@ export function createRealtimeServer(options: RealtimeServerOptions = {}): Realt
       const room = rooms.get(context.projectId)
       if (!room) {
         throw new Error(`Missing realtime room for ${context.projectId}`)
+      }
+
+      if (isInternalDocumentOrigin(payload.transactionOrigin)) {
+        return
       }
 
       emit({
@@ -435,13 +452,21 @@ async function handleHttpRequest(
   {
     env,
     database,
+    repository,
     verifyCanvasRequest,
     emit,
+    rooms,
+    createRuntime,
+    isShuttingDown,
   }: {
     env: RealtimeEnvironment
     database: DatabaseAdapter
+    repository: RealtimeRepository
     verifyCanvasRequest: typeof verifyCanvasAuthorization
     emit: (event: RealtimeServerEvent) => void
+    rooms: Map<string, RoomState>
+    createRuntime: RuntimeFactory
+    isShuttingDown: () => boolean
   },
 ): Promise<boolean> {
   const requestUrl = new URL(payload.request.url ?? '/', 'http://127.0.0.1')
@@ -451,7 +476,7 @@ async function handleHttpRequest(
     return true
   }
 
-  if (requestUrl.pathname !== '/internal/authorize') {
+  if (requestUrl.pathname !== '/internal/authorize' && requestUrl.pathname !== '/internal/document') {
     return false
   }
 
@@ -506,12 +531,44 @@ async function handleHttpRequest(
     return true
   }
 
-  writeJson(payload.response, 200, { authorized: true })
-  emit({
-    type: 'http:authorize:granted',
-    projectId: stringOrUndefined(authorizationPayload.projectId),
-    userId: stringOrUndefined(authorizationPayload.userId),
-  })
+  if (requestUrl.pathname === '/internal/authorize') {
+    writeJson(payload.response, 200, { authorized: true })
+    emit({
+      type: 'http:authorize:granted',
+      projectId: stringOrUndefined(authorizationPayload.projectId),
+      userId: stringOrUndefined(authorizationPayload.userId),
+    })
+    return true
+  }
+
+  try {
+    const projectId = String(authorizationPayload.projectId)
+    const userId = String(authorizationPayload.userId)
+    const action = typeof body.action === 'string' ? body.action : ''
+    const result = await handleInternalDocumentRequest({
+      projectId,
+      userId,
+      action,
+      body,
+      repository,
+      rooms,
+      createRuntime,
+      emit,
+      isShuttingDown,
+    })
+
+    writeJson(payload.response, 200, result)
+    emit({
+      type: 'http:authorize:granted',
+      projectId,
+      userId,
+    })
+  } catch (error) {
+    writeJson(payload.response, isReadOnlyError(error) ? 409 : 400, {
+      error: error instanceof Error ? error.message : 'Internal document request failed',
+    })
+  }
+
   return true
 }
 
@@ -589,6 +646,157 @@ async function authorizeCanvasRequest({
     }
     throw error
   }
+}
+
+async function handleInternalDocumentRequest({
+  projectId,
+  userId,
+  action,
+  body,
+  repository,
+  rooms,
+  createRuntime,
+  emit,
+  isShuttingDown,
+}: {
+  projectId: string
+  userId: string
+  action: string
+  body: Record<string, unknown>
+  repository: RealtimeRepository
+  rooms: Map<string, RoomState>
+  createRuntime: RuntimeFactory
+  emit: (event: RealtimeServerEvent) => void
+  isShuttingDown: () => boolean
+}): Promise<Record<string, unknown>> {
+  if (isShuttingDown()) {
+    throw new Error('server shutting down')
+  }
+
+  const room = rooms.get(projectId)
+  if (room) {
+    if (action === 'export-document') {
+      if (typeof room.runtime.flush === 'function') {
+        await room.runtime.flush()
+      }
+      const loaded = await repository.loadOrImport(projectId)
+      return {
+        ...buildInternalDocumentExport(room.doc),
+        durableSeq: loaded.durableSeq,
+        projectedSeq: loaded.projectedSeq,
+      }
+    }
+
+    const durableSeq = await applyInternalActionWithRuntime({
+      doc: room.doc,
+      runtime: room.runtime,
+      projectId,
+      userId,
+      action,
+      body,
+      emit,
+    })
+    return { ok: true, durableSeq }
+  }
+
+  const loaded = await repository.loadOrImport(projectId)
+  if (action === 'export-document') {
+    return {
+      ...buildInternalDocumentExport(loaded.doc),
+      durableSeq: loaded.durableSeq,
+      projectedSeq: loaded.projectedSeq,
+    }
+  }
+
+  const runtime = createRuntime({
+    projectId,
+    doc: loaded.doc,
+    repository,
+    loaded,
+  })
+  const durableSeq = await applyInternalActionWithRuntime({
+    doc: loaded.doc,
+    runtime,
+    projectId,
+    userId,
+    action,
+    body,
+    emit,
+  })
+  return { ok: true, durableSeq }
+}
+
+async function applyInternalActionWithRuntime({
+  doc,
+  runtime,
+  projectId,
+  userId,
+  action,
+  body,
+  emit,
+}: {
+  doc: Y.Doc
+  runtime: RealtimeRuntime
+  projectId: string
+  userId: string
+  action: string
+  body: Record<string, unknown>
+  emit: (event: RealtimeServerEvent) => void
+}): Promise<number> {
+  const updates: Uint8Array[] = []
+  const updateListener = (update: Uint8Array) => {
+    updates.push(new Uint8Array(update))
+  }
+
+  doc.on('update', updateListener)
+  try {
+    applyInternalDocumentAction(doc, action, body, createInternalDocumentOrigin(projectId, userId))
+  } finally {
+    doc.off('update', updateListener)
+  }
+
+  if (updates.length === 0) {
+    return 0
+  }
+
+  const mergedUpdate = updates.length === 1 ? updates[0] : Y.mergeUpdates(updates)
+  emit({
+    type: 'ws:enqueue',
+    projectId,
+    userId,
+  })
+  const durableSeq = await runtime.enqueue(mergedUpdate)
+  if (typeof runtime.flush === 'function') {
+    await runtime.flush()
+  }
+  return durableSeq
+}
+
+function createInternalDocumentOrigin(projectId: string, userId: string): {
+  source: 'local'
+  reason: 'internal-document'
+  context: ConnectionContext
+} {
+  return {
+    source: 'local',
+    reason: 'internal-document',
+    context: {
+      projectId,
+      userId,
+    },
+  }
+}
+
+function isInternalDocumentOrigin(origin: unknown): boolean {
+  return !!origin
+    && typeof origin === 'object'
+    && (origin as { source?: unknown }).source === 'local'
+    && (origin as { reason?: unknown }).reason === 'internal-document'
+}
+
+function isReadOnlyError(error: unknown): boolean {
+  return error instanceof Error
+    && (error.message.includes('read-only') || error.message.includes('shutting down'))
 }
 
 async function persistRoomChange({

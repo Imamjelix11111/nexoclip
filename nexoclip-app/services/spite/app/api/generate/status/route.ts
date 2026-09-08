@@ -34,9 +34,11 @@ export function createGenerateStatusHandler(deps: GenerateStatusDeps = {}) {
     if (!/^[a-zA-Z0-9_-]{1,200}$/.test(requestId)) return NextResponse.json({ error: 'Invalid request_id' }, { status: 400 })
 
     const projectId = searchParams.get('projectId') || undefined
+    let authenticatedUserId: string | null = null
     if (projectId && projectId !== 'undefined' && projectId !== 'null') {
       const user = await resolveUser(request)
       if (!user) return unauthorizedResponse()
+      authenticatedUserId = user.id
       const sql = db()
       if (!(await userOwnsProject(sql, user.id, projectId))) {
         return projectNotFoundResponse()
@@ -52,7 +54,14 @@ export function createGenerateStatusHandler(deps: GenerateStatusDeps = {}) {
       const nodeId = searchParams.get('nodeId') || undefined
       if (projectId && projectId !== 'undefined' && projectId !== 'null') {
         await record('video', searchParams.get('model') || 'byteplus', searchParams.get('prompt') || 'Generated asset', stored, projectId)
-        await attach(projectId, nodeId, stored)
+        if (authenticatedUserId) {
+          await attach({
+            userId: authenticatedUserId,
+            projectId,
+            nodeId,
+            url: stored,
+          })
+        }
       }
       return NextResponse.json({ status: 'COMPLETED', output: { url: stored, videos: [stored] }, requestId })
     } catch (error: any) {
