@@ -67,6 +67,14 @@ test('OPENROUTER_VIDEO_MODEL_MAP includes the new T2V/I2V mappings', () => {
     'seedance-2.5-first-last-frame-480p': 'bytedance/seedance-2.5',
     'seedance-2.5-omni-reference': 'bytedance/seedance-2.5',
     'seedance-2.5-omni-reference-480p': 'bytedance/seedance-2.5',
+    'seedance-2.5-unfiltered-text-to-video': 'ep-20260904190604-p8pjl',
+    'seedance-2.5-unfiltered-text-to-video-480p': 'ep-20260904190604-p8pjl',
+    'seedance-2.5-unfiltered-image-to-video': 'ep-20260904190604-p8pjl',
+    'seedance-2.5-unfiltered-image-to-video-480p': 'ep-20260904190604-p8pjl',
+    'seedance-2.5-unfiltered-first-last-frame': 'ep-20260904190604-p8pjl',
+    'seedance-2.5-unfiltered-first-last-frame-480p': 'ep-20260904190604-p8pjl',
+    'seedance-2.5-unfiltered-omni-reference': 'ep-20260904190604-p8pjl',
+    'seedance-2.5-unfiltered-omni-reference-480p': 'ep-20260904190604-p8pjl',
     'seedance-2-text-to-video-fast': 'bytedance/seedance-2.0-fast',
     'seedance-2-image-to-video-fast': 'bytedance/seedance-2.0-fast',
   };
@@ -85,6 +93,8 @@ test('reference-to-video / omni-reference ids are flagged as multi-reference', (
     'happy-horse-1.1-reference-to-video-720p',
     'seedance-2.5-omni-reference',
     'seedance-2.5-omni-reference-480p',
+    'seedance-2.5-unfiltered-omni-reference',
+    'seedance-2.5-unfiltered-omni-reference-480p',
   ];
   for (const id of expectedMultiRef) {
     assert.ok(OPENROUTER_MULTI_REFERENCE_MODELS.has(id), `${id} should be in OPENROUTER_MULTI_REFERENCE_MODELS`);
@@ -95,6 +105,8 @@ test('first-last-frame and plain image-to-video ids are NOT flagged as multi-ref
   const notMultiRef = [
     'seedance-2.5-first-last-frame',
     'seedance-2.5-first-last-frame-480p',
+    'seedance-2.5-unfiltered-first-last-frame',
+    'seedance-2.5-unfiltered-first-last-frame-480p',
     'kling-o1-image-to-video',
     'happy-horse-1.1-image-to-video-1080p',
     'wan2.6-image-to-video',

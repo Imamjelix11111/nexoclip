@@ -1,8 +1,19 @@
 const DEFAULT_BATCH_SIZE = 50;
 const CLAIM_LEASE = "interval '5 minutes'";
+const QUEUE_KINDS = new Set(['image', 'video', 'vimax']);
+const JOB_KINDS = {
+  image: ['image'],
+  video: ['video'],
+  vimax: ['vimax_narrative_planning', 'vimax_novel_planning', 'vimax_render_video'],
+};
+
+export function generationQueueName(kind) {
+  if (!QUEUE_KINDS.has(kind)) throw new Error('Unsupported generation queue kind');
+  return `generation-${kind}`;
+}
 
 function messageFor(job) {
-  const attempt = Number(job.attempt_count) + 1;
+  const attempt = Number(job.attempt_count || 0) + 1;
   return {
     type: 'generation',
     generationId: job.id,
@@ -11,13 +22,14 @@ function messageFor(job) {
   };
 }
 
-async function claimQueued(client, limit) {
+async function claimQueued(client, limit, kind) {
   const result = await client.query(
     `UPDATE generation_jobs
      SET queue_claimed_at = now(), updated_at = now()
      WHERE id IN (
        SELECT id FROM generation_jobs
        WHERE status = 'queued'
+         AND kind = ANY($2)
          AND queue_published_at IS NULL
          AND (next_attempt_at IS NULL OR next_attempt_at <= now())
          AND (queue_claimed_at IS NULL OR queue_claimed_at < now() - ${CLAIM_LEASE})
@@ -26,7 +38,7 @@ async function claimQueued(client, limit) {
        LIMIT $1
      )
      RETURNING id, workspace_id, status, attempt_count`,
-    [limit],
+    [limit, JOB_KINDS[kind]],
   );
   return result.rows;
 }
@@ -51,8 +63,9 @@ async function releaseClaim(pool, generationId) {
   );
 }
 
-export function createQueuePublisher({ pool, queue, batchSize = DEFAULT_BATCH_SIZE }) {
+export function createQueuePublisher({ pool, queue, kind = 'image', batchSize = DEFAULT_BATCH_SIZE }) {
   if (!pool || !queue?.enqueue) throw new TypeError('pool and queue.enqueue are required');
+  generationQueueName(kind);
 
   return {
     async publishAvailable() {
@@ -60,7 +73,7 @@ export function createQueuePublisher({ pool, queue, batchSize = DEFAULT_BATCH_SI
       let jobs;
       try {
         await client.query('BEGIN');
-        jobs = await claimQueued(client, batchSize);
+        jobs = await claimQueued(client, batchSize, kind);
         await client.query('COMMIT');
       } catch (error) {
         await client.query('ROLLBACK');

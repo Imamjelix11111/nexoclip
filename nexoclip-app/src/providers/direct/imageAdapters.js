@@ -1,3 +1,29 @@
+const OPENAI_IMAGE_SIZES = {
+  '1:1': '1024x1024',
+  '2:3': '1024x1536',
+  '3:2': '1536x1024',
+  '9:16': '1024x1536',
+  '16:9': '1536x1024',
+};
+
+// Seedream rejects dimensions below 3,686,400 pixels. These 64px-aligned sizes
+// both satisfy that floor and preserve every Studio ratio.
+const BYTEPLUS_IMAGE_SIZES = {
+  '1:1': '1920x1920',
+  '2:3': '1728x2560',
+  '3:2': '2560x1728',
+  '9:16': '1728x3072',
+  '16:9': '3072x1728',
+};
+
+function openAIImageSize(aspectRatio, fallback) {
+  return OPENAI_IMAGE_SIZES[aspectRatio] || fallback;
+}
+
+function bytePlusImageSize(aspectRatio, resolution) {
+  return BYTEPLUS_IMAGE_SIZES[aspectRatio] || resolution;
+}
+
 function normalizeImagePayload(payload) {
   const images = payload?.data || payload?.predictions || (payload?.candidates || []).flatMap((candidate) => candidate?.content?.parts || []).map((part) => part?.inlineData).filter(Boolean);
   return images.map((image) => {
@@ -29,7 +55,8 @@ async function fetchAsBlob(url, fetchImpl) {
 }
 
 export function createOpenAIImageAdapter({ apiKey, baseUrl = 'https://api.openai.com/v1', fetch: fetchImpl = globalThis.fetch } = {}) {
-  return { async generate({ model, prompt, size, quality, referenceImages }) {
+  return { async generate({ model, prompt, size, aspectRatio, quality, referenceImages }) {
+    const imageSize = openAIImageSize(aspectRatio, size);
     const root = String(baseUrl).replace(/\/+$/, '');
     let response;
     try {
@@ -38,13 +65,13 @@ export function createOpenAIImageAdapter({ apiKey, baseUrl = 'https://api.openai
         const form = new FormData();
         form.append('model', model);
         form.append('prompt', prompt);
-        if (size) form.append('size', size);
+        if (imageSize) form.append('size', imageSize);
         if (quality) form.append('quality', quality);
         const blobs = await Promise.all(referenceImages.map((url) => fetchAsBlob(url, fetchImpl)));
         blobs.forEach((blob, i) => form.append('image[]', blob, `reference-${i}.png`));
         response = await fetchImpl(`${root}/images/edits`, { method: 'POST', headers: { Authorization: `Bearer ${apiKey}` }, body: form });
       } else {
-        response = await fetchImpl(`${root}/images/generations`, { method: 'POST', headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ model, prompt, ...(size ? { size } : {}), ...(quality ? { quality } : {}) }) });
+        response = await fetchImpl(`${root}/images/generations`, { method: 'POST', headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ model, prompt, ...(imageSize ? { size: imageSize } : {}), ...(quality ? { quality } : {}) }) });
       }
     } catch (error) { throw transientError('openai', error); }
     if (!response.ok) throw transientError('openai', response, await readErrorDetail(response));
@@ -57,12 +84,10 @@ export function createOpenAIImageAdapter({ apiKey, baseUrl = 'https://api.openai
 export function createBytePlusImageAdapter({ apiKey, baseUrl, fetch: fetchImpl = globalThis.fetch } = {}) {
   if (!baseUrl) throw new TypeError('baseUrl is required');
   const root = String(baseUrl).replace(/\/+$/, '');
-  return { async generate({ model, prompt, resolution, referenceImages }) {
-    // BytePlus `size` only accepts 'WIDTHxHEIGHT' or a supported resolution preset,
-    // never an aspect ratio like '16:9'. The Seedream 4.5 deployment starts at 2K.
-    const size = model === 'ep-20260907150312-xx7gf' && resolution?.toUpperCase() === '1K'
-      ? '2K'
-      : resolution;
+  return { async generate({ model, prompt, aspectRatio, resolution, referenceImages }) {
+    // BytePlus accepts dimensions or a resolution preset. Explicit dimensions preserve the Studio ratio.
+    const providerResolution = model === 'ep-20260907150312-xx7gf' && resolution?.toUpperCase() === '1K' ? '2K' : resolution;
+    const size = bytePlusImageSize(aspectRatio, providerResolution);
     let response;
     try {
       response = await fetchImpl(`${root}/images/generations`, {

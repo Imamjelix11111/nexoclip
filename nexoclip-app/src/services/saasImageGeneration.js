@@ -2,7 +2,29 @@ import { randomUUID } from 'node:crypto';
 import { createProviderRouter } from '../providers/providerRouter.js';
 import { createGeneratedAsset } from '../repositories/assetMetadataRepository.js';
 
-function imageRequest(job) {
+function dataUrl(body, contentType) {
+  return `data:${contentType};base64,${Buffer.from(body).toString('base64')}`;
+}
+
+export async function resolveReferenceImages({ workspaceId, referenceImages, pool, storage }) {
+  if (!referenceImages?.length) return [];
+  return Promise.all(referenceImages.map(async (reference) => {
+    if (!reference.startsWith('/api/assets/')) return reference;
+    const assetId = reference.match(/^\/api\/assets\/([^/]+)\/download(?:\?|$)/)?.[1];
+    if (!assetId) throw Object.assign(new Error('Invalid asset reference'), { code: 'INVALID_REFERENCE_IMAGE' });
+    const result = await pool.query(
+      'SELECT storage_key, content_type FROM assets WHERE workspace_id = $1 AND id = $2 LIMIT 1',
+      [workspaceId, assetId],
+    );
+    const asset = result.rows[0];
+    if (!asset) throw Object.assign(new Error('Reference asset not found'), { code: 'REFERENCE_ASSET_NOT_FOUND' });
+    const download = await storage.createDownloadUrl({ key: asset.storage_key });
+    const object = await storage.get(download.url || download);
+    return dataUrl(object.body, object.contentType || asset.content_type);
+  }));
+}
+
+function imageRequest(job, referenceImages) {
   const parameters = job.parameters || {};
   return {
     model: job.model,
@@ -11,7 +33,7 @@ function imageRequest(job) {
     ...(parameters.resolution ? { resolution: parameters.resolution } : {}),
     ...(parameters.quality ? { quality: parameters.quality } : {}),
     ...(parameters.seed !== undefined ? { seed: parameters.seed } : {}),
-    ...(parameters.referenceImages?.length ? { referenceImages: parameters.referenceImages } : {}),
+    ...(referenceImages?.length ? { referenceImages } : {}),
   };
 }
 
@@ -31,8 +53,14 @@ async function downloadOutput(output) {
 export function createSaasImageHandler({ providerRouter, provider, storage, pool }) {
   if ((!providerRouter && !provider) || !storage || !pool) throw new TypeError('provider router, storage, and pool are required');
   return async (job) => {
+    const referenceImages = await resolveReferenceImages({
+      workspaceId: job.workspace_id,
+      referenceImages: job.parameters?.referenceImages,
+      pool,
+      storage,
+    });
     const result = providerRouter
-      ? await providerRouter.generateImage(imageRequest(job))
+      ? await providerRouter.generateImage(imageRequest(job, referenceImages))
       : await provider.submitGeneration({ model: job.model, payload: { prompt: job.prompt, ...(job.parameters || {}) } });
     const providerRequestId = result.providerRequestId || `${result.provider || 'provider'}:${job.id}`;
     const savedOutputs = [];

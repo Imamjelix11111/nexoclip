@@ -3438,7 +3438,13 @@ export const OPENROUTER_VIDEO_MODEL_MAP = {
   'wan2.6-text-to-video': 'alibaba/wan-2.6',
   'wan2.6-image-to-video': 'alibaba/wan-2.6',
   'seedance-2.5-unfiltered-text-to-video': 'ep-20260904190604-p8pjl',
+  'seedance-2.5-unfiltered-text-to-video-480p': 'ep-20260904190604-p8pjl',
   'seedance-2.5-unfiltered-image-to-video': 'ep-20260904190604-p8pjl',
+  'seedance-2.5-unfiltered-image-to-video-480p': 'ep-20260904190604-p8pjl',
+  'seedance-2.5-unfiltered-first-last-frame': 'ep-20260904190604-p8pjl',
+  'seedance-2.5-unfiltered-first-last-frame-480p': 'ep-20260904190604-p8pjl',
+  'seedance-2.5-unfiltered-omni-reference': 'ep-20260904190604-p8pjl',
+  'seedance-2.5-unfiltered-omni-reference-480p': 'ep-20260904190604-p8pjl',
   'seedance-2.5-text-to-video': 'bytedance/seedance-2.5',
   'seedance-2.5-text-to-video-480p': 'bytedance/seedance-2.5',
   'seedance-2.5-image-to-video': 'bytedance/seedance-2.5',
@@ -3468,6 +3474,8 @@ export const OPENROUTER_MULTI_REFERENCE_MODELS = new Set([
   'happy-horse-1.1-reference-to-video-720p',
   'seedance-2.5-omni-reference',
   'seedance-2.5-omni-reference-480p',
+  'seedance-2.5-unfiltered-omni-reference',
+  'seedance-2.5-unfiltered-omni-reference-480p',
   // Sora's `input_reference` is a single character/scene reference, not a first-frame
   // anchor — same misinterpretation risk as above.
   'openai-sora-2-pro-image-to-video',
@@ -3486,16 +3494,15 @@ export const OPENROUTER_V2V_MODEL_MAP = {
 
 export const getModelById = (id) => t2iModels.find(m => m.id === id);
 
+function imageAspectRatios(ratios) {
+  const filtered = (ratios || []).filter((ratio) => ratio !== 'Auto');
+  return ['9:16', ...filtered.filter((ratio) => ratio !== '9:16')];
+}
+
 export const getAspectRatiosForModel = (modelId) => {
   const model = getModelById(modelId);
-  if (!model) return ['1:1'];
-
-  const arInput = model.inputs?.aspect_ratio;
-  if (arInput && arInput.enum) {
-    return arInput.enum;
-  }
-
-  return ['1:1', '16:9', '9:16', '4:3', '3:2', '21:9'];
+  const arInput = model?.inputs?.aspect_ratio;
+  return imageAspectRatios(arInput?.enum || ['1:1', '16:9', '9:16', '4:3', '3:2', '21:9']);
 };
 
 // ==========================================
@@ -7930,8 +7937,23 @@ export const t2vModels = [
       "duration": { "enum": [5, 10, 15], "type": "int", "title": "Duration", "name": "duration", "default": 5 },
       "generate_audio": { "type": "boolean", "title": "Generate Audio", "name": "generate_audio", "default": true }
     },
-    "provider": "byteplus",
-    "provider_name": "BytePlus"
+    "provider": "bytedance",
+    "provider_name": "ByteDance"
+  },
+  {
+    "id": "seedance-2.5-unfiltered-text-to-video-480p",
+    "name": "Seedance 2.5 Unfiltered 480p",
+    "endpoint": "ep-20260904190604-p8pjl",
+    "family": "seedance-2.5-unfiltered",
+    "hasPrompt": true,
+    "inputs": {
+      "prompt": { "type": "string", "title": "Prompt", "name": "prompt", "description": "Text prompt describing the video." },
+      "aspect_ratio": { "enum": ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"], "type": "string", "title": "Aspect Ratio", "name": "aspect_ratio", "default": "16:9" },
+      "resolution": { "enum": ["480p"], "type": "string", "title": "Resolution", "name": "resolution", "default": "480p" },
+      "duration": { "enum": [5, 10, 15], "type": "int", "title": "Duration", "name": "duration", "default": 5 }
+    },
+    "provider": "bytedance",
+    "provider_name": "ByteDance"
   },
   {
     "id": "minimax-h3-open-text-to-video",
@@ -18051,8 +18073,97 @@ export const i2vModels = [
       "duration": { "enum": [5, 10, 15], "type": "int", "title": "Duration", "name": "duration", "default": 5 },
       "generate_audio": { "type": "boolean", "title": "Generate Audio", "name": "generate_audio", "default": true }
     },
-    "provider": "byteplus",
-    "provider_name": "BytePlus"
+    "provider": "bytedance",
+    "provider_name": "ByteDance"
+  },
+  {
+    "id": "seedance-2.5-unfiltered-image-to-video-480p",
+    "name": "Seedance 2.5 Unfiltered 480p",
+    "endpoint": "ep-20260904190604-p8pjl",
+    "family": "seedance-2.5-unfiltered",
+    "imageField": "image_url",
+    "hasPrompt": true,
+    "inputs": {
+      "prompt": { "type": "string", "title": "Prompt", "name": "prompt", "description": "Text prompt describing the video motion and style." },
+      "image_url": { "type": "string", "title": "Image URL", "name": "image_url", "field": "image", "description": "Reference image to animate." },
+      "aspect_ratio": { "enum": ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"], "type": "string", "title": "Aspect Ratio", "name": "aspect_ratio", "default": "16:9" },
+      "resolution": { "enum": ["480p"], "type": "string", "title": "Resolution", "name": "resolution", "default": "480p" },
+      "duration": { "enum": [5, 10, 15], "type": "int", "title": "Duration", "name": "duration", "default": 5 }
+    },
+    "provider": "bytedance",
+    "provider_name": "ByteDance"
+  },
+  {
+    "id": "seedance-2.5-unfiltered-first-last-frame",
+    "name": "Seedance 2.5 Unfiltered First & Last Frame",
+    "endpoint": "ep-20260904190604-p8pjl",
+    "family": "seedance-2.5-unfiltered",
+    "imageField": "image_url",
+    "lastImageField": "last_image",
+    "hasPrompt": true,
+    "inputs": {
+      "prompt": { "type": "string", "title": "Prompt", "name": "prompt", "description": "Text prompt describing the transition and motion." },
+      "image_url": { "type": "string", "title": "First Image", "name": "image_url", "field": "image", "description": "First-frame image." },
+      "last_image": { "type": "string", "title": "Last Image", "name": "last_image", "field": "image", "description": "Last-frame image." },
+      "aspect_ratio": { "enum": ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"], "type": "string", "title": "Aspect Ratio", "name": "aspect_ratio", "default": "16:9" },
+      "resolution": { "enum": ["480p", "720p", "1080p"], "type": "string", "title": "Resolution", "name": "resolution", "default": "720p" },
+      "duration": { "enum": [5, 10, 15], "type": "int", "title": "Duration", "name": "duration", "default": 5 }
+    },
+    "provider": "bytedance",
+    "provider_name": "ByteDance"
+  },
+  {
+    "id": "seedance-2.5-unfiltered-first-last-frame-480p",
+    "name": "Seedance 2.5 Unfiltered First & Last Frame 480p",
+    "endpoint": "ep-20260904190604-p8pjl",
+    "family": "seedance-2.5-unfiltered",
+    "imageField": "image_url",
+    "lastImageField": "last_image",
+    "hasPrompt": true,
+    "inputs": {
+      "prompt": { "type": "string", "title": "Prompt", "name": "prompt", "description": "Text prompt describing the transition and motion." },
+      "image_url": { "type": "string", "title": "First Image", "name": "image_url", "field": "image", "description": "First-frame image." },
+      "last_image": { "type": "string", "title": "Last Image", "name": "last_image", "field": "image", "description": "Last-frame image." },
+      "aspect_ratio": { "enum": ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"], "type": "string", "title": "Aspect Ratio", "name": "aspect_ratio", "default": "16:9" },
+      "resolution": { "enum": ["480p"], "type": "string", "title": "Resolution", "name": "resolution", "default": "480p" },
+      "duration": { "enum": [5, 10, 15], "type": "int", "title": "Duration", "name": "duration", "default": 5 }
+    },
+    "provider": "bytedance",
+    "provider_name": "ByteDance"
+  },
+  {
+    "id": "seedance-2.5-unfiltered-omni-reference",
+    "name": "Seedance 2.5 Unfiltered Omni Reference",
+    "endpoint": "ep-20260904190604-p8pjl",
+    "family": "seedance-2.5-unfiltered",
+    "imageField": "images_list",
+    "hasPrompt": true,
+    "inputs": {
+      "prompt": { "type": "string", "title": "Prompt", "name": "prompt", "description": "Text prompt describing the video and its reference images." },
+      "images_list": { "type": "array", "title": "Reference Images", "name": "images_list", "field": "images_list", "items": { "type": "string" }, "maxItems": 30, "description": "Reference image URLs." },
+      "aspect_ratio": { "enum": ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"], "type": "string", "title": "Aspect Ratio", "name": "aspect_ratio", "default": "16:9" },
+      "resolution": { "enum": ["480p", "720p", "1080p"], "type": "string", "title": "Resolution", "name": "resolution", "default": "720p" },
+      "duration": { "enum": [5, 10, 15], "type": "int", "title": "Duration", "name": "duration", "default": 5 }
+    },
+    "provider": "bytedance",
+    "provider_name": "ByteDance"
+  },
+  {
+    "id": "seedance-2.5-unfiltered-omni-reference-480p",
+    "name": "Seedance 2.5 Unfiltered Omni Reference 480p",
+    "endpoint": "ep-20260904190604-p8pjl",
+    "family": "seedance-2.5-unfiltered",
+    "imageField": "images_list",
+    "hasPrompt": true,
+    "inputs": {
+      "prompt": { "type": "string", "title": "Prompt", "name": "prompt", "description": "Text prompt describing the video and its reference images." },
+      "images_list": { "type": "array", "title": "Reference Images", "name": "images_list", "field": "images_list", "items": { "type": "string" }, "maxItems": 30, "description": "Reference image URLs." },
+      "aspect_ratio": { "enum": ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"], "type": "string", "title": "Aspect Ratio", "name": "aspect_ratio", "default": "16:9" },
+      "resolution": { "enum": ["480p"], "type": "string", "title": "Resolution", "name": "resolution", "default": "480p" },
+      "duration": { "enum": [5, 10, 15], "type": "int", "title": "Duration", "name": "duration", "default": 5 }
+    },
+    "provider": "bytedance",
+    "provider_name": "ByteDance"
   },
   {
     "id": "seedance-2.5-image-to-video",
@@ -19637,9 +19748,7 @@ export const getMaxImagesForI2VModel = (modelId) => {
 
 export const getAspectRatiosForI2IModel = (modelId) => {
     const model = getI2IModelById(modelId);
-    if (!model) return ['1:1'];
-    if (model.inputs && model.inputs.aspect_ratio && model.inputs.aspect_ratio.enum) return model.inputs.aspect_ratio.enum;
-    return ['1:1', '16:9', '9:16'];
+    return imageAspectRatios(model?.inputs?.aspect_ratio?.enum || ['1:1', '16:9', '9:16']);
 };
 
 export const getAspectRatiosForI2VModel = (modelId) => {

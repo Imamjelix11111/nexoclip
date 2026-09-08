@@ -77,15 +77,13 @@ export async function generateImage(_apiKey, params) {
     return response.json();
 }
 
-export async function generateSaasImage(params, { maxAttempts = 180, interval = 2000 } = {}) {
+async function submitSaasGeneration({ kind, model, params }, { maxAttempts = 180, interval = 2000 } = {}) {
     const workspaceId = params.workspace_id || (typeof window !== 'undefined' ? window.sessionStorage.getItem('nexoclip_workspace_id') : null);
-    const model = OPENROUTER_IMAGE_MODEL_MAP[params.model];
-    if (!model) throw new Error(`Image model is not available through the SaaS provider router: ${params.model}`);
     if (!workspaceId) throw new Error('Select a workspace before generating');
     const response = await fetch('/api/generations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-workspace-id': workspaceId, 'Idempotency-Key': params.idempotencyKey },
-        body: JSON.stringify({ prompt: params.prompt || '', model, parameters: params.parameters || {}, idempotencyKey: params.idempotencyKey }),
+        body: JSON.stringify({ kind, prompt: params.prompt || '', model, parameters: params.parameters || {}, idempotencyKey: params.idempotencyKey }),
     });
     if (!response.ok) {
         const body = await response.json().catch(() => ({}));
@@ -104,14 +102,44 @@ export async function generateSaasImage(params, { maxAttempts = 180, interval = 
         const { generation } = await poll.json();
         if (generation.status === 'succeeded') {
             const output = generation.outputs?.[0];
-            const url = output?.assetId
-                ? `/api/assets/${encodeURIComponent(output.assetId)}/download?workspace_id=${encodeURIComponent(workspaceId)}`
-                : output?.url;
+            const url = output?.assetId ? `/api/assets/${encodeURIComponent(output.assetId)}/download?workspace_id=${encodeURIComponent(workspaceId)}` : output?.url;
             return { id: generation.id, provider: generation.provider, outputs: url ? [{ url }] : [] };
         }
-        if (generation.status === 'failed' || generation.status === 'cancelled') throw new Error(generation.error?.message || 'Image generation failed');
+        if (generation.status === 'failed' || generation.status === 'cancelled') throw new Error(generation.error?.message || `${kind} generation failed`);
     }
-    throw new Error('Image generation timed out');
+    throw new Error(`${kind} generation timed out`);
+}
+
+export async function generateSaasImage(params, options) {
+    const model = OPENROUTER_IMAGE_MODEL_MAP[params.model] || params.model;
+    if (!model) throw new Error(`Image model is not available through the SaaS provider router: ${params.model}`);
+    return submitSaasGeneration({ kind: 'image', model, params }, options);
+}
+
+export async function generateSaasVideo(params, options) {
+    const model = OPENROUTER_VIDEO_MODEL_MAP[params.model] || OPENROUTER_V2V_MODEL_MAP[params.model] || params.model;
+    if (!model) throw new Error(`Video model is not available through the SaaS provider router: ${params.model}`);
+    const images = params.images_list || (params.image_url ? [params.image_url] : []);
+    const usesReferenceImages = OPENROUTER_MULTI_REFERENCE_MODELS.has(params.model);
+    const frameImages = usesReferenceImages ? [] : images.map((url, index) => ({ url, frameType: index ? 'last_frame' : 'first_frame' }));
+    if (params.last_image) frameImages.push({ url: params.last_image, frameType: 'last_frame' });
+    return submitSaasGeneration({
+        kind: 'video', model, params: {
+            ...params,
+            prompt: params.prompt || 'Animate the provided reference.',
+            idempotencyKey: params.idempotencyKey || crypto.randomUUID(),
+            parameters: params.parameters || {
+                ...(params.aspect_ratio ? { aspectRatio: params.aspect_ratio } : {}),
+                ...(params.duration !== undefined ? { duration: Number(params.duration) } : {}),
+                ...(params.resolution ? { resolution: params.resolution } : {}),
+                ...(params.seed !== undefined && params.seed !== -1 ? { seed: params.seed } : {}),
+                ...(frameImages.length ? { frameImages } : {}),
+                ...(usesReferenceImages && images.length ? { referenceImages: images } : {}),
+                ...(params.videos_list?.length ? { referenceVideos: params.videos_list } : {}),
+                ...(params.video_url ? { referenceVideos: [params.video_url] } : {}),
+            },
+        },
+    }, options);
 }
 
 export async function generateI2I(_apiKey, params) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { generateImage, uploadFile } from "../generationClient.js";
+import { generateSaasImage, uploadFile } from "../generationClient.js";
 import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
 import MobileGenerationActions, {
   CopyContentIcon,
@@ -135,7 +135,7 @@ const LENSES = Object.keys(LENS_MAP);
 const FOCAL_LENGTHS = Object.keys(FOCAL_PERSPECTIVE).map((k) => parseInt(k));
 const APERTURES = Object.keys(APERTURE_EFFECT);
 
-function buildNanoBananaPrompt(
+function buildCinemaPrompt(
   basePrompt,
   camera,
   lens,
@@ -662,7 +662,7 @@ export default function CinemaStudio({
     onGenerationStart?.();
     setIsGenerating(true);
 
-    const finalPrompt = buildNanoBananaPrompt(
+    const finalPrompt = buildCinemaPrompt(
       basePrompt,
       settings.camera,
       settings.lens,
@@ -672,14 +672,16 @@ export default function CinemaStudio({
 
     try {
       const workspaceId = typeof window !== "undefined" ? window.sessionStorage.getItem("nexoclip_workspace_id") : null;
-      const res = await generateImage(apiKey, {
-        model: uploadedImage ? "nano-banana-pro-edit" : "nano-banana-pro",
+      const res = await generateSaasImage({
+        model: "bytedance-seed/seedream-4.5",
         prompt: finalPrompt,
-        aspect_ratio: settings.aspect_ratio,
-        resolution,
-        negative_prompt: "blurry, low quality, distortion, bad composition",
-        images_list: uploadedImage ? [uploadedImage] : [],
         workspace_id: workspaceId,
+        idempotencyKey: crypto.randomUUID(),
+        parameters: {
+          aspectRatio: settings.aspect_ratio,
+          resolution,
+          referenceImages: uploadedImage ? [uploadedImage] : [],
+        },
       });
 
       const outputUrl = res?.url || res?.outputs?.[0]?.url;
@@ -708,7 +710,7 @@ export default function CinemaStudio({
         if (onGenerationComplete) {
           onGenerationComplete({
             url: outputUrl,
-            model: "nano-banana-pro",
+            model: "bytedance-seed/seedream-4.5",
             prompt: basePrompt,
             type: "cinema",
           });

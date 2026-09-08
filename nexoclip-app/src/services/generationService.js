@@ -40,6 +40,38 @@ export function validateImageGenerationInput(input) {
   return { prompt, model, parameters };
 }
 
+function validAssetReferences(values) {
+  return Array.isArray(values) && values.every((url) => typeof url === 'string' && /^\/api\/assets\/[^/]+\/download(?:\?|$)/.test(url));
+}
+
+export function validateVideoGenerationInput(input) {
+  const prompt = String(input?.prompt || '').trim();
+  const model = String(input?.model || '').trim();
+  const supplied = input?.parameters && Object.getPrototypeOf(input.parameters) === Object.prototype ? input.parameters : {};
+  if (input?.kind !== 'video' || !prompt || prompt.length > 10000 || !model || model.length > 120) throw new Error('Video generation request is invalid');
+  const parameters = {};
+  if (supplied.aspectRatio !== undefined) {
+    if (!aspectRatios.has(supplied.aspectRatio)) throw new Error('Video aspect ratio is invalid');
+    parameters.aspectRatio = supplied.aspectRatio;
+  }
+  if (supplied.duration !== undefined) {
+    if (!Number.isInteger(Number(supplied.duration)) || Number(supplied.duration) < 1 || Number(supplied.duration) > 60) throw new Error('Video duration is invalid');
+    parameters.duration = Number(supplied.duration);
+  }
+  for (const key of ['resolution', 'seed']) if (supplied[key] !== undefined) parameters[key] = supplied[key];
+  for (const key of ['referenceImages', 'referenceVideos']) {
+    if (supplied[key] !== undefined) {
+      if (!validAssetReferences(supplied[key]) || supplied[key].length > 10) throw new Error(`Video ${key} must be tenant asset references`);
+      parameters[key] = supplied[key];
+    }
+  }
+  if (supplied.frameImages !== undefined) {
+    if (!Array.isArray(supplied.frameImages) || supplied.frameImages.length > 2 || !supplied.frameImages.every((frame) => typeof frame?.url === 'string' && /^\/api\/assets\/[^/]+\/download(?:\?|$)/.test(frame.url) && ['first_frame', 'last_frame'].includes(frame.frameType))) throw new Error('Video frame images must be tenant asset references');
+    parameters.frameImages = supplied.frameImages;
+  }
+  return { kind: 'video', prompt, model, parameters };
+}
+
 export function validateVimaxGenerationInput(input) {
   const allowed = new Set(['kind', 'sessionId', 'input', 'idempotencyKey', 'projectId', 'pricingVersion']);
   if (!input || Object.keys(input).some((key) => !allowed.has(key))) {
@@ -90,14 +122,14 @@ async function enforceGenerationLimits(client, workspaceId, cost) {
 export async function createImageGenerationJobWithReservation(pool, workspaceId, input, { userId } = {}) {
   if (!workspaceId || !input?.idempotencyKey) throw new Error('Generation idempotency key is required');
   if (!userId) throw new Error('Generation user is required');
-  const validated = validateImageGenerationInput(input);
+  const validated = input?.kind === 'video' ? validateVideoGenerationInput(input) : validateImageGenerationInput(input);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const existing = await findGenerationByIdempotencyKey(client, workspaceId, input.idempotencyKey);
     if (existing) { await client.query('COMMIT'); return existing; }
 
-    const selected = await findPricingRule(client, { operation: input.operation || 'image_generation', pricingVersion: input.pricingVersion || null });
+    const selected = await findPricingRule(client, { operation: input.operation || (validated.kind === 'video' ? 'video_generation' : 'image_generation'), pricingVersion: input.pricingVersion || null });
     if (!selected) throw new Error('Pricing rule not found');
     const estimate = estimateCost({ ...selected, quantity: 1 });
     await enforceGenerationLimits(client, workspaceId, Number(estimate.amount));

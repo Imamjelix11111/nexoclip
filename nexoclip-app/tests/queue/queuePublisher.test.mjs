@@ -21,14 +21,14 @@ function poolFor(rows) {
 test('publishes a claimed generation after it is committed and uses a stable idempotency key', async () => {
   const pool = poolFor([{ id: 'g1', workspace_id: 'w1', status: 'queued' }]);
   const messages = [];
-  const queue = { async enqueue(message, options) { messages.push({ message, options }); } };
+  const queue = { async enqueue(message, options) { messages.push({ message, options }); return { runnable: true }; } };
 
   const published = await createQueuePublisher({ pool, queue }).publishAvailable();
 
   assert.equal(published, 1);
   assert.deepEqual(messages, [{
-    message: { type: 'generation', generationId: 'g1', workspaceId: 'w1' },
-    options: { idempotencyKey: 'generation:g1' },
+    message: { type: 'generation', generationId: 'g1', workspaceId: 'w1', attempt: 1 },
+    options: { idempotencyKey: 'generation:g1:attempt:1' },
   }]);
   assert.equal(pool.calls[0].text, 'BEGIN');
   assert.equal(pool.calls.findIndex((call) => call.text === 'COMMIT') > pool.calls.findIndex((call) => /SET queue_claimed_at = now/.test(call.text)), true);
@@ -37,7 +37,7 @@ test('publishes a claimed generation after it is committed and uses a stable ide
 
 test('claims a due retry even if it was published before', async () => {
   const pool = poolFor([]);
-  const publisher = createQueuePublisher({ pool, queue: { async enqueue() {} } });
+  const publisher = createQueuePublisher({ pool, queue: { async enqueue() { return { runnable: true }; } } });
 
   await publisher.publishAvailable();
 

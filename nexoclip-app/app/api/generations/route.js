@@ -1,7 +1,7 @@
 import { SESSION_COOKIE } from '../../../src/lib/auth/session.js';
 import { resolveTenantContext } from '../../../src/services/tenantContext.js';
 import { createImageGenerationJobWithReservation } from '../../../src/services/generationService.js';
-import { recoverQueuedGenerations } from '../../../src/queue/generationQueue.js';
+import { recoverQueuedGenerations, generationQueueName } from '../../../src/queue/generationQueue.js';
 import { createBullMqGenerationQueue } from '../../../src/queue/bullmqGenerationQueue.js';
 import { Queue, Worker } from 'bullmq';
 import IORedis from 'ioredis';
@@ -15,11 +15,11 @@ function errorResponse(error) {
   return Response.json({ error: error.message, code: error.code }, { status });
 }
 
-async function publishReservedGeneration({ pool }) {
+async function publishReservedGeneration({ pool, kind }) {
   if (!process.env.REDIS_URL) throw new Error('Generation queue is unavailable');
   const connection = new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: null });
-  const queue = createBullMqGenerationQueue({ Queue, Worker, connection });
-  try { await recoverQueuedGenerations({ pool, queue }); }
+  const queue = createBullMqGenerationQueue({ Queue, Worker, connection, queueName: generationQueueName(kind) });
+  try { await recoverQueuedGenerations({ pool, queue, kind }); }
   finally { await queue.close(); await connection.quit(); }
 }
 
@@ -40,7 +40,7 @@ export function createGenerationsPostHandler({
       const database = pool || (await import('../../../src/db/pool.js')).getPool();
       const generation = await reserve(database, tenant.workspace.id, { ...input, idempotencyKey }, { userId: tenant.user.id });
       try {
-        await publish({ pool: database });
+        await publish({ pool: database, kind: generation.kind });
       } catch (error) {
         logError({ event: 'generation_publication_deferred', generationId: generation.id, errorName: error?.name || 'Error', errorCode: error?.code || null });
       }

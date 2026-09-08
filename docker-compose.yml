@@ -61,6 +61,77 @@ services:
         condition: service_healthy
     restart: "no"
 
+  nexoclip-asset-storage-init:
+    image: busybox:1.37
+    command: ["sh", "-c", "mkdir -p /data/assets && chown -R 1000:1000 /data"]
+    volumes:
+      - nexoclip-assets:/data
+    restart: "no"
+
+  nexoclip-image-worker:
+    networks:
+      - ai-ugc
+    build:
+      context: ./nexoclip-app
+      target: worker
+    command: ["node", "src/queue/imageWorker.mjs"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
+      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@nexoclip-redis:6379
+      LOCAL_OBJECT_STORAGE_DIR: /data/assets
+      LOCAL_OBJECT_STORAGE_SECRET: ${LOCAL_OBJECT_STORAGE_SECRET:?LOCAL_OBJECT_STORAGE_SECRET is required}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-${GOOGLE_API_KEY:-}}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      BYTEPLUS_API_KEY: ${BYTEPLUS_API_KEY:-}
+      BYTEPLUS_BASE_URL: ${BYTEPLUS_BASE_URL:-}
+      IMAGE_WORKER_CONCURRENCY: ${IMAGE_WORKER_CONCURRENCY:-3}
+    volumes:
+      - nexoclip-assets:/data
+    depends_on:
+      nexoclip-asset-storage-init:
+        condition: service_completed_successfully
+      nexoclip-postgres:
+        condition: service_healthy
+      nexoclip-migrate:
+        condition: service_completed_successfully
+      nexoclip-redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  nexoclip-video-worker:
+    networks:
+      - ai-ugc
+    build:
+      context: ./nexoclip-app
+      target: worker
+    command: ["node", "src/queue/videoWorker.mjs"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
+      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@nexoclip-redis:6379
+      LOCAL_OBJECT_STORAGE_DIR: /data/assets
+      LOCAL_OBJECT_STORAGE_SECRET: ${LOCAL_OBJECT_STORAGE_SECRET:?LOCAL_OBJECT_STORAGE_SECRET is required}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-${GOOGLE_API_KEY:-}}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      BYTEPLUS_API_KEY: ${BYTEPLUS_API_KEY:-}
+      BYTEPLUS_BASE_URL: ${BYTEPLUS_BASE_URL:-}
+      VIDEO_WORKER_CONCURRENCY: ${VIDEO_WORKER_CONCURRENCY:-3}
+    volumes:
+      - nexoclip-assets:/data
+    depends_on:
+      nexoclip-asset-storage-init:
+        condition: service_completed_successfully
+      nexoclip-postgres:
+        condition: service_healthy
+      nexoclip-migrate:
+        condition: service_completed_successfully
+      nexoclip-redis:
+        condition: service_healthy
+    restart: unless-stopped
+
   nexoclip-storyboard-worker:
     build:
       context: ./nexoclip-app
@@ -121,6 +192,9 @@ services:
       args:
         NEXT_PUBLIC_SPITE_URL: http://localhost:3005/spite
     container_name: nexoclip-app
+    networks:
+      - default
+      - ai-ugc
     ports:
       - "3000:3000"
     environment:
@@ -131,10 +205,21 @@ services:
       VIMAX_RUNTIME_TOKEN: ${VIMAX_RUNTIME_TOKEN:?Set VIMAX_RUNTIME_TOKEN in your environment}
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@nexoclip-redis:6379
       MUAPI_API_KEY: ${MUAPI_API_KEY:-}
+      LOCAL_OBJECT_STORAGE_DIR: /data/assets
+      LOCAL_OBJECT_STORAGE_SECRET: ${LOCAL_OBJECT_STORAGE_SECRET:?LOCAL_OBJECT_STORAGE_SECRET is required}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-${GOOGLE_API_KEY:-}}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      BYTEPLUS_API_KEY: ${BYTEPLUS_API_KEY:-}
+      BYTEPLUS_BASE_URL: ${BYTEPLUS_BASE_URL:-}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_OAUTH_ORIGIN: ${GOOGLE_OAUTH_ORIGIN:-}
+    volumes:
+      - nexoclip-assets:/data
     depends_on:
+      nexoclip-asset-storage-init:
+        condition: service_completed_successfully
       nexoclip-postgres:
         condition: service_healthy
       nexoclip-migrate:
@@ -145,9 +230,15 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+networks:
+  ai-ugc:
+    external: true
+    name: ai-ugc_default
+
 volumes:
   nexoclip-postgres-data:
     external: true
     name: open-generative-ai_nexoclip-postgres-data
   ai-storyboard-tenants:
   nexoclip-redis-data:
+  nexoclip-assets:

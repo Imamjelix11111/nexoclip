@@ -13,6 +13,7 @@ class FakeQueue {
 
   async add(name, data, options) {
     FakeQueue.added.push({ name, data, options });
+    return { async getState() { return 'waiting'; } };
   }
 
   async close() {}
@@ -22,7 +23,7 @@ class FakeWorker {}
 
 test('maps publisher idempotency keys to deterministic BullMQ-safe job ids and enqueues them', async () => {
   FakeQueue.added = [];
-  const queue = createBullMqGenerationQueue({ Queue: FakeQueue, Worker: FakeWorker, connection: {} });
+  const queue = createBullMqGenerationQueue({ Queue: FakeQueue, Worker: FakeWorker, connection: {}, queueName: 'test' });
   const idempotencyKey = 'generation:g1';
   const jobId = bullMqJobId(idempotencyKey);
 
@@ -45,7 +46,7 @@ test('does not swallow Redis errors that resemble duplicate job errors', async (
   class FailingQueue extends FakeQueue {
     async add() { throw new Error('Redis job exists connection lost'); }
   }
-  const queue = createBullMqGenerationQueue({ Queue: FailingQueue, Worker: FakeWorker, connection: {} });
+  const queue = createBullMqGenerationQueue({ Queue: FailingQueue, Worker: FakeWorker, connection: {}, queueName: 'test' });
 
   await assert.rejects(
     queue.enqueue({ type: 'generation', generationId: 'g1' }, { idempotencyKey: 'generation:g1' }),
@@ -54,7 +55,7 @@ test('does not swallow Redis errors that resemble duplicate job errors', async (
 });
 
 test('does not expose a polling dequeue method', () => {
-  const queue = createBullMqGenerationQueue({ Queue: FakeQueue, Worker: FakeWorker, connection: {} });
+  const queue = createBullMqGenerationQueue({ Queue: FakeQueue, Worker: FakeWorker, connection: {}, queueName: 'test' });
 
   assert.equal('dequeue' in queue, false);
 });

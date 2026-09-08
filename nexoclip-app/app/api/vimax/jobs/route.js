@@ -3,7 +3,7 @@ import { getCurrentSession } from '../../../../src/services/authService.js';
 import { getDefaultWorkspace } from '../../../../src/services/workspaceService.js';
 import { getPool } from '../../../../src/db/pool.js';
 import { createVimaxGenerationJobWithReservation } from '../../../../src/services/generationService.js';
-import { recoverQueuedGenerations } from '../../../../src/queue/generationQueue.js';
+import { recoverQueuedGenerations, generationQueueName } from '../../../../src/queue/generationQueue.js';
 import { createBullMqGenerationQueue } from '../../../../src/queue/bullmqGenerationQueue.js';
 import { Queue, Worker } from 'bullmq';
 import IORedis from 'ioredis';
@@ -15,14 +15,14 @@ function queueForEnvironment() {
   const redisUrl = process.env.REDIS_URL;
   if (!redisUrl) throw new Error('Generation queue is unavailable');
   const connection = new IORedis(redisUrl, { maxRetriesPerRequest: null });
-  const queue = createBullMqGenerationQueue({ Queue, Worker, connection });
+  const queue = createBullMqGenerationQueue({ Queue, Worker, connection, queueName: generationQueueName('vimax') });
   return { queue, connection };
 }
 
 async function publishReservedGeneration({ pool }) {
   const { queue, connection } = queueForEnvironment();
   try {
-    await recoverQueuedGenerations({ pool, queue });
+    await recoverQueuedGenerations({ pool, queue, kind: 'vimax' });
   } finally {
     await queue.close();
     await connection.quit();

@@ -70,6 +70,31 @@ test('exposes the unfiltered Seedance 2.5 endpoint with standard duration choice
   assert.deepEqual(getDirectProvider(endpoint), { provider: 'byteplus', model: endpoint });
 });
 
+test('exposes the complete ByteDance-branded Seedance 2.5 Unfiltered video family', () => {
+  const endpoint = 'ep-20260904190604-p8pjl';
+  const expected = {
+    'seedance-2.5-unfiltered-text-to-video': t2vModels,
+    'seedance-2.5-unfiltered-text-to-video-480p': t2vModels,
+    'seedance-2.5-unfiltered-image-to-video': i2vModels,
+    'seedance-2.5-unfiltered-image-to-video-480p': i2vModels,
+    'seedance-2.5-unfiltered-first-last-frame': i2vModels,
+    'seedance-2.5-unfiltered-first-last-frame-480p': i2vModels,
+    'seedance-2.5-unfiltered-omni-reference': i2vModels,
+    'seedance-2.5-unfiltered-omni-reference-480p': i2vModels,
+  };
+
+  for (const [id, models] of Object.entries(expected)) {
+    const model = models.find((entry) => entry.id === id);
+    assert.equal(model?.provider, 'bytedance', `${id} should show the ByteDance logo`);
+    assert.equal(model?.provider_name, 'ByteDance', `${id} should have a ByteDance label`);
+    assert.equal(OPENROUTER_VIDEO_MODEL_MAP[id], endpoint, `${id} routing`);
+    if (id.endsWith('-480p')) assert.deepEqual(model?.inputs?.resolution?.enum, ['480p']);
+  }
+
+  assert.equal(i2vModels.find((model) => model.id === 'seedance-2.5-unfiltered-first-last-frame')?.lastImageField, 'last_image');
+  assert.equal(i2vModels.find((model) => model.id === 'seedance-2.5-unfiltered-first-last-frame-480p')?.lastImageField, 'last_image');
+});
+
 test('maps 3D IDs to no media fallback', () => {
   assert.equal(getDirectProvider('Hyper3D-Gen2'), null);
   assert.equal(getDirectProvider('Hitem3D-2.0'), null);

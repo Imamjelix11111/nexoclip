@@ -4,21 +4,21 @@ const columns = `id, workspace_id, created_by_user_id, project_id, kind, status,
   vimax_session_id, provider, provider_request_id, progress,
   created_at, updated_at, started_at, finished_at`;
 
-export async function createImageGeneration(client, { workspaceId, createdByUserId = null, projectId, prompt, model, parameters, idempotencyKey, estimatedCost, pricingVersionId, reservationLedgerId }) {
+export async function createImageGeneration(client, { workspaceId, createdByUserId = null, projectId, kind = 'image', prompt, model, parameters, idempotencyKey, estimatedCost, pricingVersionId, reservationLedgerId }) {
   const reserved = idempotencyKey !== undefined;
   const result = await client.query(
     reserved
       ? `INSERT INTO generation_jobs
-           (workspace_id, created_by_user_id, project_id, prompt, model, parameters, idempotency_key,
+           (workspace_id, created_by_user_id, project_id, kind, prompt, model, parameters, idempotency_key,
             estimated_cost, pricing_version_id, reservation_ledger_id)
-         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11)
          RETURNING ${columns}`
-      : `INSERT INTO generation_jobs (workspace_id, created_by_user_id, project_id, prompt, model, parameters)
-         VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+      : `INSERT INTO generation_jobs (workspace_id, created_by_user_id, project_id, kind, prompt, model, parameters)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
          RETURNING ${columns}`,
     reserved
-      ? [workspaceId, createdByUserId, projectId, prompt, model, JSON.stringify(parameters), idempotencyKey, estimatedCost, pricingVersionId, reservationLedgerId]
-      : [workspaceId, createdByUserId, projectId, prompt, model, JSON.stringify(parameters)],
+      ? [workspaceId, createdByUserId, projectId, kind, prompt, model, JSON.stringify(parameters), idempotencyKey, estimatedCost, pricingVersionId, reservationLedgerId]
+      : [workspaceId, createdByUserId, projectId, kind, prompt, model, JSON.stringify(parameters)],
   );
   return result.rows[0];
 }

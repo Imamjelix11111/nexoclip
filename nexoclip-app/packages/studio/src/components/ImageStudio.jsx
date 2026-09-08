@@ -907,9 +907,7 @@ export default function ImageStudio({
   const [imageMode, setImageMode] = useState(false); // false=t2i, true=i2i
   const [selectedModelId, setSelectedModelId] = useState(openRouterT2IModels[0].id);
   const [selectedModelName, setSelectedModelName] = useState(openRouterT2IModels[0].name);
-  const [selectedAr, setSelectedAr] = useState(
-    openRouterT2IModels[0].inputs?.aspect_ratio?.default || "1:1",
-  );
+  const [selectedAr, setSelectedAr] = useState("9:16");
   const [selectedQuality, setSelectedQuality] = useState(() => {
     const resolutions = getResolutionsForModel(openRouterT2IModels[0].id);
     return resolutions[0] || null;
@@ -968,7 +966,7 @@ export default function ImageStudio({
         if (data.imageMode !== undefined) setImageMode(data.imageMode);
         if (data.selectedModelId) setSelectedModelId(data.selectedModelId);
         if (data.selectedModelName) setSelectedModelName(data.selectedModelName);
-        if (data.selectedAr) setSelectedAr(data.selectedAr);
+        if (data.selectedAr && data.selectedAr !== "Auto") setSelectedAr(data.selectedAr);
         if (data.selectedQuality) setSelectedQuality(data.selectedQuality);
         if (data.selectedEffect) setSelectedEffect(data.selectedEffect);
         if (data.maxImages) setMaxImages(data.maxImages);
@@ -1136,7 +1134,7 @@ export default function ImageStudio({
         setImageMode(true);
         setSelectedModelId(target.id);
         setSelectedModelName(target.name);
-        setSelectedAr(ars[0] || "1:1");
+        setSelectedAr(ars[0] || "9:16");
         setSelectedQuality(resolutions[0] || null);
         setSelectedEffect(effects.length > 0 ? (getDefaultEffectForI2IModel(target.id) || effects[0]) : "");
         setMaxImages(getMaxImagesForI2IModel(target.id));
@@ -1185,7 +1183,7 @@ export default function ImageStudio({
     const resolutions = getResolutionsForModel(target.id);
     setSelectedModelId(target.id);
     setSelectedModelName(target.name);
-    setSelectedAr(ars[0] || "1:1");
+    setSelectedAr(ars[0] || "9:16");
     setSelectedQuality(resolutions[0] || null);
     setSelectedEffect("");
     setMaxImages(1);
@@ -1207,7 +1205,7 @@ export default function ImageStudio({
     setImageMode(nextImageMode);
     setSelectedModelId(m.id);
     setSelectedModelName(m.name);
-    setSelectedAr(ars[0] || "1:1");
+    setSelectedAr(ars[0] || "9:16");
     setSelectedQuality(resolutions[0] || null);
     setSwapImageUrl(null);
     if (nextImageMode) {
@@ -1244,7 +1242,7 @@ export default function ImageStudio({
     const resolutions = getResolutionsForModel(firstT2I.id);
     setSelectedModelId(firstT2I.id);
     setSelectedModelName(firstT2I.name);
-    setSelectedAr(ars[0] || "1:1");
+    setSelectedAr(ars[0] || "9:16");
     setSelectedQuality(resolutions[0] || null);
     setSelectedEffect("");
     setMaxImages(1);

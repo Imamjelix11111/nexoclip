@@ -13,7 +13,7 @@ test('creates a queued image generation scoped to a workspace', async () => {
     workspaceId: 'w1', createdByUserId: 'u1', projectId: 'p1', prompt: 'fox', model: 'flux-dev', parameters: { aspectRatio: '1:1' },
   });
   assert.equal(generation.status, 'queued');
-  assert.deepEqual(client.calls[0].values, ['w1', 'u1', 'p1', 'fox', 'flux-dev', '{"aspectRatio":"1:1"}']);
+  assert.deepEqual(client.calls[0].values, ['w1', 'u1', 'p1', 'image', 'fox', 'flux-dev', '{"aspectRatio":"1:1"}']);
   assert.match(client.calls[0].text, /INSERT INTO generation_jobs/);
   assert.match(client.calls[0].text, /created_by_user_id/);
 });

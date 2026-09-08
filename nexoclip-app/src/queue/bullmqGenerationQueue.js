@@ -3,8 +3,8 @@ export function bullMqJobId(idempotencyKey) {
   return `id-${Buffer.from(idempotencyKey).toString('base64url')}`;
 }
 
-export function createBullMqGenerationQueue({ Queue, Worker, connection, queueName = 'generation' }) {
-  if (!Queue || !Worker || !connection) throw new TypeError('Queue, Worker, and connection are required');
+export function createBullMqGenerationQueue({ Queue, Worker, connection, queueName }) {
+  if (!Queue || !Worker || !connection || !queueName) throw new TypeError('Queue, Worker, connection, and queueName are required');
 
   const producer = new Queue(queueName, { connection });
   return {

@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import toast, { Toaster } from "react-hot-toast";
-import { generateImage } from "../generationClient.js";
+import { generateSaasImage } from "../generationClient.js";
 import { formatErrorMessage } from "../utils/formatError.js";
 import MobileGenerationActions, {
   GenerationCopyButtons,
@@ -415,11 +415,12 @@ export default function AiInfluencerStudio({
         res = await onGenerate({ prompt, aspectRatio, selections: selectedOptions });
       } else {
         const workspaceId = typeof window !== "undefined" ? window.sessionStorage.getItem("nexoclip_workspace_id") : null;
-        res = await generateImage(apiKey, {
+        res = await generateSaasImage({
           model: INFLUENCER_MODEL,
           prompt,
-          aspect_ratio: aspectRatio,
           workspace_id: workspaceId,
+          idempotencyKey: crypto.randomUUID(),
+          parameters: { aspectRatio },
         });
       }
       const outputUrl = res?.url || res?.outputs?.[0]?.url;

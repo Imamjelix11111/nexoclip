@@ -4,7 +4,7 @@ import { Queue, Worker } from 'bullmq';
 import IORedis from 'ioredis';
 import { getPool, closePool } from '../db/pool.js';
 import { createBullMqGenerationQueue } from './bullmqGenerationQueue.js';
-import { recoverQueuedGenerations } from './generationQueue.js';
+import { recoverQueuedGenerations, generationQueueName } from './generationQueue.js';
 import { createStoryboardRuntimeClient } from './storyboardRuntimeClient.js';
 import { createGenerationProcessor } from './generationWorker.js';
 import { recordGenerationProgress, recordGenerationProgressById, recoverExpiredGenerationJobs } from '../repositories/generationStateRepository.js';
@@ -90,7 +90,7 @@ export async function createStoryboardWorker({
   const config = workerConfig(env);
   const connection = new Redis(config.redisUrl, { maxRetriesPerRequest: null });
   const pool = loadPool();
-  const queue = createQueue({ Queue, Worker, connection });
+  const queue = createQueue({ Queue, Worker, connection, queueName: generationQueueName('vimax') });
   const progress = await createProgressServer({token: config.progressToken, pool});
   const runtimeClient = createRuntimeClient({
     baseUrl: config.runtimeUrl, token: config.runtimeToken,
@@ -105,7 +105,7 @@ export async function createStoryboardWorker({
         else await releaseCredits(pool, {workspaceId: job.workspaceId, generationId: job.id});
       }
     }
-    return recover({ pool, queue });
+    return recover({ pool, queue, kind: 'vimax' });
   };
   await recoverNow();
   const interval = schedule(recoverNow, 30_000);

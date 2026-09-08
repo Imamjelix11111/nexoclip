@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import toast, { Toaster } from "react-hot-toast";
-import { generateVideo, generateI2V, processV2V, uploadFile } from "../generationClient.js";
+import { generateSaasVideo, uploadFile } from "../generationClient.js";
 import { formatErrorMessage } from "../utils/formatError.js";
 import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
 import DrawModal from "./DrawModal.jsx";
@@ -1184,9 +1184,12 @@ export default function VideoStudio({
       if (v2vMode) {
         // V2V: dedicated processV2V handles single-input tools (e.g. watermark
         // remover) and motion-control models (which take video + image + prompt)
+        const workspaceId = typeof window !== "undefined" ? window.sessionStorage.getItem("nexoclip_workspace_id") : null;
         const v2vParams = {
           model: selectedModel,
+          workspace_id: workspaceId,
           video_url: uploadedVideoUrl,
+          prompt: trimmedPrompt || "Process the uploaded video",
         };
         if (currentModel?.imageField && uploadedImageUrl) {
           v2vParams.image_url = uploadedImageUrl;
@@ -1194,24 +1197,25 @@ export default function VideoStudio({
         if (currentModel?.hasPrompt && trimmedPrompt) {
           v2vParams.prompt = trimmedPrompt;
         }
-        res = await processV2V(apiKey, v2vParams);
-        if (!res?.url) throw new Error("No video URL returned by API");
+        res = await generateSaasVideo(v2vParams);
+        const outputUrl = res?.outputs?.[0]?.url;
+        if (!outputUrl) throw new Error("No video URL returned by API");
 
         const genId = res.id || Date.now().toString();
         setLastGenerationId(null);
         setLastGenerationModel(null);
         const entry = {
           id: genId,
-          url: res.url,
+          url: outputUrl,
           prompt: currentModel?.hasPrompt ? trimmedPrompt : "",
           model: selectedModel,
           timestamp: new Date().toISOString(),
         };
         addToLocalHistory(entry);
-        showVideoInCanvas(res.url, selectedModel);
+        showVideoInCanvas(outputUrl, selectedModel);
         if (onGenerationComplete)
           onGenerationComplete({
-            url: res.url,
+            url: outputUrl,
             model: selectedModel,
             prompt: currentModel?.hasPrompt ? trimmedPrompt : "",
             type: "video",
@@ -1239,8 +1243,9 @@ export default function VideoStudio({
         if (selectedMode) i2vParams.mode = selectedMode;
         if (showEffect && selectedEffect) i2vParams.name = selectedEffect;
 
-        res = await generateI2V(apiKey, i2vParams);
-        if (!res?.url) throw new Error("No video URL returned by API");
+        res = await generateSaasVideo(i2vParams);
+        const outputUrl = res?.outputs?.[0]?.url;
+        if (!outputUrl) throw new Error("No video URL returned by API");
 
         const genId = res.id || Date.now().toString();
         if (selectedModel === "seedance-v2.0-i2v") {
@@ -1252,7 +1257,7 @@ export default function VideoStudio({
         }
         const entry = {
           id: genId,
-          url: res.url,
+          url: outputUrl,
           prompt: trimmedPrompt,
           model: selectedModel,
           aspect_ratio: selectedAr,
@@ -1260,10 +1265,10 @@ export default function VideoStudio({
           timestamp: new Date().toISOString(),
         };
         addToLocalHistory(entry);
-        showVideoInCanvas(res.url, selectedModel);
+        showVideoInCanvas(outputUrl, selectedModel);
         if (onGenerationComplete)
           onGenerationComplete({
-            url: res.url,
+            url: outputUrl,
             model: selectedModel,
             prompt: trimmedPrompt,
             type: "video",
@@ -1295,8 +1300,9 @@ export default function VideoStudio({
         if (selectedQuality) params.quality = selectedQuality;
         if (selectedMode) params.mode = selectedMode;
 
-        res = await generateVideo(apiKey, params);
-        if (!res?.url) throw new Error("No video URL returned by API");
+        res = await generateSaasVideo(params);
+        const outputUrl = res?.outputs?.[0]?.url;
+        if (!outputUrl) throw new Error("No video URL returned by API");
 
         const genId = res.id || Date.now().toString();
         if (
@@ -1311,7 +1317,7 @@ export default function VideoStudio({
         }
         const entry = {
           id: genId,
-          url: res.url,
+          url: outputUrl,
           prompt: trimmedPrompt,
           model: selectedModel,
           aspect_ratio: selectedAr,
@@ -1319,10 +1325,10 @@ export default function VideoStudio({
           timestamp: new Date().toISOString(),
         };
         addToLocalHistory(entry);
-        showVideoInCanvas(res.url, selectedModel);
+        showVideoInCanvas(outputUrl, selectedModel);
         if (onGenerationComplete)
           onGenerationComplete({
-            url: res.url,
+            url: outputUrl,
             model: selectedModel,
             prompt: trimmedPrompt,
             type: "video",

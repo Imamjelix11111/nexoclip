@@ -2,12 +2,18 @@ import * as jobRepository from '../repositories/jobRepository.js';
 
 function toJob(row) {
   if (!row) return null;
+  const result = row.result && typeof row.result === 'object' ? { ...row.result } : row.result ?? {};
+  if (row.output_asset_id && !result.outputUrl) {
+    const url = `/api/assets/${encodeURIComponent(row.output_asset_id)}/download?workspace_id=${encodeURIComponent(row.workspace_id)}`;
+    result.outputUrl = url;
+    result.thumbnailUrl = result.thumbnailUrl || url;
+  }
   return {
     id: row.id,
     kind: row.kind,
     status: row.status,
     params: row.parameters ?? {},
-    result: row.result ?? null,
+    result,
     error: row.error ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

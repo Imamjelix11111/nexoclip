@@ -43,6 +43,7 @@
     "worker:recover": "node scripts/worker-recover.mjs",
     "worker:storyboard": "node src/queue/storyboardWorker.mjs",
     "worker:image": "node --env-file-if-exists=.env.local src/queue/imageWorker.mjs",
+    "worker:video": "node --env-file-if-exists=.env.local src/queue/videoWorker.mjs",
     "pi:task": "bash scripts/pi-task.sh"
   },
   "build": {

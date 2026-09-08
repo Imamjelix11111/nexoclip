@@ -58,6 +58,7 @@ const TABS = [
   {
     id: 'audio',
     label: 'Audio Studio',
+    hidden: true,
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M9 18V5l12-2v13"/>
@@ -69,6 +70,7 @@ const TABS = [
   {
     id: 'clipping',
     label: 'AI Clipping',
+    hidden: true,
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="6" cy="6" r="3"/>
@@ -82,6 +84,7 @@ const TABS = [
   {
     id: 'vibe-motion',
     label: 'Vibe Motion',
+    hidden: true,
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
@@ -91,6 +94,7 @@ const TABS = [
   {
     id: 'lipsync',
     label: 'Lip Sync',
+    hidden: true,
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
@@ -102,6 +106,7 @@ const TABS = [
   {
     id: 'body-swap',
     label: 'Body Swap',
+    hidden: true,
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
@@ -130,6 +135,7 @@ const TABS = [
   {
     id: 'marketing',
     label: 'Marketing Studio',
+    hidden: true,
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -736,30 +742,6 @@ export default function StandaloneShell({ initialTab, children }) {
                 return (
                   <>
                     <div className={`space-y-0.5 ${isCollapsed ? 'mb-1' : 'mb-3 pb-3 border-b border-white/[0.06]'}`}>
-                      <a
-                        href="/ai-storyboard"
-                        onClick={(event) => {
-                          if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
-                            event.preventDefault();
-                            setIsMobileOpen(false);
-                            router.push('/ai-storyboard');
-                          }
-                        }}
-                        aria-label="AI Storyboard"
-                        title={isCollapsed ? 'AI Storyboard' : undefined}
-                        className={`
-                          group relative flex items-center rounded-lg text-white/55 hover:text-white hover:bg-white/[0.04] transition-colors duration-150
-                          ${isCollapsed ? 'h-10 w-10 justify-center mx-auto' : 'gap-3 px-2.5 py-2 text-[13px] font-medium'}
-                        `}
-                      >
-                        <span className="flex-shrink-0 text-white/45 group-hover:text-cyan-300">
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M12 2l2.8 6.2L21 11l-6.2 2.8L12 20l-2.8-6.2L3 11l6.2-2.8L12 2z" />
-                            <path d="M19 3v4M21 5h-4" />
-                          </svg>
-                        </span>
-                        {!isCollapsed && <span className="truncate">AI Storyboard</span>}
-                      </a>
                       {(() => {
                         const canvasTab = TABS.find((item) => item.id === 'workflows');
                         if (!canvasTab) return null;
