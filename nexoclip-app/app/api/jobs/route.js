@@ -8,8 +8,11 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export function createJobsListHandler({
-  getSession = getCurrentSession, getWorkspace = getDefaultWorkspace,
-  listJobs = listJobsService, pool = getPool(),
+  getSession = getCurrentSession,
+  getWorkspace = getDefaultWorkspace,
+  listJobs = listJobsService,
+  pool,
+  poolFactory = getPool,
 } = {}) {
   return async function GET(request) {
     const session = await getSession(request.cookies?.get(SESSION_COOKIE)?.value);
@@ -20,7 +23,8 @@ export function createJobsListHandler({
     const url = new URL(request.url);
     const statuses = url.searchParams.get('status') === 'active' ? ['queued', 'running'] : null;
     const kind = url.searchParams.get('kind') || null;
-    const { jobs } = await listJobs({ pool, workspaceId: workspace.id, statuses, kind });
+    const resolvedPool = pool ?? poolFactory();
+    const { jobs } = await listJobs({ pool: resolvedPool, workspaceId: workspace.id, statuses, kind });
     return Response.json({ jobs });
   };
 }

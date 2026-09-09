@@ -836,3 +836,31 @@ git commit -m "test(spite): verify realtime CRDT canvas"
   - `cd nexoclip-app && rtk node --test tests/deployment/dockerDeployment.test.mjs tests/production/productionConfig.test.mjs` ✅
   - `cd nexoclip-app && rtk bash -n scripts/deploy.sh` ✅
   - `cd nexoclip-app && REALTIME_JWT_SECRET=dummy CANVAS_AUTH_URL=http://spite-realtime:3007/internal/authorize NEXOCLIP_INTERNAL_URL=http://nexoclip:3000 NEXT_PUBLIC_REALTIME_URL=/spite/ws rtk docker compose --env-file .env.production.example -f docker-compose.prod.yml config --quiet` ✅
+
+## 2026-09-09 Full verification hardening follow-up
+
+- Added failing-first regression coverage in `nexoclip-app/tests/api/jobsBuildSafety.test.mjs` to prove the root jobs route modules can be imported without `DATABASE_URL` at module evaluation time.
+- Updated both root jobs route factories to resolve `getPool()` lazily inside the request handler instead of during module initialization:
+  - `nexoclip-app/app/api/jobs/route.js`
+  - `nexoclip-app/app/api/jobs/[id]/route.js`
+- This fixes the production build failure seen during `rtk npm run build`, where Next evaluated the route modules while collecting page data and crashed on `DATABASE_URL is required` before any request existed.
+- Narrowed standalone Spite TypeScript verification to application source by excluding Next 16’s generated `.next/types/validator.ts` from `nexoclip-app/services/spite/tsconfig.json`. `next build` still runs Next’s own route/type validation; the exclusion only prevents plain `tsc --noEmit` from failing on the generated `./routes.js` import shim mismatch.
+- Refreshed inline route documentation to match the shipped projection/realtime behavior:
+  - `nexoclip-app/services/spite/app/api/projects/[projectId]/duplicate/route.ts`
+  - `nexoclip-app/services/spite/app/api/projects/[projectId]/canvas/route.ts`
+  - `nexoclip-app/services/spite/app/api/projects/[projectId]/canvas/snapshots/route.ts`
+- Boundary audit after the fixes:
+  - authoritative projection-table rewrites remain confined to `nexoclip-app/services/spite/realtime/projector.ts`
+  - destructive cleanup deletes remain only in project deletion / global clear-data handlers
+  - legacy canvas POST remains `410 Gone`
+  - no active `use-canvas-auto-save` caller remains
+- Full verification run:
+  - `cd nexoclip-app && rtk node --test tests/realtime/*.test.mjs tests/deployment/dockerDeployment.test.mjs tests/production/productionConfig.test.mjs tests/api/jobsBuildSafety.test.mjs` ✅
+  - `cd nexoclip-app && rtk npm run build` ✅
+  - `cd nexoclip-app/services/spite && rtk npm test` ✅
+  - `cd nexoclip-app/services/spite && rtk npm exec tsc -- --noEmit` ✅
+  - `cd nexoclip-app/services/spite && rtk npm run build` ✅
+- Non-blocking warnings still observed during verification:
+  - root app `next build` warns about optional `@valkey/valkey-glide` resolution from BullMQ
+  - Spite Next 16 build warns about inferred workspace root and deprecated `middleware` naming
+  - root node tests emit `MODULE_TYPELESS_PACKAGE_JSON` warnings for existing ESM `.js` files

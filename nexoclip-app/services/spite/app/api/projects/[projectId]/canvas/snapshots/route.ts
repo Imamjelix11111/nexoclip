@@ -12,16 +12,14 @@ import {
 import { NextRequest, NextResponse } from 'next/server'
 
 // GET /api/projects/<id>/canvas/snapshots
-// Returns the rolling list of canvas snapshots for this project (newest
-// first), each with a small summary so the user can pick one to restore.
-// Use case: "the canvas looks wrong after a save / browser crash — give
-// me a previous version."
+// Returns the rolling list of compatibility snapshots for this project
+// (newest first), each with a small summary so the user can pick one to
+// restore after a bad sync or crash.
 //
 // To restore, POST to this same URL with `{ snapshotId: '<uuid>' }`. The
-// restore overwrites the current canvas with the snapshot's nodes/edges,
-// but BEFORE doing so it takes a fresh snapshot of the current state,
-// so a restore itself is undoable by restoring the snapshot taken just
-// before it.
+// route first snapshots the current projection for rollback, then restores
+// the selected snapshot by replacing the authoritative realtime document via
+// the trusted internal realtime API.
 interface SnapshotRouteDeps {
   getDb?: typeof getDb
   getAuthenticatedUser?: typeof getAuthenticatedUser

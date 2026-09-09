@@ -9,10 +9,9 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const PROJECTION_SOURCE = 'projection'
 
-// Idempotent — adds the scenes/active_scene_id columns on projects if
-// they don't exist yet. Older installs ship the projects table without
-// them; lazy-creating on first read keeps compatibility without a manual
-// migration step.
+// Compatibility-only projection metadata: older installs can still lack the
+// scenes / active_scene_id columns, so reads lazily add them before returning
+// projection data. This route never restores authoritative canvas state.
 async function ensureSceneColumns(sql: any) {
   await sql`ALTER TABLE projects ADD COLUMN IF NOT EXISTS scenes jsonb`
   await sql`ALTER TABLE projects ADD COLUMN IF NOT EXISTS active_scene_id text`

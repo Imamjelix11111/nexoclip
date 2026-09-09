@@ -12,9 +12,10 @@ import {
 import { NextRequest, NextResponse } from 'next/server'
 import { v4 as uuidv4 } from 'uuid'
 
-// Duplicate a project: copies the project row, all of its canvas_nodes, and
-// all of its canvas_edges under a fresh project id. Asset/generation history
-// is NOT cloned — the copy references the same assets as the original.
+// Duplicate a project by creating a new project row, exporting the source
+// project's authoritative realtime document, and replacing the new project's
+// document through the trusted realtime API. Asset/generation history is not
+// cloned — the copy references the same stored assets as the original.
 interface DuplicateProjectDeps {
   getDb?: typeof getDb
   getAuthenticatedUser?: typeof getAuthenticatedUser
