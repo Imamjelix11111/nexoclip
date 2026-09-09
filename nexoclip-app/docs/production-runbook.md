@@ -55,7 +55,7 @@ From `nexoclip-app/`:
 
 1. host architecture guard (`x86_64/AMD64`)
 2. `.env.production` presence + mode check
-3. `npm run config:check` (**required preflight gate**)
+3. `set -a; . ./.env.production; set +a; NODE_ENV=production npm run config:check` (**required preflight gate**)
 4. `docker compose ... config --quiet`
 5. build + ordered migration jobs
 6. service startup + `docker compose ps`
@@ -66,7 +66,7 @@ If `config:check` fails, deployment must stop before any migration or `up`.
 
 ### Preflight validation
 
-- `npm run config:check` with `NODE_ENV=production`
+- `set -a; . ./.env.production; set +a; NODE_ENV=production npm run config:check`
 - `docker compose --env-file .env.production -f docker-compose.prod.yml config --quiet`
 
 ### Runtime health checks

@@ -824,3 +824,15 @@ git commit -m "test(spite): verify realtime CRDT canvas"
 - Verification run (focused + Task 7 suites):
   - `cd nexoclip-app && node --test tests/realtime/realtimeTokenRoute.test.mjs tests/realtime/internalAuth.test.mjs`
   - `cd nexoclip-app/services/spite && npx --yes tsx --test realtime/auth.test.ts`
+
+## 2026-09-09 Task 19 Round 2 deploy preflight fix
+
+- Added failing-first deploy contract assertion in `nexoclip-app/tests/deployment/dockerDeployment.test.mjs` to require production env loading before config preflight:
+  - `set -a; . ./.env.production; set +a; NODE_ENV=production npm run config:check`
+  - preserved ordering guarantee: config check must run before `docker compose ... config --quiet`.
+- Updated `nexoclip-app/scripts/deploy.sh` preflight to source `.env.production` safely (after explicit presence check) and run config check with `NODE_ENV=production`.
+- Updated runbook command wording in `nexoclip-app/docs/production-runbook.md` to match deploy preflight contract.
+- Verification run:
+  - `cd nexoclip-app && rtk node --test tests/deployment/dockerDeployment.test.mjs tests/production/productionConfig.test.mjs` ✅
+  - `cd nexoclip-app && rtk bash -n scripts/deploy.sh` ✅
+  - `cd nexoclip-app && REALTIME_JWT_SECRET=dummy CANVAS_AUTH_URL=http://spite-realtime:3007/internal/authorize NEXOCLIP_INTERNAL_URL=http://nexoclip:3000 NEXT_PUBLIC_REALTIME_URL=/spite/ws rtk docker compose --env-file .env.production.example -f docker-compose.prod.yml config --quiet` ✅

@@ -115,10 +115,12 @@ test('deploy script validates the host and runs config + migrations before start
   assert.match(script, /^#!\/usr\/bin\/env bash\nset -Eeuo pipefail/);
   assert.match(script, /uname -m/);
   assert.match(script, /x86_64\/AMD64/);
+  assert.match(script, /\[\[ -f \.env\.production \]\]/);
+  assert.match(script, /Copy \.env\.production\.example to \.env\.production first\./);
   assert.match(script, /stat -c '%a' \.env\.production/);
-  assert.match(script, /npm run config:check/);
+  assert.match(script, /set -a; \. \.\/\.env\.production; set \+a; NODE_ENV=production npm run config:check/);
   assert.match(script, /config --quiet/);
-  assert.ok(script.indexOf('npm run config:check') < script.indexOf('"${compose[@]}" config --quiet'));
+  assert.ok(script.indexOf('NODE_ENV=production npm run config:check') < script.indexOf('"${compose[@]}" config --quiet'));
   assert.ok(script.indexOf('"${compose[@]}" config --quiet') < script.indexOf('run --rm nexoclip-migrate'));
   assert.ok(script.indexOf('"${compose[@]}" build') < script.indexOf('run --rm nexoclip-migrate'));
   assert.ok(script.indexOf('run --rm nexoclip-migrate') < script.indexOf('run --rm spite-realtime-migrate'));
