@@ -21,6 +21,31 @@ export function resolveIncomingPrompt(nodeId: string, nodes: Node[], edges: Edge
   return { connected: Boolean(source), prompt: String(source?.data.text ?? '').trim() }
 }
 
+export function getGenerationPromptState(nodeId: string, nodes: Node[], edges: Edge[]) {
+  const { connected, prompt } = resolveIncomingPrompt(nodeId, nodes, edges)
+  return {
+    connected,
+    prompt,
+    disabled: !connected || !prompt,
+    message: !connected ? 'Connect a Text node first' : !prompt ? 'Enter text in the connected Text node' : undefined,
+  }
+}
+
+type GenerationStatusQuery = {
+  nodeId: string
+  requestId: string
+  provider: string
+  model: string
+  projectId: string
+  getNodes: () => Node[]
+  getEdges: () => Edge[]
+}
+
+export function createGenerationStatusQuery({ nodeId, requestId, provider, model, projectId, getNodes, getEdges }: GenerationStatusQuery) {
+  const { prompt } = resolveIncomingPrompt(nodeId, getNodes(), getEdges())
+  return new URLSearchParams({ request_id: requestId, provider, model, projectId, nodeId, prompt })
+}
+
 export function parseAspectRatio(value: string, fallback: string): number {
   return parseRatio(value) ?? parseRatio(fallback) ?? 1
 }

@@ -5,6 +5,8 @@ import type { Edge, Node } from '@xyflow/react'
 import {
   clampNodeSize,
   parseAspectRatio,
+  createGenerationStatusQuery,
+  getGenerationPromptState,
   resolveFollowTarget,
   resolveIncomingPrompt,
 } from './canvas-node-interactions'
@@ -63,6 +65,40 @@ test('resolveIncomingPrompt ignores legacy edges without the prompt-in target', 
     connected: false,
     prompt: '',
   })
+})
+
+test('generation gating requires a connected Text node with text', () => {
+  assert.deepEqual(getGenerationPromptState('image-1', nodes, []), {
+    connected: false, prompt: '', disabled: true, message: 'Connect a Text node first',
+  })
+  assert.deepEqual(getGenerationPromptState('image-1', nodes, [{ ...edgeA, source: 'prompt-empty' }]), {
+    connected: true, prompt: '', disabled: true, message: 'Enter text in the connected Text node',
+  })
+  assert.deepEqual(getGenerationPromptState('image-1', nodes, [edgeA]), {
+    connected: true, prompt: 'alpha', disabled: false, message: undefined,
+  })
+})
+
+test('status payload resolves the prompt at request time rather than from a stale render', () => {
+  const currentNodes = nodes.map((node) => ({ ...node, data: { ...node.data } }))
+  const getNodes = () => currentNodes
+  const getEdges = () => [edgeA]
+
+  assert.equal(
+    createGenerationStatusQuery({
+      nodeId: 'image-1', requestId: 'job-1', provider: 'fal', model: 'model-1', projectId: 'project-1', getNodes, getEdges,
+    }).get('prompt'),
+    'alpha',
+  )
+
+  currentNodes[0].data.text = ' beta after editing '
+
+  assert.equal(
+    createGenerationStatusQuery({
+      nodeId: 'image-1', requestId: 'job-1', provider: 'fal', model: 'model-1', projectId: 'project-1', getNodes, getEdges,
+    }).get('prompt'),
+    'beta after editing',
+  )
 })
 
 test('parseAspectRatio parses a landscape ratio', () => {

@@ -19,7 +19,7 @@ import { ConnectedInputs } from '../connected-inputs'
 import { captureVideoThumbnail } from '@/lib/video-thumbnail'
 import { useCanvasCollaboration } from '../canvas-collaboration'
 import { createLocalStateSyncGuard } from '@/lib/local-state-sync'
-import { parseAspectRatio, resolveIncomingPrompt } from '@/lib/canvas-node-interactions'
+import { createGenerationStatusQuery, getGenerationPromptState, parseAspectRatio, resolveIncomingPrompt } from '@/lib/canvas-node-interactions'
 
 const VIDEO_MODELS = getVideoModels()
 
@@ -201,11 +201,11 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   // Prompt text is read from the connected Text node at render and again
   // immediately before submission; this node never owns a prompt.
   const resolvedPrompt = resolveIncomingPrompt(id, getNodes(), getEdges())
+  const promptState = getGenerationPromptState(id, getNodes(), getEdges())
 
   // Check connection states fresh on each render
   let hasConnectedFirstFrame = false
   let hasConnectedReferences = false
-  let hasConnectedVideo = false
   try {
     const edges = getEdges()
     const allIncomingEdges = edges.filter(edge => edge.target === id)
@@ -214,9 +214,6 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       (e.sourceHandle === 'image-out' && e.targetHandle !== 'end-frame-in' && e.targetHandle !== 'reference-in' && e.targetHandle !== 'video-in')
     )
     hasConnectedReferences = allIncomingEdges.some(e => e.targetHandle === 'reference-in')
-    hasConnectedVideo = allIncomingEdges.some(e =>
-      e.targetHandle === 'video-in' || e.sourceHandle === 'video-out'
-    )
   } catch { /* ignore */ }
 
   // Get current model config
@@ -416,7 +413,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       return true
     }
     try {
-        const response = await fetch(withBasePath(`/api/generate/status?request_id=${reqId}&provider=${encodeURIComponent((data.pendingProvider as string) || currentModel?.provider || 'byteplus')}&model=${encodeURIComponent(providerId)}&projectId=${projectId}&nodeId=${encodeURIComponent(id)}&prompt=${encodeURIComponent(resolvedPrompt.prompt)}`))
+      const statusQuery = createGenerationStatusQuery({
+        nodeId: id, requestId: reqId, provider: (data.pendingProvider as string) || currentModel?.provider || 'byteplus', model: providerId, projectId, getNodes, getEdges,
+      })
+      const response = await fetch(withBasePath(`/api/generate/status?${statusQuery}`))
       const result = await response.json()
 
       // Cancelled while this request was in flight — drop the result.
@@ -469,7 +469,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       console.error('Poll error:', err)
       return false
     }
-  }, [clearPending])
+  }, [clearPending, data.pendingProvider, getEdges, getNodes, id, projectId, currentModel?.provider])
 
   // Start polling when we have a request_id. resumeToken is included as
   // a dep so a user-initiated re-check (handleRecheck below) restarts the
@@ -518,9 +518,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     toast.loading('Checking the provider for this job…', { id: toastId })
 
     try {
-      const response = await fetch(
-        withBasePath(`/api/generate/status?request_id=${requestId}&provider=${encodeURIComponent((data.pendingProvider as string) || currentModel.provider)}&model=${encodeURIComponent(pollProvider)}&projectId=${projectId}&nodeId=${encodeURIComponent(id)}&prompt=${encodeURIComponent(resolvedPrompt.prompt)}`),
-      )
+      const statusQuery = createGenerationStatusQuery({
+        nodeId: id, requestId, provider: (data.pendingProvider as string) || currentModel.provider, model: pollProvider, projectId, getNodes, getEdges,
+      })
+      const response = await fetch(withBasePath(`/api/generate/status?${statusQuery}`))
       const result = await response.json()
 
       if (result.error) {
@@ -583,13 +584,11 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
 
   const handleGenerate = async () => {
     const { connected, prompt: compiledPrompt } = resolveIncomingPrompt(id, getNodes(), getEdges())
-    const isUpscalerStandard =
-      modelId === 'topaz-video-upscale' && upscaleMode === 'standard'
-    if (!isUpscalerStandard && !connected) {
+    if (!connected) {
       setError('Connect a Text node first')
       return
     }
-    if (!isUpscalerStandard && !compiledPrompt) {
+    if (!compiledPrompt) {
       setError('Enter text in the connected Text node')
       return
     }
@@ -732,9 +731,8 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     }
 
     try {
-      // Topaz Standard is a plug-and-play video transform. Creative and
-      // ordinary generation models use the resolved Text-node prompt.
-      const submitPrompt = isUpscalerStandard ? '' : compiledPrompt
+      // Every video generation uses the deterministic connected Text-node prompt.
+      const submitPrompt = compiledPrompt
 
       // Send RAW settings; the server builds the model-specific payload.
       const body = JSON.stringify({
@@ -902,9 +900,8 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     [currentModel, numVideos, duration],
   )
   const generateTooltip = useMemo(() => {
-    const isUpscalerStandard = modelId === 'topaz-video-upscale' && upscaleMode === 'standard'
-    if (!isUpscalerStandard && !resolvedPrompt.connected) return 'Connect a Text node first'
-    if (!isUpscalerStandard && !resolvedPrompt.prompt) return 'Enter text in the connected Text node'
+    if (!resolvedPrompt.connected) return 'Connect a Text node first'
+    if (!resolvedPrompt.prompt) return 'Enter text in the connected Text node'
     if (!currentModel) return 'Generate video'
     if (blockedNoFirstFrame) {
       return `${currentModel?.name} needs a first frame when references are connected — wire an image into the blue First frame handle.`
@@ -1130,13 +1127,11 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           )}
         </div>
 
-        {(modelId !== 'topaz-video-upscale' || upscaleMode === 'creative') && (
-          <div className="px-3 pt-2 text-[10px] font-mono text-muted-foreground/60">
-            {resolvedPrompt.connected
-              ? resolvedPrompt.prompt || 'Enter text in the connected Text node'
-              : 'Connect a Text node first'}
-          </div>
-        )}
+        <div className="px-3 pt-2 text-[10px] font-mono text-muted-foreground/60">
+          {resolvedPrompt.connected
+            ? resolvedPrompt.prompt || 'Enter text in the connected Text node'
+            : 'Connect a Text node first'}
+        </div>
 
         {/* Kling 2.6 voice ID slots. Only shown for kling-2.6 since it's
             the only model on our list that supports this. Max 2 voices
@@ -1348,13 +1343,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           ) : (
             <button
               onClick={requestGenerate}
-              disabled={
-                isGenerating ||
-                blockedNoFirstFrame ||
-                (modelId === 'topaz-video-upscale' && upscaleMode === 'standard'
-                  ? !hasConnectedVideo
-                  : !resolvedPrompt.connected || !resolvedPrompt.prompt)
-              }
+              disabled={isGenerating || blockedNoFirstFrame || promptState.disabled}
               className="w-6 h-6 rounded-full bg-accent/20 hover:bg-accent text-accent hover:text-accent-foreground flex items-center justify-center transition-colors accent-glow disabled:opacity-50 disabled:cursor-not-allowed"
               title={generateTooltip}
             >

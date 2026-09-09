@@ -18,7 +18,7 @@ import { completeGenerationNode } from '@/lib/generation-node'
 import { ConnectedInputs } from '../connected-inputs'
 import { useCanvasCollaboration } from '../canvas-collaboration'
 import { createLocalStateSyncGuard } from '@/lib/local-state-sync'
-import { parseAspectRatio, resolveIncomingPrompt } from '@/lib/canvas-node-interactions'
+import { createGenerationStatusQuery, getGenerationPromptState, parseAspectRatio, resolveIncomingPrompt } from '@/lib/canvas-node-interactions'
 
 const IMAGE_MODELS = getImageModels()
 
@@ -185,6 +185,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
   // Prompt text is read from the connected Text node at render and again
   // immediately before recovery/submission; this node never owns a prompt.
   const resolvedPrompt = resolveIncomingPrompt(id, getNodes(), getEdges())
+  const promptState = getGenerationPromptState(id, getNodes(), getEdges())
 
   useEffect(() => {
     const finishSync = syncGuardRef.current.beginPropSync()
@@ -372,7 +373,10 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
       return true
     }
     try {
-        const response = await fetch(withBasePath(`/api/generate/status?request_id=${reqId}&provider=${encodeURIComponent((data.pendingProvider as string) || currentModel?.provider || 'byteplus')}&model=${encodeURIComponent(providerId)}&projectId=${projectId}&nodeId=${encodeURIComponent(id)}&prompt=${encodeURIComponent(resolvedPrompt.prompt)}`))
+      const statusQuery = createGenerationStatusQuery({
+        nodeId: id, requestId: reqId, provider: (data.pendingProvider as string) || currentModel?.provider || 'byteplus', model: providerId, projectId, getNodes, getEdges,
+      })
+      const response = await fetch(withBasePath(`/api/generate/status?${statusQuery}`))
       const result = await response.json()
 
       // Cancelled while this request was in flight — drop the result.
@@ -460,7 +464,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
       console.error('Poll error:', err)
       return false
     }
-  }, [clearPending])
+  }, [clearPending, data.pendingProvider, getEdges, getNodes, id, projectId, currentModel?.provider])
 
   // Start polling when we have a request_id. resumeToken is included as
   // a dep so a user-initiated re-check restarts the polling loop even
@@ -507,9 +511,10 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     toast.loading('Checking the provider for this job…', { id: toastId })
 
     try {
-      const response = await fetch(
-        withBasePath(`/api/generate/status?request_id=${requestId}&provider=${encodeURIComponent((data.pendingProvider as string) || currentModel.provider)}&model=${encodeURIComponent(pollProvider)}&projectId=${projectId}&nodeId=${encodeURIComponent(id)}&prompt=${encodeURIComponent(resolvedPrompt.prompt)}`),
-      )
+      const statusQuery = createGenerationStatusQuery({
+        nodeId: id, requestId, provider: (data.pendingProvider as string) || currentModel.provider, model: pollProvider, projectId, getNodes, getEdges,
+      })
+      const response = await fetch(withBasePath(`/api/generate/status?${statusQuery}`))
       const result = await response.json()
 
       if (result.error) {
@@ -575,7 +580,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
       setError('Connect a Text node first')
       return
     }
-    if (!compiledPrompt && !currentModel?.optionalPrompt) {
+    if (!compiledPrompt) {
       setError('Enter text in the connected Text node')
       return
     }
@@ -836,7 +841,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
   )
   const generateTooltip = useMemo(() => {
     if (!resolvedPrompt.connected) return 'Connect a Text node first'
-    if (!resolvedPrompt.prompt && !currentModel?.optionalPrompt) return 'Enter text in the connected Text node'
+    if (!resolvedPrompt.prompt) return 'Enter text in the connected Text node'
     if (!currentModel) return 'Generate image'
     const label = `Generate ${numImages} image${numImages === 1 ? '' : 's'}`
     if (!costEstimate.isKnown) return `${label}\n(price not estimated for this model)`
@@ -1125,7 +1130,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
           ) : (
             <button
               onClick={requestGenerate}
-              disabled={isGenerating || !resolvedPrompt.connected || (!resolvedPrompt.prompt && !currentModel?.optionalPrompt)}
+              disabled={isGenerating || promptState.disabled}
               className="w-6 h-6 rounded-full bg-accent/20 hover:bg-accent text-accent hover:text-accent-foreground flex items-center justify-center transition-colors accent-glow disabled:opacity-50 disabled:cursor-not-allowed"
               title={generateTooltip}
             >

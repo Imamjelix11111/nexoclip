@@ -15,7 +15,6 @@ export interface ModelConfig {
   resolutions?: string[]
   supportsAudio?: boolean
   supportsLoop?: boolean
-  optionalPrompt?: boolean
   imageParam?: 'image_url' | 'image_urls' | 'start_image_url'
   referenceParam?: 'image_urls' | 'elements' | 'input_image_urls' | 'subject_reference_image_url'
   referenceModel?: string
