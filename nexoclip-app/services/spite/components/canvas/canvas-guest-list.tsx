@@ -19,7 +19,7 @@ export function CanvasGuestList({ peers, scenes, onFollow }: CanvasGuestListProp
       <div className="space-y-1">
         {peers.map((peer) => {
           const sceneName = scenes.find((scene) => scene.id === peer.sceneId)?.name
-          const canFollow = Boolean(peer.sceneId && sceneName)
+          const canFollow = scenes.some((scene) => scene.id === peer.sceneId)
 
           return (
           <div key={peer.clientId} className="flex items-center gap-2 rounded px-2 py-1.5 text-xs text-foreground">
