@@ -568,7 +568,7 @@ async function handleHttpRequest(
       userId,
     })
   } catch (error) {
-    writeJson(payload.response, isReadOnlyError(error) ? 409 : 400, {
+    writeJson(payload.response, resolveInternalDocumentErrorStatus(error), {
       error: error instanceof Error ? error.message : 'Internal document request failed',
     })
   }
@@ -747,23 +747,11 @@ async function applyInternalActionWithRuntime({
   body: Record<string, unknown>
   emit: (event: RealtimeServerEvent) => void
 }): Promise<number> {
-  const updates: Uint8Array[] = []
-  const updateListener = (update: Uint8Array) => {
-    updates.push(new Uint8Array(update))
-  }
-
-  doc.on('update', updateListener)
-  try {
-    applyInternalDocumentAction(doc, action, body, createInternalDocumentOrigin(projectId, userId))
-  } finally {
-    doc.off('update', updateListener)
-  }
-
-  if (updates.length === 0) {
+  const mergedUpdate = buildInternalDocumentUpdate(doc, action, body, createInternalDocumentOrigin(projectId, userId))
+  if (!mergedUpdate) {
     return 0
   }
 
-  const mergedUpdate = updates.length === 1 ? updates[0] : Y.mergeUpdates(updates)
   emit({
     type: 'ws:enqueue',
     projectId,
@@ -773,7 +761,36 @@ async function applyInternalActionWithRuntime({
   if (typeof runtime.flush === 'function') {
     await runtime.flush()
   }
+  Y.applyUpdate(doc, mergedUpdate, createInternalDocumentOrigin(projectId, userId))
   return durableSeq
+}
+
+function buildInternalDocumentUpdate(
+  sourceDoc: Y.Doc,
+  action: string,
+  body: Record<string, unknown>,
+  origin: unknown,
+): Uint8Array | null {
+  const workingDoc = new Y.Doc()
+  Y.applyUpdate(workingDoc, Y.encodeStateAsUpdate(sourceDoc))
+
+  const updates: Uint8Array[] = []
+  const updateListener = (update: Uint8Array) => {
+    updates.push(new Uint8Array(update))
+  }
+
+  workingDoc.on('update', updateListener)
+  try {
+    applyInternalDocumentAction(workingDoc, action, body, origin)
+  } finally {
+    workingDoc.off('update', updateListener)
+  }
+
+  if (updates.length === 0) {
+    return null
+  }
+
+  return updates.length === 1 ? updates[0] : Y.mergeUpdates(updates)
 }
 
 function createInternalDocumentOrigin(projectId: string, userId: string): {
@@ -799,8 +816,36 @@ function isInternalDocumentOrigin(origin: unknown): boolean {
 }
 
 function isReadOnlyError(error: unknown): boolean {
-  return error instanceof Error
-    && (error.message.includes('read-only') || error.message.includes('shutting down'))
+  return error instanceof Error && error.message.includes('read-only')
+}
+
+function isServiceUnavailableError(error: unknown): boolean {
+  return error instanceof Error && error.message.includes('shutting down')
+}
+
+function isValidationError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+
+  return error.message === 'projection is required'
+    || error.message.startsWith('Unsupported internal document action:')
+}
+
+function resolveInternalDocumentErrorStatus(error: unknown): number {
+  if (isValidationError(error)) {
+    return 400
+  }
+
+  if (isReadOnlyError(error)) {
+    return 409
+  }
+
+  if (isServiceUnavailableError(error)) {
+    return 503
+  }
+
+  return 500
 }
 
 async function persistRoomChange({

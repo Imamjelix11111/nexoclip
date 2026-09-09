@@ -76,6 +76,98 @@ function extractOutputUrl(result: any): { url: string | null; isVideo: boolean }
   return { url: null, isVideo: false }
 }
 
+function createRecoveryKey(projectId: string, nodeId: string): string {
+  return `${projectId}:${nodeId}`
+}
+
+function pendingRecoveryItemFromProjectionNode(
+  projectId: string,
+  node: {
+    id: string
+    type?: string
+    data?: Record<string, unknown>
+  },
+): RecoveryItem | null {
+  const data = node.data && typeof node.data === 'object' && !Array.isArray(node.data) ? node.data : null
+  const requestId = typeof data?.pendingRequestId === 'string' ? data.pendingRequestId : null
+  const modelEndpoint = typeof data?.pendingFalEndpoint === 'string' ? data.pendingFalEndpoint : null
+  if (!requestId || !modelEndpoint) {
+    return null
+  }
+
+  const hintedType = node.type === 'videoGen'
+    ? 'video'
+    : node.type === 'imageGen'
+      ? 'image'
+      : undefined
+
+  return {
+    requestId,
+    modelEndpoint,
+    projectId,
+    nodeId: node.id,
+    hintedType,
+    prompt: typeof data?.prompt === 'string' ? data.prompt : undefined,
+  }
+}
+
+async function discoverAuthoritativePendingItems({
+  sql,
+  userId,
+  projectFilter,
+  client,
+}: {
+  sql: ReturnType<typeof getDb>
+  userId: string
+  projectFilter: string | null
+  client: InternalRealtimeClient
+}): Promise<RecoveryItem[]> {
+  const rows = await (projectFilter
+    ? sql`
+        SELECT p.id AS project_id, d.durable_seq, d.projected_seq
+        FROM projects p
+        LEFT JOIN canvas_yjs_documents d ON d.project_id = p.id::text
+        WHERE p.userid = ${userId}
+          AND p.id = ${projectFilter}
+      `
+    : sql`
+        SELECT p.id AS project_id, d.durable_seq, d.projected_seq
+        FROM projects p
+        LEFT JOIN canvas_yjs_documents d ON d.project_id = p.id::text
+        WHERE p.userid = ${userId}
+      `) as Array<{
+        project_id?: string
+        projectid?: string
+        durable_seq?: number | null
+        durableSeq?: number | null
+        projected_seq?: number | null
+        projectedSeq?: number | null
+      }>
+
+  const items: RecoveryItem[] = []
+  for (const row of rows) {
+    const projectId = String(row.project_id ?? row.projectid ?? '')
+    if (!projectId) continue
+
+    const durableSeq = Number(row.durable_seq ?? row.durableSeq ?? 0)
+    const projectedSeq = Number(row.projected_seq ?? row.projectedSeq ?? -1)
+    const needsAuthoritativeScan = durableSeq <= 0 || projectedSeq < durableSeq
+    if (!needsAuthoritativeScan) {
+      continue
+    }
+
+    const authoritative = await client.exportDocument({ userId, projectId })
+    for (const node of authoritative.projection.nodes) {
+      const item = pendingRecoveryItemFromProjectionNode(projectId, node)
+      if (item) {
+        items.push(item)
+      }
+    }
+  }
+
+  return items
+}
+
 function createRecoverOne(deps: Required<Pick<GenerateRecoverDeps, 'fetchFalStatus' | 'fetchFalResult' | 'rehostToR2' | 'recordAsset'>>) {
   return async function recoverOne(item: RecoveryItem, falKey: string): Promise<RecoveryResult> {
     const responseBase = {
@@ -264,7 +356,7 @@ export function createGenerateRecoverHandler(deps: GenerateRecoverDeps = {}) {
       return NextResponse.json({ mode: 'manual', results: [result] })
     }
 
-    const rows = await (projectFilter
+    const projectionRows = await (projectFilter
       ? sql`
           SELECT projectId, nodeId, data, type
           FROM canvas_nodes
@@ -281,7 +373,32 @@ export function createGenerateRecoverHandler(deps: GenerateRecoverDeps = {}) {
             AND c.data->>'pendingFalEndpoint' IS NOT NULL
         `)
 
-    if (rows.length === 0) {
+    const pendingItems = new Map<string, RecoveryItem>()
+    for (const row of projectionRows as any[]) {
+      const data = (row.data || {}) as any
+      const projectId = String(row.projectid ?? row.projectId)
+      const nodeId = String(row.nodeid ?? row.nodeId)
+      pendingItems.set(createRecoveryKey(projectId, nodeId), {
+        requestId: String(data.pendingRequestId),
+        modelEndpoint: String(data.pendingFalEndpoint),
+        projectId,
+        hintedType: row.type === 'videoGen' ? 'video' : row.type === 'imageGen' ? 'image' : undefined,
+        nodeId,
+        prompt: data.prompt ? String(data.prompt) : undefined,
+      })
+    }
+
+    const authoritativeItems = await discoverAuthoritativePendingItems({
+      sql,
+      userId: user.id,
+      projectFilter,
+      client: internalRealtime(),
+    })
+    for (const item of authoritativeItems) {
+      pendingItems.set(createRecoveryKey(item.projectId, item.nodeId ?? ''), item)
+    }
+
+    if (pendingItems.size === 0) {
       return NextResponse.json({
         mode: 'bulk',
         scanned: 0,
@@ -291,26 +408,8 @@ export function createGenerateRecoverHandler(deps: GenerateRecoverDeps = {}) {
     }
 
     const results: RecoveryResult[] = []
-    for (const row of rows as any[]) {
-      const data = (row.data || {}) as any
-      const requestId = String(data.pendingRequestId)
-      const modelEndpoint = String(data.pendingFalEndpoint)
-      const projectId = String(row.projectid ?? row.projectId)
-      const nodeId = String(row.nodeid ?? row.nodeId)
-      const hintedType = row.type === 'videoGen' ? 'video' : row.type === 'imageGen' ? 'image' : undefined
-      results.push(
-        await recoverOne(
-          {
-            requestId,
-            modelEndpoint,
-            projectId,
-            hintedType,
-            nodeId,
-            prompt: data.prompt ? String(data.prompt) : undefined,
-          },
-          falKey,
-        ),
-      )
+    for (const item of pendingItems.values()) {
+      results.push(await recoverOne(item, falKey))
     }
 
     const clearedByProject = new Map<string, string[]>()
@@ -344,7 +443,7 @@ export function createGenerateRecoverHandler(deps: GenerateRecoverDeps = {}) {
 
     return NextResponse.json({
       mode: 'bulk',
-      scanned: rows.length,
+      scanned: pendingItems.size,
       recovered: results.filter((result) => result.status === 'recovered').length,
       stillPending: results.filter((result) => result.status === 'still_pending').length,
       failed: results.filter((result) => result.status === 'failed').length,

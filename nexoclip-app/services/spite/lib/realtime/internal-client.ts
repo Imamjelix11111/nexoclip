@@ -17,6 +17,16 @@ type InternalClientEnv = Partial<Pick<NodeJS.ProcessEnv,
   | 'CANVAS_AUTH_HMAC_SECRET'
   | 'CANVAS_AUTH_SECRET'>>
 
+export class InternalRealtimeRequestError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message)
+    this.name = 'InternalRealtimeRequestError'
+  }
+}
+
 export type ExportDocumentInput = {
   userId: string
   projectId: string
@@ -96,14 +106,17 @@ export function createInternalRealtimeClient(options: InternalRequestFactoryOpti
     })
 
     if (!response.ok) {
-      let message = `Realtime internal request failed with ${response.status}`
+      let responseMessage = `Realtime internal request failed with ${response.status}`
       try {
         const body = await response.json()
         if (typeof body?.error === 'string' && body.error) {
-          message = body.error
+          responseMessage = body.error
         }
       } catch {}
-      throw new Error(message)
+      throw new InternalRealtimeRequestError(
+        response.status,
+        formatInternalRequestErrorMessage(response.status, responseMessage),
+      )
     }
 
     return response.json() as Promise<T>
@@ -258,6 +271,22 @@ function resolveDocumentUrl(env: InternalClientEnv): string {
   }
 
   return authorizeUrl.replace(/\/internal\/authorize\/?$/, '/internal/document')
+}
+
+function formatInternalRequestErrorMessage(status: number, responseMessage: string): string {
+  if (status === 400) {
+    return `Realtime internal request validation failed: ${responseMessage}`
+  }
+
+  if (status === 409) {
+    return `Realtime internal request conflicted with read-only state: ${responseMessage}`
+  }
+
+  if (status === 503) {
+    return `Realtime internal request unavailable: ${responseMessage}`
+  }
+
+  return `Realtime internal request failed with ${status}: ${responseMessage}`
 }
 
 function resolveAuthorizationSecret(env: InternalClientEnv): string {

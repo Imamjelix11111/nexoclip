@@ -190,6 +190,159 @@ test('duplicate project clones authoritative document instead of copying project
   }])
 })
 
+test('duplicate exports before insert and deletes the inserted project when authoritative replace fails', async () => {
+  const operations: string[] = []
+  const handler = createDuplicateProjectHandler({
+    getDb: () => (async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      const normalized = strings.join(' ? ').replace(/\s+/g, ' ').trim().toLowerCase()
+
+      if (normalized.includes('select 1 from projects where id = ? and userid = ? limit 1')) {
+        operations.push('owns-project')
+        return [{ ok: 1 }]
+      }
+
+      if (normalized.startsWith("select name, description, thumbnail, coalesce(origin, 'canvas') as origin from projects where id = ?")) {
+        operations.push('load-source-project')
+        return [{ name: 'Storyboard', description: '', thumbnail: null, origin: 'canvas' }]
+      }
+
+      if (normalized.startsWith('insert into projects')) {
+        operations.push('insert-copy')
+        return [{ id: 'copy-project', name: 'Storyboard (Copy)' }]
+      }
+
+      if (normalized.startsWith('delete from projects where id = ? and userid = ?')) {
+        operations.push('delete-orphan-copy')
+        return []
+      }
+
+      throw new Error(`Unhandled SQL in duplicate cleanup test: ${normalized}`)
+    }) as any,
+    getAuthenticatedUser: async () => ({ id: OWNER_ID }),
+    createProjectId: () => 'copy-project',
+    createInternalRealtimeClient: () => ({
+      exportDocument: async (input: unknown) => {
+        operations.push('export-authoritative')
+        return {
+          durableSeq: 9,
+          projectedSeq: 9,
+          projection: {
+            nodes: [{ id: 'source-node', type: 'prompt', position: { x: 1, y: 2 }, data: { label: 'hello' } }],
+            edges: [],
+            scenes: [{ id: 'scene-1', name: 'Scene 1' }],
+            activeSceneId: 'scene-1',
+          },
+        }
+      },
+      replaceDocument: async () => {
+        operations.push('replace-authoritative')
+        throw new Error('replace failed')
+      },
+    }) as any,
+  })
+
+  const response = await handler(makeRequest(`http://spite.local/api/projects/${PROJECT_ID}/duplicate`, {
+    method: 'POST',
+  }) as any, { params: Promise.resolve({ projectId: PROJECT_ID }) } as any)
+
+  assert.equal(response.status, 500)
+  assert.deepEqual(operations, [
+    'owns-project',
+    'load-source-project',
+    'export-authoritative',
+    'insert-copy',
+    'replace-authoritative',
+    'delete-orphan-copy',
+  ])
+})
+
+test('generate/recover discovers pending Yjs nodes from authoritative exports when projection data is absent or lagging', async () => {
+  const exportCalls: unknown[] = []
+  const patchCalls: unknown[] = []
+  const laggingProjectId = '550e8400-e29b-41d4-a716-4466554400aa'
+  const currentProjectId = '550e8400-e29b-41d4-a716-4466554400bb'
+
+  const handler = createGenerateRecoverHandler({
+    getDb: () => (async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      const normalized = strings.join(' ? ').replace(/\s+/g, ' ').trim().toLowerCase()
+
+      if (normalized.includes('select c.projectid, c.nodeid, c.data, c.type from canvas_nodes c join projects p on p.id::text = c.projectid') && normalized.includes('where p.userid = ?') && normalized.includes("c.data->>'pendingrequestid' is not null") && normalized.includes("c.data->>'pendingfalendpoint' is not null")) {
+        return []
+      }
+
+      if (normalized.includes('select p.id as project_id, d.durable_seq, d.projected_seq from projects p left join canvas_yjs_documents d on d.project_id = p.id::text') && normalized.includes('where p.userid = ?')) {
+        return [
+          { project_id: laggingProjectId, durable_seq: 5, projected_seq: 4 },
+          { project_id: currentProjectId, durable_seq: 3, projected_seq: 3 },
+        ]
+      }
+
+      throw new Error(`Unhandled SQL in authoritative recovery discovery test: ${normalized}`)
+    }) as any,
+    getAuthenticatedUser: async () => ({ id: OWNER_ID }),
+    falKey: 'test-fal-key',
+    fetchFalStatus: async (requestId) => {
+      if (requestId === 'req-yjs-pending') return Response.json({ status: 'FAILED' })
+      throw new Error(`unexpected requestId: ${requestId}`)
+    },
+    fetchFalResult: async () => Response.json({}),
+    createInternalRealtimeClient: () => ({
+      exportDocument: async (input: { userId: string; projectId: string }) => {
+        exportCalls.push(input)
+        if (input.projectId === laggingProjectId) {
+          return {
+            durableSeq: 5,
+            projectedSeq: 4,
+            projection: {
+              nodes: [{
+                id: 'node-yjs-only',
+                type: 'imageGen',
+                position: { x: 10, y: 20 },
+                data: {
+                  pendingRequestId: 'req-yjs-pending',
+                  pendingFalEndpoint: 'fal-ai/flux/dev',
+                  prompt: 'recover authoritative node',
+                },
+              }],
+              edges: [],
+              scenes: [{ id: 'scene-1', name: 'Scene 1' }],
+              activeSceneId: 'scene-1',
+            },
+          }
+        }
+
+        return {
+          durableSeq: 3,
+          projectedSeq: 3,
+          projection: {
+            nodes: [],
+            edges: [],
+            scenes: [{ id: 'scene-1', name: 'Scene 1' }],
+            activeSceneId: 'scene-1',
+          },
+        }
+      },
+      patchNodeData: async (input: unknown) => {
+        patchCalls.push(input)
+      },
+    }) as any,
+  })
+
+  const response = await handler(makeRequest('http://spite.local/api/generate/recover', {
+    method: 'POST',
+    body: {},
+  }) as any)
+
+  assert.equal(response.status, 200)
+  assert.deepEqual(exportCalls, [{ userId: OWNER_ID, projectId: laggingProjectId }])
+  assert.deepEqual(patchCalls, [{
+    userId: OWNER_ID,
+    projectId: laggingProjectId,
+    nodeId: 'node-yjs-only',
+    unset: ['pendingRequestId', 'pendingFalEndpoint', 'pendingStartedAt'],
+  }])
+})
+
 test('generate/recover bulk cleanup clears pending markers via authoritative realtime patching', async () => {
   const patchCalls: unknown[] = []
   const handler = createGenerateRecoverHandler({
@@ -211,6 +364,10 @@ test('generate/recover bulk cleanup clears pending markers via authoritative rea
             prompt: 'recover me',
           },
         }]
+      }
+
+      if (normalized.includes('select p.id as project_id, d.durable_seq, d.projected_seq from projects p left join canvas_yjs_documents d on d.project_id = p.id::text') && normalized.includes('where p.userid = ?') && normalized.includes('and p.id = ?')) {
+        return [{ project_id: PROJECT_ID, durable_seq: 1, projected_seq: 1 }]
       }
 
       throw new Error(`Unhandled SQL in generate/recover task 17 test: ${normalized}`)

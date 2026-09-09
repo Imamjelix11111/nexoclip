@@ -32,6 +32,12 @@ type LoadedProjectDocument = {
   projectedSeq: number
 }
 
+type Deferred<T> = {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (error: unknown) => void
+}
+
 class FakeRealtimeRepository {
   readonly ownsCalls: Array<{ projectId: string; userId: string }> = []
   readonly loadCalls: string[] = []
@@ -106,6 +112,37 @@ class FakeRuntime {
   }
 }
 
+class DeferredRuntime {
+  readonly enqueueCalls: Uint8Array[] = []
+  readonly orderedFacts: string[] = []
+  readonly enqueueDeferred = deferred<number>()
+  readonly flushDeferred = deferred<void>()
+
+  async enqueue(update: Uint8Array): Promise<number> {
+    this.enqueueCalls.push(new Uint8Array(update))
+    this.orderedFacts.push('ENQUEUE')
+    const durableSeq = await this.enqueueDeferred.promise
+    this.orderedFacts.push('NEON_COMMIT')
+    return durableSeq
+  }
+
+  async flush(): Promise<void> {
+    this.orderedFacts.push('FLUSH')
+    await this.flushDeferred.promise
+    this.orderedFacts.push('FLUSH_DONE')
+  }
+}
+
+class ThrowingRuntime {
+  constructor(private readonly error: Error) {}
+
+  async enqueue(): Promise<number> {
+    throw this.error
+  }
+
+  async flush(): Promise<void> {}
+}
+
 class FakeAuthorizationDatabase implements DatabaseAdapter {
   readonly usedNonces = new Set<string>()
   readonly ownership = new Set<string>()
@@ -163,6 +200,16 @@ class FakeAuthorizationDatabase implements DatabaseAdapter {
   }
 
   async close(): Promise<void> {}
+}
+
+function deferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve
+    reject = nextReject
+  })
+  return { promise, resolve, reject }
 }
 
 async function issueExpiredToken({ userId = OWNER_USER_ID, projectId = PROJECT_ID } = {}) {
@@ -473,6 +520,326 @@ test('private /internal/document exports and patches authoritative documents', a
     assert.equal(afterBody.projection.nodes[0].data.outputUrl, '/uploads/generated.png')
     assert.equal('pendingRequestId' in afterBody.projection.nodes[0].data, false)
     assert.equal(afterBody.durableSeq, 1)
+  } finally {
+    await server.destroy()
+  }
+})
+
+test('private /internal/document applies committed updates to the live room only after enqueue and flush complete', async () => {
+  const repository = new FakeRealtimeRepository()
+  repository.setOwner(PROJECT_ID, OWNER_USER_ID)
+
+  const seededDoc = createCanvasDocument()
+  upsertNode(seededDoc, {
+    id: 'seed-node',
+    type: 'imageGen',
+    position: { x: 10, y: 20 },
+    data: {
+      pendingRequestId: 'req-123',
+      pendingFalEndpoint: 'fal-ai/flux/dev',
+      prompt: 'hello',
+    },
+  })
+  repository.setDocument(PROJECT_ID, seededDoc)
+
+  const database = new FakeAuthorizationDatabase()
+  database.allow(PROJECT_ID, OWNER_USER_ID)
+
+  const runtime = new DeferredRuntime()
+  const server = createRealtimeServer({
+    address: '127.0.0.1',
+    port: 0,
+    env: {
+      REALTIME_TOKEN_SECRET: JWT_SECRET,
+      CANVAS_AUTH_SECRET,
+    },
+    repository,
+    database,
+    createRuntime: () => runtime,
+  })
+
+  await server.listen()
+
+  const token = (await issueRealtimeToken({ userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
+  const observer = await connectProvider({
+    url: server.wsUrl,
+    name: roomName(PROJECT_ID),
+    token,
+  })
+
+  const createBody = (nonce: string, action: Record<string, unknown>) => {
+    const actionPayload = {
+      ...action,
+    }
+    const payload = {
+      userId: OWNER_USER_ID,
+      projectId: PROJECT_ID,
+      timestamp: Math.floor(Date.now() / 1000),
+      nonce,
+      actionDigest: createCanvasAuthorizationActionDigest(actionPayload),
+    }
+
+    return {
+      ...payload,
+      signature: signCanvasAuthorization(payload, CANVAS_AUTH_SECRET),
+      ...actionPayload,
+    }
+  }
+
+  try {
+    await observer.synced
+
+    observer.document.on('update', () => {
+      runtime.orderedFacts.push('LIVE_DOC_UPDATE')
+    })
+
+    const patchPromise = fetch(`${server.httpUrl}/internal/document`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(createBody('nonce-live-ordering', {
+        action: 'patch-node-data',
+        nodeId: 'seed-node',
+        set: {
+          outputUrl: '/uploads/generated.png',
+          status: 'completed',
+        },
+        unset: ['pendingRequestId', 'pendingFalEndpoint'],
+      })),
+    })
+
+    await waitFor(() => runtime.enqueueCalls.length === 1)
+    assert.equal(readCanvasProjection(observer.document).nodes[0].data.outputUrl, undefined)
+    assert.equal(runtime.orderedFacts.includes('LIVE_DOC_UPDATE'), false)
+
+    runtime.enqueueDeferred.resolve(7)
+    await waitFor(() => runtime.orderedFacts.includes('FLUSH'))
+    await new Promise((resolve) => setTimeout(resolve, 25))
+    assert.equal(readCanvasProjection(observer.document).nodes[0].data.outputUrl, undefined)
+    assert.equal(runtime.orderedFacts.includes('LIVE_DOC_UPDATE'), false)
+
+    runtime.flushDeferred.resolve()
+    const patchResponse = await patchPromise
+    assert.equal(patchResponse.status, 200)
+    await waitFor(() => readCanvasProjection(observer.document).nodes[0].data.outputUrl === '/uploads/generated.png')
+
+    assert.deepEqual(
+      runtime.orderedFacts.filter((fact) => ['ENQUEUE', 'NEON_COMMIT', 'FLUSH', 'FLUSH_DONE', 'LIVE_DOC_UPDATE'].includes(fact)),
+      ['ENQUEUE', 'NEON_COMMIT', 'FLUSH', 'FLUSH_DONE', 'LIVE_DOC_UPDATE'],
+    )
+  } finally {
+    observer.provider.destroy()
+    await waitFor(() => server.getConnectionCount() === 0)
+    await server.destroy()
+  }
+})
+
+test('private /internal/document leaves the live room unchanged when enqueue rejects', async () => {
+  const repository = new FakeRealtimeRepository()
+  repository.setOwner(PROJECT_ID, OWNER_USER_ID)
+
+  const seededDoc = createCanvasDocument()
+  upsertNode(seededDoc, {
+    id: 'seed-node',
+    type: 'imageGen',
+    position: { x: 10, y: 20 },
+    data: {
+      pendingRequestId: 'req-123',
+      pendingFalEndpoint: 'fal-ai/flux/dev',
+      prompt: 'hello',
+    },
+  })
+  repository.setDocument(PROJECT_ID, seededDoc)
+
+  const database = new FakeAuthorizationDatabase()
+  database.allow(PROJECT_ID, OWNER_USER_ID)
+
+  const server = createRealtimeServer({
+    address: '127.0.0.1',
+    port: 0,
+    env: {
+      REALTIME_TOKEN_SECRET: JWT_SECRET,
+      CANVAS_AUTH_SECRET,
+    },
+    repository,
+    database,
+    createRuntime: () => new ThrowingRuntime(new Error('database offline')),
+  })
+
+  await server.listen()
+
+  const token = (await issueRealtimeToken({ userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
+  const observer = await connectProvider({
+    url: server.wsUrl,
+    name: roomName(PROJECT_ID),
+    token,
+  })
+
+  const createBody = (nonce: string, action: Record<string, unknown>) => {
+    const actionPayload = {
+      ...action,
+    }
+    const payload = {
+      userId: OWNER_USER_ID,
+      projectId: PROJECT_ID,
+      timestamp: Math.floor(Date.now() / 1000),
+      nonce,
+      actionDigest: createCanvasAuthorizationActionDigest(actionPayload),
+    }
+
+    return {
+      ...payload,
+      signature: signCanvasAuthorization(payload, CANVAS_AUTH_SECRET),
+      ...actionPayload,
+    }
+  }
+
+  try {
+    await observer.synced
+
+    const patchResponse = await fetch(`${server.httpUrl}/internal/document`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(createBody('nonce-live-reject', {
+        action: 'patch-node-data',
+        nodeId: 'seed-node',
+        set: {
+          outputUrl: '/uploads/generated.png',
+        },
+      })),
+    })
+
+    assert.equal(patchResponse.status, 500)
+    assert.deepEqual(await patchResponse.json(), { error: 'database offline' })
+    assert.equal(readCanvasProjection(observer.document).nodes[0].data.outputUrl, undefined)
+
+    const afterResponse = await fetch(`${server.httpUrl}/internal/document`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(createBody('nonce-export-after-reject', { action: 'export-document' })),
+    })
+
+    assert.equal(afterResponse.status, 200)
+    const afterBody = await afterResponse.json()
+    assert.equal(afterBody.projection.nodes[0].data.outputUrl, undefined)
+    assert.equal(afterBody.durableSeq, 0)
+  } finally {
+    observer.provider.destroy()
+    await waitFor(() => server.getConnectionCount() === 0)
+    await server.destroy()
+  }
+})
+
+test('private /internal/document maps validation, read-only conflicts, service unavailability, and unexpected backend failures', async () => {
+  const repository = new FakeRealtimeRepository()
+  repository.setOwner(PROJECT_ID, OWNER_USER_ID)
+
+  const seededDoc = createCanvasDocument()
+  upsertNode(seededDoc, {
+    id: 'seed-node',
+    type: 'imageGen',
+    position: { x: 10, y: 20 },
+    data: { prompt: 'hello' },
+  })
+  repository.setDocument(PROJECT_ID, seededDoc)
+
+  const database = new FakeAuthorizationDatabase()
+  database.allow(PROJECT_ID, OWNER_USER_ID)
+
+  let runtimeMode: 'read-only' | 'shutdown' | 'backend' = 'read-only'
+  const server = createRealtimeServer({
+    address: '127.0.0.1',
+    port: 0,
+    env: {
+      REALTIME_TOKEN_SECRET: JWT_SECRET,
+      CANVAS_AUTH_SECRET,
+    },
+    repository,
+    database,
+    createRuntime: () => {
+      if (runtimeMode === 'read-only') {
+        return new ThrowingRuntime(new Error(`Project ${PROJECT_ID} runtime is read-only`))
+      }
+      if (runtimeMode === 'shutdown') {
+        return new ThrowingRuntime(new Error('server shutting down'))
+      }
+      return new ThrowingRuntime(new Error('database offline'))
+    },
+  })
+
+  await server.listen()
+
+  const createBody = (nonce: string, action: Record<string, unknown>) => {
+    const actionPayload = {
+      ...action,
+    }
+    const payload = {
+      userId: OWNER_USER_ID,
+      projectId: PROJECT_ID,
+      timestamp: Math.floor(Date.now() / 1000),
+      nonce,
+      actionDigest: createCanvasAuthorizationActionDigest(actionPayload),
+    }
+
+    return {
+      ...payload,
+      signature: signCanvasAuthorization(payload, CANVAS_AUTH_SECRET),
+      ...actionPayload,
+    }
+  }
+
+  try {
+    const validationResponse = await fetch(`${server.httpUrl}/internal/document`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(createBody('nonce-validation', {
+        action: 'replace-document',
+      })),
+    })
+
+    assert.equal(validationResponse.status, 400)
+    assert.deepEqual(await validationResponse.json(), { error: 'projection is required' })
+
+    runtimeMode = 'read-only'
+    const readOnlyResponse = await fetch(`${server.httpUrl}/internal/document`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(createBody('nonce-read-only', {
+        action: 'patch-node-data',
+        nodeId: 'seed-node',
+        set: { outputUrl: '/uploads/generated.png' },
+      })),
+    })
+
+    assert.equal(readOnlyResponse.status, 409)
+    assert.deepEqual(await readOnlyResponse.json(), { error: `Project ${PROJECT_ID} runtime is read-only` })
+
+    runtimeMode = 'shutdown'
+    const shutdownResponse = await fetch(`${server.httpUrl}/internal/document`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(createBody('nonce-shutdown', {
+        action: 'patch-node-data',
+        nodeId: 'seed-node',
+        set: { outputUrl: '/uploads/generated.png' },
+      })),
+    })
+
+    assert.equal(shutdownResponse.status, 503)
+    assert.deepEqual(await shutdownResponse.json(), { error: 'server shutting down' })
+
+    runtimeMode = 'backend'
+    const backendResponse = await fetch(`${server.httpUrl}/internal/document`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(createBody('nonce-backend', {
+        action: 'patch-node-data',
+        nodeId: 'seed-node',
+        set: { outputUrl: '/uploads/generated.png' },
+      })),
+    })
+
+    assert.equal(backendResponse.status, 500)
+    assert.deepEqual(await backendResponse.json(), { error: 'database offline' })
   } finally {
     await server.destroy()
   }

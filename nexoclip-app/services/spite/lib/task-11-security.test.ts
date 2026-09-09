@@ -318,6 +318,10 @@ test('generate/recover cleanup scopes pending marker removal by authorized proje
       }]
     }
 
+    if (normalized.includes('select p.id as project_id, d.durable_seq, d.projected_seq from projects p left join canvas_yjs_documents d on d.project_id = p.id::text') && normalized.includes('where p.userid = ?') && normalized.includes('and p.id = ?')) {
+      return [{ project_id: OWNER_PROJECT_ID, durable_seq: 1, projected_seq: 1 }]
+    }
+
     throw new Error(`Unhandled SQL in recover cleanup test: ${normalized}`)
   }
 
@@ -372,6 +376,13 @@ test('generate/recover bulk cleanup uses projectId+nodeId pair when node ids rep
             prompt: 'second node',
           },
         },
+      ]
+    }
+
+    if (normalized.includes('select p.id as project_id, d.durable_seq, d.projected_seq from projects p left join canvas_yjs_documents d on d.project_id = p.id::text') && normalized.includes('where p.userid = ?')) {
+      return [
+        { project_id: OWNER_PROJECT_ID, durable_seq: 1, projected_seq: 1 },
+        { project_id: secondProjectId, durable_seq: 1, projected_seq: 1 },
       ]
     }
 

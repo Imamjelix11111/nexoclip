@@ -53,6 +53,11 @@ export function createDuplicateProjectHandler(deps: DuplicateProjectDeps = {}) {
 
       const newId = createProjectId()
       const newName = `${original[0].name} (Copy)`
+      const realtime = internalRealtime()
+      const projection = await realtime.exportDocument({
+        userId: user.id,
+        projectId,
+      })
 
       const inserted = await sql`
         INSERT INTO projects (id, userid, name, description, thumbnail, origin, createdat, updatedat)
@@ -69,16 +74,19 @@ export function createDuplicateProjectHandler(deps: DuplicateProjectDeps = {}) {
         RETURNING id, name, description, thumbnail, origin, createdat, updatedat
       `
 
-      const projection = await internalRealtime().exportDocument({
-        userId: user.id,
-        projectId,
-      })
-
-      await internalRealtime().replaceDocument({
-        userId: user.id,
-        projectId: newId,
-        projection: projection.projection,
-      })
+      try {
+        await realtime.replaceDocument({
+          userId: user.id,
+          projectId: newId,
+          projection: projection.projection,
+        })
+      } catch (error) {
+        await sql`
+          DELETE FROM projects
+          WHERE id = ${newId} AND userid = ${user.id}
+        `
+        throw error
+      }
 
       return NextResponse.json(inserted[0])
     } catch (error) {
