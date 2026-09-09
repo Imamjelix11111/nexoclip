@@ -2,17 +2,7 @@
 
 ## Task status
 
-- [x] Round 1 — Task 19 deploy/config contract hardening
 - [x] S3 — Production migration and runbook hardening
-
-## Round 1 — Task 19 deploy/config contract hardening implementation note
-
-- What changed: Hardened the production deployment contract so `scripts/deploy.sh` now runs `npm run config:check` before any Compose migration/startup action. Updated static deployment contract tests to enforce that order and tightened realtime Compose env interpolation to required `${VAR:?message}` for `CANVAS_AUTH_URL`, `NEXOCLIP_INTERNAL_URL`, `NEXT_PUBLIC_REALTIME_URL`, and `REALTIME_JWT_SECRET` in production runtime paths. Expanded production config validation to require `NEXT_PUBLIC_REALTIME_URL`, refreshed the production runbook for split-database ownership, migration job responsibilities, auth URL/secret handling, release sequencing, and health validation, and expanded `.env.example` local server-side realtime variables with an explicit pointer to `.env.production.example` as canonical production contract.
-- Files: `scripts/deploy.sh`, `docker-compose.prod.yml`, `scripts/production-config.mjs`, `tests/deployment/dockerDeployment.test.mjs`, `tests/production/productionConfig.test.mjs`, `docs/production-runbook.md`, `.env.example`, `docs/sprint-1-progress.md`.
-- Tests: `rtk node --test tests/deployment/dockerDeployment.test.mjs tests/production/productionConfig.test.mjs` — 9 passed, 0 failed after the expected red run when the new deploy/config and realtime requirements were asserted first.
-- Verification: `rtk docker compose --env-file /tmp/nexoclip-prod-fixture.env -f docker-compose.prod.yml config --quiet` exits successfully with warnings for intentionally unset non-required fixture variables; required realtime contract variables resolve and no compose interpolation error occurs.
-- Blockers: No live deployment was executed in this session; verification is static contract + compose config preflight only.
-- Follow-up: Add a dedicated fixture `.env` for production compose contract checks to suppress expected warnings and make CI preflight output cleaner.
 
 ## S3 — Production migration and runbook hardening implementation note
 
