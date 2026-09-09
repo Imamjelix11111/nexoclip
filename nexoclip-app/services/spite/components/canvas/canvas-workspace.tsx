@@ -41,6 +41,10 @@ import {
   presenceSnapshotNeedsPublish,
   projectRemotePresence,
 } from '@/lib/realtime/presence'
+import {
+  filterSelectedNodeIdsToVisible,
+  reconcileSelectedNodeIds,
+} from '@/lib/canvas-selection'
 import { CanvasToolbar } from './canvas-toolbar'
 import { nodeHasNoMedia } from '@/lib/node-media'
 import { OnboardingTour } from '@/components/onboarding/use-onboarding-tour'
@@ -410,21 +414,16 @@ function CanvasInner({ projectId }: { projectId: string }) {
 
   useEffect(() => {
     const visibleIds = new Set(nodes.map((node) => node.id))
-    setSelectedNodeIds((previous) => previous.filter((id) => visibleIds.has(id)))
+    setSelectedNodeIds((previous) => filterSelectedNodeIdsToVisible(previous, visibleIds))
   }, [nodes])
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     const selectChanges = changes.filter((change) => change.type === 'select')
     if (selectChanges.length > 0) {
-      setSelectedNodeIds((previous) => {
-        const next = new Set(previous.filter((id) => nodes.some((node) => node.id === id)))
-        for (const change of selectChanges) {
-          if (change.type !== 'select') continue
-          if (change.selected) next.add(change.id)
-          else next.delete(change.id)
-        }
-        return Array.from(next)
-      })
+      const visibleNodeIds = new Set(nodes.map((node) => node.id))
+      setSelectedNodeIds((previous) =>
+        reconcileSelectedNodeIds(previous, selectChanges, visibleNodeIds),
+      )
     }
 
     const durableChanges = changes.filter((change) => change.type !== 'select')
