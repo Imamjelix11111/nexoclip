@@ -1,8 +1,9 @@
 'use client'
 
 import { memo, useState, useEffect, useCallback } from 'react'
-import { NodeProps, useReactFlow } from '@xyflow/react'
+import { NodeProps } from '@xyflow/react'
 import { X } from '@phosphor-icons/react'
+import { useCanvasCollaboration } from '../canvas-collaboration'
 
 const LAST_STICKER_KEY = 'canvas_last_sticker'
 
@@ -21,7 +22,7 @@ const STICKER_ROWS = [
 ]
 
 function StickerNodeImpl({ id, data, selected }: NodeProps) {
-  const { deleteElements } = useReactFlow()
+  const { deleteNodes, patchNodeData } = useCanvasCollaboration()
   const [sticker, setSticker] = useState(
     (data.sticker as string) || getLastSticker()
   )
@@ -34,11 +35,16 @@ function StickerNodeImpl({ id, data, selected }: NodeProps) {
     return () => window.removeEventListener('closeStickerPickers', handler)
   }, [])
 
+  useEffect(() => {
+    setSticker((data.sticker as string) || getLastSticker())
+  }, [data.sticker])
+
   const pick = useCallback((s: string) => {
     setSticker(s)
     saveLastSticker(s)
+    patchNodeData(id, { sticker: s })
     setShowPicker(false)
-  }, [])
+  }, [id, patchNodeData])
 
   return (
     <div className="relative group">
@@ -63,7 +69,7 @@ function StickerNodeImpl({ id, data, selected }: NodeProps) {
       <button
         onClick={(e) => {
           e.stopPropagation()
-          deleteElements({ nodes: [{ id }] })
+          deleteNodes([id])
         }}
         className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-black/80 border border-white/20 text-white/80 hover:text-white hover:bg-red-500/80 hover:border-red-400/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 nodrag"
         aria-label="Delete sticker"

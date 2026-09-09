@@ -5,6 +5,12 @@
     reverse_proxy ai-clip:4175
   }
 
+  respond /spite/api/internal/* 404
+
+  handle /spite/ws* {
+    reverse_proxy spite-realtime:3007
+  }
+
   handle /spite* {
     reverse_proxy spite:3005
   }

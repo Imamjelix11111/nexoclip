@@ -1,6 +1,7 @@
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { getDb } from './db'
+import { createInternalRealtimeClient, type InternalRealtimeClient } from './realtime/internal-client'
 import { assetExpiresAt } from './retention'
 import crypto from 'crypto'
 
@@ -256,30 +257,38 @@ export async function recordAsset(
   return id
 }
 
-export async function attachGeneratedMediaToNode(
-  projectId: string | undefined,
-  nodeId: string | undefined,
-  url: string,
-) {
-  if (!projectId || !nodeId) return
-  const sql = getDb()
-  await sql`
-    UPDATE canvas_nodes
-    SET data = (
-      COALESCE(data, '{}'::jsonb)
-      - 'pendingRequestId'
-      - 'pendingProvider'
-      - 'pendingProviderModel'
-      - 'pendingFalEndpoint'
-      - 'pendingStartedAt'
-    ) || jsonb_build_object(
-      'outputUrl', ${url}::text,
-      'status', 'completed'::text,
-      'error', NULL::text
-    )
-    WHERE projectId = ${projectId}::text AND nodeId = ${nodeId}
-  `
+export function createAttachGeneratedMediaToNode({
+  createInternalRealtimeClient: createClient = createInternalRealtimeClient,
+}: {
+  createInternalRealtimeClient?: () => InternalRealtimeClient
+} = {}) {
+  return async function attachGeneratedMediaToNode({
+    userId,
+    projectId,
+    nodeId,
+    url,
+  }: {
+    userId: string
+    projectId: string | undefined
+    nodeId: string | undefined
+    url: string
+  }) {
+    if (!projectId || !nodeId) return
+    await createClient().patchNodeData({
+      userId,
+      projectId,
+      nodeId,
+      set: {
+        outputUrl: url,
+        status: 'completed',
+        error: null,
+      },
+      unset: ['pendingRequestId', 'pendingProvider', 'pendingProviderModel', 'pendingFalEndpoint', 'pendingStartedAt'],
+    })
+  }
 }
+
+export const attachGeneratedMediaToNode = createAttachGeneratedMediaToNode()
 
 export async function markAssetUsedInCanvas(assetId: string) {
   const sql = getDb()

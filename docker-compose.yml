@@ -1,5 +1,6 @@
 # Monorepo orchestrator. Run from the repo root: `docker compose up --build`.
-# Redis and the storyboard runtime are private; Next and PostgreSQL are exposed for local development.
+# Redis, ownership/migration jobs, and the realtime canvas runtime stay private.
+# Next, Spite HTTP, and PostgreSQL are exposed for local development.
 services:
   nexoclip-postgres:
     image: postgres:16-alpine
@@ -55,10 +56,41 @@ services:
       target: migrate
     environment:
       NODE_ENV: production
+      DATABASE_URL_NEXOCLIP: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
       DATABASE_URL: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
     depends_on:
       nexoclip-postgres:
         condition: service_healthy
+    restart: "no"
+
+  spite-realtime-migrate:
+    build:
+      context: ./nexoclip-app/services/spite
+      target: migrate-realtime
+    environment:
+      NODE_ENV: production
+      DATABASE_URL_SPITE: ${DATABASE_URL_SPITE:?DATABASE_URL_SPITE is required}
+      DATABASE_URL: ${DATABASE_URL_SPITE:?DATABASE_URL_SPITE is required}
+    restart: "no"
+
+  spite-ownership-migrate:
+    build:
+      context: ./nexoclip-app
+      target: node-runtime
+    command: ["node", "scripts/migrate-spite-ownership.mjs"]
+    environment:
+      NODE_ENV: development
+      DATABASE_URL_NEXOCLIP: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
+      DATABASE_URL_SPITE: ${DATABASE_URL_SPITE:?DATABASE_URL_SPITE is required}
+      SPITE_OWNER_USER_ID: ${SPITE_OWNER_USER_ID:-}
+      SPITE_ALLOW_DETERMINISTIC_FIRST_USER: ${SPITE_ALLOW_DETERMINISTIC_FIRST_USER:-1}
+    depends_on:
+      nexoclip-postgres:
+        condition: service_healthy
+      nexoclip-migrate:
+        condition: service_completed_successfully
+      spite-realtime-migrate:
+        condition: service_completed_successfully
     restart: "no"
 
   nexoclip-asset-storage-init:
@@ -159,14 +191,17 @@ services:
   spite:
     build:
       context: ./nexoclip-app/services/spite
+      target: web
       args:
         NEXT_PUBLIC_BASE_PATH: /spite
         NEXT_PUBLIC_STUDIO_URL: http://localhost:3000/studio
+        NEXT_PUBLIC_REALTIME_URL: ws://localhost:3007
     container_name: nexoclip-spite
     ports:
       - "3005:3005"
     environment:
       NODE_ENV: production
+      DATABASE_URL_SPITE: ${DATABASE_URL_SPITE:?DATABASE_URL_SPITE is required}
       DATABASE_URL: ${DATABASE_URL_SPITE:?DATABASE_URL_SPITE is required}
       APP_PASSWORD: ${SPITE_APP_PASSWORD:?SPITE_APP_PASSWORD is required}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-${GOOGLE_API_KEY:-}}
@@ -180,9 +215,52 @@ services:
       R2_BUCKET_NAME: ${R2_BUCKET_NAME:?R2_BUCKET_NAME is required}
       R2_PUBLIC_URL: ${R2_PUBLIC_URL:-}
       R2_PROXY_SIGNING_SECRET: ${R2_PROXY_SIGNING_SECRET:-}
+      NEXOCLIP_INTERNAL_URL: ${NEXOCLIP_INTERNAL_URL:-http://nexoclip-app:3000}
+      CANVAS_AUTH_URL: ${CANVAS_AUTH_URL:-http://spite-realtime:3007/internal/authorize}
+      CANVAS_AUTH_HMAC_SECRET: ${CANVAS_AUTH_HMAC_SECRET:?CANVAS_AUTH_HMAC_SECRET is required}
+      CANVAS_AUTH_SECRET: ${CANVAS_AUTH_HMAC_SECRET:?CANVAS_AUTH_HMAC_SECRET is required}
+      REALTIME_TOKEN_SECRET: ${REALTIME_JWT_SECRET:?REALTIME_JWT_SECRET is required}
+      NEXT_PUBLIC_REALTIME_URL: ${NEXT_PUBLIC_REALTIME_URL:-/spite/ws}
     depends_on:
-      nexoclip-postgres:
+      spite-realtime-migrate:
+        condition: service_completed_successfully
+      spite-ownership-migrate:
+        condition: service_completed_successfully
+      spite-realtime:
         condition: service_healthy
+    restart: unless-stopped
+
+  spite-realtime:
+    build:
+      context: ./nexoclip-app/services/spite
+      target: realtime
+    container_name: nexoclip-spite-realtime
+    ports:
+      - "3007:3007"
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3007
+      DATABASE_URL_SPITE: ${DATABASE_URL_SPITE:?DATABASE_URL_SPITE is required}
+      DATABASE_URL: ${DATABASE_URL_SPITE:?DATABASE_URL_SPITE is required}
+      CANVAS_AUTH_HMAC_SECRET: ${CANVAS_AUTH_HMAC_SECRET:?CANVAS_AUTH_HMAC_SECRET is required}
+      CANVAS_AUTH_SECRET: ${CANVAS_AUTH_HMAC_SECRET:?CANVAS_AUTH_HMAC_SECRET is required}
+      REALTIME_JWT_SECRET: ${REALTIME_JWT_SECRET:?REALTIME_JWT_SECRET is required}
+      REALTIME_TOKEN_SECRET: ${REALTIME_JWT_SECRET:?REALTIME_JWT_SECRET is required}
+      SPITE_REALTIME_MAX_QUEUED_UPDATES: ${SPITE_REALTIME_MAX_QUEUED_UPDATES:-256}
+      SPITE_REALTIME_MAX_QUEUED_BYTES: ${SPITE_REALTIME_MAX_QUEUED_BYTES:-524288}
+      SPITE_REALTIME_SNAPSHOT_INTERVAL_MS: ${SPITE_REALTIME_SNAPSHOT_INTERVAL_MS:-30000}
+      SPITE_REALTIME_COMPACT_AFTER_UPDATES: ${SPITE_REALTIME_COMPACT_AFTER_UPDATES:-128}
+    depends_on:
+      spite-realtime-migrate:
+        condition: service_completed_successfully
+      spite-ownership-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3007/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     restart: unless-stopped
 
   nexoclip-app:
@@ -199,6 +277,7 @@ services:
       - "3000:3000"
     environment:
       NODE_ENV: production
+      DATABASE_URL_NEXOCLIP: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
       DATABASE_URL: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
       VIMAX_SERVICE_URL: http://ai-storyboard:4173
       VIMAX_RUNTIME_URL: http://ai-storyboard:4173
@@ -221,6 +300,11 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_OAUTH_ORIGIN: ${GOOGLE_OAUTH_ORIGIN:-}
+      CANVAS_AUTH_URL: ${CANVAS_AUTH_URL:-http://spite-realtime:3007/internal/authorize}
+      CANVAS_AUTH_HMAC_SECRET: ${CANVAS_AUTH_HMAC_SECRET:?CANVAS_AUTH_HMAC_SECRET is required}
+      CANVAS_AUTH_SECRET: ${CANVAS_AUTH_HMAC_SECRET:?CANVAS_AUTH_HMAC_SECRET is required}
+      REALTIME_JWT_SECRET: ${REALTIME_JWT_SECRET:?REALTIME_JWT_SECRET is required}
+      REALTIME_TOKEN_SECRET: ${REALTIME_JWT_SECRET:?REALTIME_JWT_SECRET is required}
     volumes:
       - nexoclip-assets:/data
     depends_on:

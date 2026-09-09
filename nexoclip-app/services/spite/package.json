@@ -7,12 +7,18 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "realtime": "tsx realtime/server.ts",
+    "realtime:migrate": "node scripts/migrate-realtime.mjs",
+    "realtime:recover-projections": "tsx scripts/recover-realtime-projections.ts",
     "test": "tsx --test \"lib/**/*.test.ts\"",
+    "test:realtime": "tsx --test \"lib/realtime/**/*.test.ts\" \"realtime/**/*.test.ts\"",
     "release": "node scripts/release.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1053.0",
     "@aws-sdk/s3-request-presigner": "^3.1053.0",
+    "@hocuspocus/provider": "4.6.0",
+    "@hocuspocus/server": "4.6.0",
     "@hookform/resolvers": "^3.9.1",
     "@neondatabase/serverless": "^1.1.0",
     "@phosphor-icons/react": "^2.1.10",
@@ -53,6 +59,7 @@
     "date-fns": "4.1.0",
     "embla-carousel-react": "8.6.0",
     "input-otp": "1.4.2",
+    "jose": "6.2.12",
     "jszip": "^3.10.1",
     "lucide-react": "^0.564.0",
     "next": "16.2.11",
@@ -67,6 +74,8 @@
     "tailwind-merge": "^3.3.1",
     "uuid": "^14.0.0",
     "vaul": "^1.1.2",
+    "y-protocols": "1.0.7",
+    "yjs": "13.6.32",
     "zod": "^3.24.1"
   },
   "devDependencies": {

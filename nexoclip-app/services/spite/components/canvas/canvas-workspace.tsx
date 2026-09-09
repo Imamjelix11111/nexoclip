@@ -1,6 +1,11 @@
 'use client'
 
 import { withBasePath } from '@/lib/base-path'
+import {
+  createInvocationTimeRuntimeControls,
+  getCanvasRuntimeCapabilities,
+  type CanvasRuntimeControls,
+} from '@/lib/canvas-runtime-ui'
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { toast } from 'sonner'
 import {
@@ -9,18 +14,17 @@ import {
   BackgroundVariant,
   MiniMap,
   ReactFlowProvider,
-  useNodesState,
-  useEdgesState,
   useReactFlow,
   useUpdateNodeInternals,
   useViewport,
-  addEdge,
   SelectionMode,
   type NodeTypes,
   type EdgeTypes,
   type Connection,
   type Node,
   type Edge,
+  type NodeChange,
+  type EdgeChange,
 } from '@xyflow/react'
 import { ScissorsEdge } from './edges/scissors-edge'
 import {
@@ -29,14 +33,25 @@ import {
   type ConnectorAnimation,
 } from '@/lib/connector-animation'
 import '@xyflow/react/dist/style.css'
-import { useCanvasAutoSave } from '@/hooks/use-canvas-auto-save'
+import { useRealtimeCanvas } from '@/hooks/use-realtime-canvas'
+import {
+  createLocalPresenceSnapshot,
+  createPresenceController,
+  getOrCreateParticipantHint,
+  presenceSnapshotNeedsPublish,
+  projectRemotePresence,
+} from '@/lib/realtime/presence'
+import {
+  filterSelectedNodeIdsToVisible,
+  reconcileSelectedNodeIds,
+} from '@/lib/canvas-selection'
 import { CanvasToolbar } from './canvas-toolbar'
 import { nodeHasNoMedia } from '@/lib/node-media'
 import { OnboardingTour } from '@/components/onboarding/use-onboarding-tour'
 import { JobsPanel } from './jobs-panel'
-import { LeftToolbar, type Asset, type AssetCategory } from './left-toolbar'
+import { LeftToolbar, type Asset } from './left-toolbar'
 import { BottomBar } from './bottom-bar'
-import { SceneTimeline, type Scene, type Shot } from './scene-timeline'
+import { SceneTimeline, type Shot } from './scene-timeline'
 import { AlignmentGuides, computeAlignmentGuides } from './alignment-guides'
 import { MapTrifold, X } from '@phosphor-icons/react'
 import { AddNodeMenu } from './add-node-menu'
@@ -47,6 +62,8 @@ import { ReferenceNode } from './nodes/reference-node'
 import { CommentNode } from './nodes/comment-node'
 import { StickerNode, getLastSticker } from './nodes/sticker-node'
 import { CompressNode } from './nodes/compress-node'
+import { RealtimePresenceOverlay } from './realtime-presence'
+import { CanvasCollaborationProvider } from './canvas-collaboration'
 
 const NODE_TYPES: NodeTypes = {
   imageGen: ImageNode,
@@ -67,6 +84,11 @@ const EDGE_TYPES: EdgeTypes = {
 // React Flow's edge memoization and re-renders all edges. One shared object
 // keeps the identity stable.
 const EDGE_STYLE = { stroke: '#aec3d2' } as const
+const DEFAULT_EDGE_OPTIONS = {
+  type: 'scissors',
+  style: EDGE_STYLE,
+  animated: false,
+} as const
 
 // Restores AND persists the viewport (pan + zoom) per-project via localStorage,
 // so a project reopens exactly where you left it. Lives in its own leaf so that
@@ -119,15 +141,6 @@ function ViewportPersistor({ projectId }: { projectId: string | undefined }) {
 
 let nodeCount = 1
 function makeId() { return `node-${Date.now()}-${Math.random().toString(36).slice(2, 7)}` }
-
-// Scene IDs are timestamp + random so they NEVER collide with whatever's
-// already in the loaded scenes list. The previous module-level counter
-// (`sceneCount = 2`) reset on every page load, so after scenes started
-// persisting (commit c735535) the first "Add scene" click would return
-// `scene-2` again — colliding with the saved scene-2 and silently
-// inheriting any orphan nodes that already had sceneId='scene-2' from a
-// pre-persistence session.
-function makeSceneId() { return `scene-${Date.now()}-${Math.random().toString(36).slice(2, 7)}` }
 
 let assetCount = 1
 function makeAssetId() { return `asset-${assetCount++}` }
@@ -207,18 +220,10 @@ function makeNode(
   }
 }
 
-// Initial demo data
-const INITIAL_SCENES: Scene[] = [
-  { id: 'scene-1', name: 'Scene 1', shots: [] },
-]
-
 const INITIAL_ASSETS: Asset[] = []
 
 // Clipboard buffer — lives outside component so it persists across re-renders
 let clipboardNodes: Node[] = []
-
-// History for undo/redo
-const MAX_HISTORY = 50
 
 // Ghost sticker that follows the cursor during placement
 function StickerGhost({ containerRef }: { containerRef: React.RefObject<HTMLDivElement | null> }) {
@@ -260,9 +265,41 @@ function StickerGhost({ containerRef }: { containerRef: React.RefObject<HTMLDivE
 }
 
 function CanvasInner({ projectId }: { projectId: string }) {
-  const [projectName, setProjectName] = useState('Untitled Project')
-  const [nodes, setNodes, onNodesChange] = useNodesState([] as Node[])
-  const [edges, setEdges, onEdgesChange] = useEdgesState([] as Edge[])
+  const realtime = useRealtimeCanvas(projectId)
+  const persistenceStatus = realtime.persistenceStatus
+  const { allowDocumentMutation } = getCanvasRuntimeCapabilities(persistenceStatus)
+  const readOnly = !allowDocumentMutation
+  const runtimeStatusRef = useRef(persistenceStatus)
+  runtimeStatusRef.current = persistenceStatus
+  const runtimeControlsRef = useRef<CanvasRuntimeControls>({
+    commands: realtime.commands,
+    undo: realtime.undo,
+    redo: realtime.redo,
+  })
+  runtimeControlsRef.current = {
+    commands: realtime.commands,
+    undo: realtime.undo,
+    redo: realtime.redo,
+  }
+  const guardedRuntimeControls = useMemo(
+    () => createInvocationTimeRuntimeControls(runtimeControlsRef, runtimeStatusRef),
+    [],
+  )
+  const {
+    nodes,
+    edges,
+    allNodes,
+    projectName,
+    scenes,
+    activeSceneId,
+    peers: realtimePeers,
+    awareness,
+  } = realtime
+  const { commands, undo, redo } = guardedRuntimeControls
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([])
+  const presenceControllerRef = useRef<ReturnType<typeof createPresenceController> | null>(null)
+  const selectedSceneNodeIdsRef = useRef<string[]>([])
+  const [presenceNow, setPresenceNow] = useState(() => Date.now())
   // Connector-animation preference (Settings → Performance). Read on mount and
   // kept live via the broadcast event so toggling it reflects without reload.
   const [connectorAnim, setConnectorAnim] = useState<ConnectorAnimation>('auto')
@@ -276,19 +313,11 @@ function CanvasInner({ projectId }: { projectId: string }) {
   // React Flow's separate hook for forcing a node's handle re-measurement.
   // Declared here near the top because onConnect (below) depends on it.
   const updateNodeInternals = useUpdateNodeInternals()
-  
-  // Simple undo/redo using state
-  const [past, setPast] = useState<{ nodes: Node[]; edges: Edge[] }[]>([])
-  const [future, setFuture] = useState<{ nodes: Node[]; edges: Edge[] }[]>([])
-  const skipHistoryRef = useRef(false)
-  
-  // Scene management
-  const [scenes, setScenes] = useState<Scene[]>(INITIAL_SCENES)
-  const [activeSceneId, setActiveSceneId] = useState('scene-1')
-  
+  const viewport = useViewport()
+
   // Asset management
   const [assets, setAssets] = useState<Asset[]>(INITIAL_ASSETS)
-  
+
   // History panel state (for generations)
   const [showHistory, setShowHistory] = useState(false)
   // Right-side jobs panel: open/close state lives here so the panel
@@ -299,67 +328,74 @@ function CanvasInner({ projectId }: { projectId: string }) {
   // something is in flight even when the panel is closed.
   const activeJobCount = useMemo(
     () =>
-      nodes.filter(n => {
+      allNodes.filter(n => {
         if (n.type !== 'imageGen' && n.type !== 'videoGen') return false
         const s = (n.data as any)?.status as string | undefined
         return s === 'submitting' || s === 'in_queue' || s === 'in_progress'
       }).length,
-    [nodes],
+    [allNodes],
   )
-  
+
   // Active tool state
   const [activeTool, setActiveTool] = useState<'select' | 'cut' | 'sticker' | 'comment'>('select')
 
-  // Auto-save hook
-  const { saveCanvas, saveStatus } = useCanvasAutoSave(projectId, nodes, edges, scenes, activeSceneId)
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setPresenceNow(Date.now())
+    }, 1_000)
 
-  // Load canvas data and assets on mount
+    return () => {
+      window.clearInterval(timer)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!awareness) {
+      presenceControllerRef.current?.destroy()
+      presenceControllerRef.current = null
+      return
+    }
+
+    const controller = createPresenceController({
+      awareness,
+      participantId: getOrCreateParticipantHint(),
+    })
+
+    const syncPresenceSnapshot = () => {
+      const snapshot = createLocalPresenceSnapshot(
+        selectedSceneNodeIdsRef.current,
+        document.activeElement,
+      )
+      if (!presenceSnapshotNeedsPublish(awareness.getLocalState?.(), snapshot)) {
+        return
+      }
+
+      controller.publishSelection(snapshot.selection.nodeIds)
+      controller.publishEditing(snapshot.editing?.nodeId ?? null)
+    }
+
+    presenceControllerRef.current = controller
+    awareness.on?.('change', syncPresenceSnapshot)
+    awareness.on?.('update', syncPresenceSnapshot)
+    syncPresenceSnapshot()
+
+    return () => {
+      awareness.off?.('change', syncPresenceSnapshot)
+      awareness.off?.('update', syncPresenceSnapshot)
+      controller.publishCursor(null)
+      controller.publishEditing(null)
+      controller.publishSelection([])
+      controller.stopDragLock()
+      controller.destroy()
+      if (presenceControllerRef.current === controller) {
+        presenceControllerRef.current = null
+      }
+    }
+  }, [awareness])
+
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Load project details (including name)
-        const projectResponse = await fetch(withBasePath(`/api/projects/${projectId}`))
-        if (projectResponse.ok) {
-          const project = await projectResponse.json()
-          if (project.name) {
-            setProjectName(project.name)
-          }
-        }
-
-        // Load canvas — nodes/edges plus the persisted scene list and
-        // last-active scene id. Before scene persistence shipped, the
-        // scenes array was reset to INITIAL_SCENES on every load and
-        // newly-added scenes vanished after a reload, leaving any
-        // nodes tagged with their sceneId orphaned (sceneId pointing
-        // to a scene that no longer existed in the list).
-        const canvasResponse = await fetch(withBasePath(`/api/projects/${projectId}/canvas`))
-        if (canvasResponse.ok) {
-          const {
-            nodes: savedNodes,
-            edges: savedEdges,
-            scenes: savedScenes,
-            activeSceneId: savedActiveSceneId,
-          } = await canvasResponse.json()
-          if (savedNodes && savedEdges) {
-            setNodes(savedNodes)
-            setEdges(savedEdges)
-          }
-          if (Array.isArray(savedScenes) && savedScenes.length > 0) {
-            // Saved scenes are bare {id, name}; the in-memory shape
-            // includes shots[] which scenesWithShots derives from
-            // nodes. Initialise with empty shots so the derivation
-            // runs cleanly on the next render.
-            setScenes(savedScenes.map((s: any) => ({ id: s.id, name: s.name, shots: [] })))
-          }
-          if (typeof savedActiveSceneId === 'string' && savedActiveSceneId) {
-            setActiveSceneId(savedActiveSceneId)
-          }
-        }
-
-        // Viewport restore is handled up-front by <ViewportPersistor> (on mount,
-        // before this async load completes), so there's nothing to do here.
-
-        // Load assets
         const assetsResponse = await fetch(withBasePath(`/api/projects/${projectId}/assets`))
         if (assetsResponse.ok) {
           const loadedAssets = await assetsResponse.json()
@@ -371,51 +407,49 @@ function CanvasInner({ projectId }: { projectId: string }) {
     }
 
     loadData()
-  }, [projectId, setNodes, setEdges])
+  }, [projectId])
 
-  // Batch-generation nodes (image/video) ask the canvas to add edges that
-  // mirror the original node's connections onto the spawned duplicates.
   useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail
-      if (detail?.edges?.length) {
-        setEdges(es => {
-          const existing = new Set(es.map(ed => ed.id))
-          const toAdd = detail.edges.filter((ed: Edge) => !existing.has(ed.id))
-          return [...es, ...toAdd]
-        })
-      }
-    }
-    window.addEventListener('frame-add-edges', handler as EventListener)
-    return () => window.removeEventListener('frame-add-edges', handler as EventListener)
-  }, [setEdges])
+    const visibleIds = new Set(nodes.map((node) => node.id))
+    setSelectedNodeIds((previous) => filterSelectedNodeIdsToVisible(previous, visibleIds))
+  }, [nodes])
 
-  // Save project name when it changes (debounced)
-  const saveProjectNameRef = useRef<NodeJS.Timeout | null>(null)
-  const handleProjectNameChange = (newName: string) => {
-    setProjectName(newName)
-    
-    // Debounce the save
-    if (saveProjectNameRef.current) {
-      clearTimeout(saveProjectNameRef.current)
+  const onNodesChange = useCallback((changes: NodeChange[]) => {
+    const selectChanges = changes.filter((change) => change.type === 'select')
+    if (selectChanges.length > 0) {
+      const visibleNodeIds = new Set(nodes.map((node) => node.id))
+      setSelectedNodeIds((previous) =>
+        reconcileSelectedNodeIds(previous, selectChanges, visibleNodeIds),
+      )
     }
-    saveProjectNameRef.current = setTimeout(async () => {
-      try {
-        await fetch(withBasePath(`/api/projects/${projectId}`), {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: newName })
-        })
-      } catch (error) {
-        console.error('Error saving project name:', error)
-      }
-    }, 500)
+
+    const durableChanges = changes.filter((change) => change.type !== 'select')
+    if (!allowDocumentMutation || durableChanges.length === 0) {
+      return
+    }
+
+    commands.applyNodeChanges(durableChanges)
+  }, [allowDocumentMutation, commands, nodes])
+
+  const onEdgesChange = useCallback((changes: EdgeChange[]) => {
+    const durableChanges = changes.filter((change) => change.type !== 'select')
+    if (!allowDocumentMutation || durableChanges.length === 0) {
+      return
+    }
+
+    commands.applyEdgeChanges(durableChanges)
+  }, [allowDocumentMutation, commands])
+
+  const handleProjectNameChange = (newName: string) => {
+    if (allowDocumentMutation) {
+      commands.setProjectName(newName)
+    }
   }
 
   // Derive shots from nodes that have a shotId assigned (tagged to a shot)
   const scenesWithShots = useMemo(() => {
     return scenes.map(scene => {
-      const sceneNodes = (nodes as Node[]).filter(n => n.data.sceneId === scene.id)
+      const sceneNodes = (allNodes as Node[]).filter(n => n.data.sceneId === scene.id)
       // Build a map of shot number -> node for tagged nodes. Falls back to
       // the legacy `selectedShotId` field that older reference-node code
       // wrote (before we standardised on `shotId`). Once a user re-touches
@@ -462,14 +496,15 @@ function CanvasInner({ projectId }: { projectId: string }) {
       }
       return { ...scene, shots }
     })
-  }, [scenes, nodes])
+  }, [scenes, allNodes])
 
   const onConnect = useCallback((params: Connection) => {
+    if (!allowDocumentMutation) {
+      return
+    }
+
     if (isValidConnection(params)) {
-      setEdges((eds: Edge[]) => addEdge({
-        ...params,
-        animated: true,
-      }, eds) as Edge[])
+      commands.connect(params)
       // Force React Flow to re-measure the source/target handles. Without
       // this, edges connected to handles whose layout shifted after first
       // measurement (e.g. when the conditional reference-in handle first
@@ -486,7 +521,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
         duration: 3000,
       })
     }
-  }, [setEdges, updateNodeInternals])
+  }, [allowDocumentMutation, commands, updateNodeInternals])
   
   const [minimapOpen, setMinimapOpen] = useState(true)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; flowPos: { x: number; y: number } } | null>(null)
@@ -494,9 +529,10 @@ function CanvasInner({ projectId }: { projectId: string }) {
   const flowRef = useRef<HTMLDivElement>(null)
 
   const addNode = useCallback((type: string, flowPos?: { x: number; y: number }, initialData?: Record<string, any>) => {
+    if (!allowDocumentMutation) return
     const pos = flowPos || screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
-    setNodes((ns: Node[]) => [...ns, makeNode(type, pos, undefined, activeSceneId, initialData)] as Node[])
-  }, [screenToFlowPosition, setNodes, activeSceneId])
+    commands.createNode(makeNode(type, pos, undefined, activeSceneId, initialData))
+  }, [allowDocumentMutation, screenToFlowPosition, commands, activeSceneId])
 
   // Scene handlers. Name = highest existing "Scene N" + 1 so deletes
   // don't reuse numbers (deleting Scene 3 then adding a new one gives
@@ -504,58 +540,29 @@ function CanvasInner({ projectId }: { projectId: string }) {
   // like shot numbers do, which avoids confusion when a node is
   // tagged to "Scene 3" and a different scene later wears that name).
   const handleAddScene = useCallback(() => {
+    if (!allowDocumentMutation) return
     let maxNum = 0
     for (const s of scenes) {
       const m = s.name.match(/^Scene (\d+)$/)
       if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10))
     }
-    const newScene: Scene = {
-      id: makeSceneId(),
-      name: `Scene ${maxNum + 1}`,
-      shots: [],
-    }
-    setScenes(s => [...s, newScene])
-    setActiveSceneId(newScene.id)
-  }, [scenes])
+    commands.createScene(`Scene ${maxNum + 1}`)
+    setSelectedNodeIds([])
+  }, [allowDocumentMutation, commands, scenes])
 
   // Delete a scene: remove the scene itself, every node tagged with
-  // that sceneId, and every edge between those nodes. Auto-save will
-  // catch up and remove the rows from the canvas_nodes / canvas_edges
-  // tables on the next debounced write.
+  // that sceneId, and every edge between those nodes. The durable
+  // realtime runtime persists and projects those deletions.
   //
   // If the active scene is being deleted, switch to the previous scene
   // in the list (or the first one if we're deleting the first scene)
   // before the removal so the user isn't left looking at an empty
   // canvas with no active sceneId.
   const handleDeleteScene = useCallback((sceneId: string) => {
-    // Snapshot the doomed node ids BEFORE mutating state so we can
-    // filter edges in the same pass without depending on setState
-    // ordering. setNodes/setEdges are queued in React and the edge
-    // filter ran against a stale nodes array in the previous draft.
-    const doomedNodeIds = new Set(
-      getNodes()
-        .filter(n => (n.data as any)?.sceneId === sceneId)
-        .map(n => n.id),
-    )
-    setScenes(prev => {
-      const idx = prev.findIndex(s => s.id === sceneId)
-      if (idx === -1) return prev
-      const next = prev.filter(s => s.id !== sceneId)
-      if (sceneId === activeSceneId && next.length > 0) {
-        // Switch to the neighbour: previous scene if there is one,
-        // otherwise the new first scene.
-        const fallback = next[Math.max(0, idx - 1)]
-        setActiveSceneId(fallback.id)
-      }
-      return next
-    })
-    setNodes((ns: Node[]) =>
-      (ns as Node[]).filter(n => !doomedNodeIds.has(n.id)),
-    )
-    setEdges((es: Edge[]) =>
-      (es as Edge[]).filter(e => !doomedNodeIds.has(e.source) && !doomedNodeIds.has(e.target)),
-    )
-  }, [activeSceneId, setNodes, setEdges, getNodes])
+    if (!allowDocumentMutation) return
+    commands.deleteScene(sceneId)
+    setSelectedNodeIds([])
+  }, [allowDocumentMutation, commands])
 
   // Asset handlers
   const handleSelectAsset = useCallback((asset: Asset) => {}, [])
@@ -566,12 +573,19 @@ function CanvasInner({ projectId }: { projectId: string }) {
   const handleDragOver = useCallback((e: React.DragEvent) => {
     const hasAsset = e.dataTransfer.types.includes('asset')
     const hasFiles = e.dataTransfer.types.includes('Files')
-    if (hasAsset || hasFiles) {
-      e.preventDefault()
-      e.dataTransfer.dropEffect = 'copy'
-      if (hasFiles) setIsDragOver(true)
+    const hasFolderAssets = e.dataTransfer.types.includes('folder-assets')
+    if (!hasAsset && !hasFiles && !hasFolderAssets) return
+
+    e.preventDefault()
+    if (!allowDocumentMutation) {
+      e.dataTransfer.dropEffect = 'none'
+      setIsDragOver(false)
+      return
     }
-  }, [])
+
+    e.dataTransfer.dropEffect = 'copy'
+    if (hasFiles) setIsDragOver(true)
+  }, [allowDocumentMutation])
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     // Only hide overlay if leaving the canvas entirely
@@ -584,14 +598,22 @@ function CanvasInner({ projectId }: { projectId: string }) {
   const handleDrop = useCallback((e: React.DragEvent) => {
     setIsDragOver(false)
 
-    // Desktop file drop
     const files = Array.from(e.dataTransfer.files).filter(f =>
       f.type.startsWith('image/') ||
       f.type.startsWith('video/') ||
       f.type.startsWith('audio/'),
     )
-    if (files.length > 0) {
+    const folderData = e.dataTransfer.getData('folder-assets')
+    const assetData = e.dataTransfer.getData('asset')
+    const recognizedDrop = files.length > 0 || Boolean(folderData) || Boolean(assetData)
+    if (recognizedDrop) {
       e.preventDefault()
+    }
+
+    if (!allowDocumentMutation) return
+
+    // Desktop file drop
+    if (files.length > 0) {
       files.forEach((file, i) => {
         const pos = screenToFlowPosition({ x: e.clientX + i * 20, y: e.clientY + i * 20 })
         pasteImageFile(file, pos)
@@ -602,7 +624,6 @@ function CanvasInner({ projectId }: { projectId: string }) {
     // Whole-folder drop from the sidebar's category panel: spawn one
     // reference node per asset, laid out as a small grid so they don't
     // stack on top of each other.
-    const folderData = e.dataTransfer.getData('folder-assets')
     if (folderData) {
       try {
         const payload = JSON.parse(folderData) as {
@@ -633,7 +654,11 @@ function CanvasInner({ projectId }: { projectId: string }) {
             },
           } as Node
         })
-        setNodes((ns: Node[]) => [...ns, ...newNodes] as Node[])
+        commands.batch(({ createNode }) => {
+          for (const node of newNodes) {
+            createNode(node)
+          }
+        })
         // Auto-protect every asset we just dropped.
         for (const asset of payload.assets) {
           if (!asset.id) continue
@@ -651,7 +676,6 @@ function CanvasInner({ projectId }: { projectId: string }) {
     }
 
     // Internal asset drop from assets panel
-    const assetData = e.dataTransfer.getData('asset')
     if (!assetData) return
 
     try {
@@ -673,7 +697,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
         },
       }
 
-      setNodes((ns: Node[]) => [...ns, newNode] as Node[])
+      commands.createNode(newNode)
 
       // Mark asset as protected
       fetch(withBasePath(`/api/assets/${asset.id}`), {
@@ -686,133 +710,67 @@ function CanvasInner({ projectId }: { projectId: string }) {
     } catch (error) {
       console.error('Drop error:', error)
     }
-  }, [screenToFlowPosition, setNodes, activeSceneId])
-
-  // Undo - restore previous state
-  const undo = useCallback(() => {
-    if (past.length === 0) return
-    skipHistoryRef.current = true
-    const previous = past[past.length - 1]
-    const newPast = past.slice(0, -1)
-    setFuture(f => [{ nodes, edges }, ...f])
-    setPast(newPast)
-    setNodes(previous.nodes as Node[])
-    setEdges(previous.edges as Edge[])
-  }, [past, nodes, edges, setNodes, setEdges])
-
-  // Redo - restore future state
-  const redo = useCallback(() => {
-    if (future.length === 0) return
-    skipHistoryRef.current = true
-    const next = future[0]
-    const newFuture = future.slice(1)
-    setPast(p => [...p, { nodes, edges }])
-    setFuture(newFuture)
-    setNodes(next.nodes as Node[])
-    setEdges(next.edges as Edge[])
-  }, [future, nodes, edges, setNodes, setEdges])
+  }, [allowDocumentMutation, screenToFlowPosition, commands, activeSceneId])
 
   // Shot click - center on node
   const handleShotClick = useCallback((sceneId: string, shotId: string) => {
     const shot = scenesWithShots.find(s => s.id === sceneId)?.shots.find(sh => sh.id === shotId)
     if (shot) {
-      const node = nodes.find(n => n.id === shot.nodeId)
+      const node = allNodes.find(n => n.id === shot.nodeId)
       if (node) {
         setCenter(node.position.x + 200, node.position.y + 150, { zoom: 1, duration: 300 })
-        // Select the node
-        setNodes(ns => ns.map(n => ({ ...n, selected: n.id === node.id })))
+        setSelectedNodeIds([node.id])
       }
     }
-  }, [scenesWithShots, nodes, setCenter, setNodes])
+  }, [scenesWithShots, allNodes, setCenter])
 
-  // Track state changes for undo/redo. We push the PREVIOUS state (the
-  // one we're moving away from) onto `past`, not the new state — otherwise
-  // past[length-1] always equals the current state and undo is a no-op.
-  const lastStateRef = useRef<{ nodes: Node[]; edges: Edge[] } | null>(null)
-  useEffect(() => {
-    const prev = lastStateRef.current
-    lastStateRef.current = { nodes, edges }
-    if (skipHistoryRef.current) {
-      skipHistoryRef.current = false
-      return
-    }
-    if (prev === null) return // first render — no prior state to remember
-    setPast(p => [...p.slice(-49), prev])
-    setFuture([])
-  }, [nodes, edges])
-
-  // Delete selected nodes + their edges
   const deleteSelected = useCallback(() => {
-    setNodes(ns => {
-      const toDelete = ns.filter(n => n.selected)
-      const selectedIds = new Set(toDelete.map(n => n.id))
-      setEdges(es => es.filter(e => !selectedIds.has(e.source) && !selectedIds.has(e.target)))
+    if (!allowDocumentMutation) return
+    const selectedIds = new Set(selectedNodeIds)
+    if (selectedIds.size === 0) return
 
-      // Mark any linked assets as temporary (used_in_canvas = false)
-      // Match by assetId if present, otherwise by thumbnail URL
-      toDelete.forEach(n => {
-        const assetId = n.data?.assetId as string | undefined
-        const thumbnail = n.data?.thumbnail as string | undefined
-        if (assetId) {
-          fetch(withBasePath(`/api/assets/${assetId}`), {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ used_in_canvas: false }),
-          }).then(() => {
-            window.dispatchEvent(new CustomEvent('asset-status-changed'))
-          }).catch(() => {})
-        } else if (thumbnail) {
-          // Fallback: look up by URL then mark as temporary
-          fetch(withBasePath(`/api/assets/by-url`), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: thumbnail, used_in_canvas: false }),
-          }).then(() => {
-            window.dispatchEvent(new CustomEvent('asset-status-changed'))
-          }).catch(() => {})
-        }
-      })
-
-      return ns.filter(n => !n.selected)
+    const toDelete = allNodes.filter((node) => selectedIds.has(node.id))
+    commands.batch(({ deleteNode }) => {
+      for (const nodeId of selectedIds) {
+        deleteNode(nodeId)
+      }
     })
-  }, [setNodes, setEdges])
+    setSelectedNodeIds([])
 
-  // Duplicate selected nodes with offset
+    for (const node of toDelete) {
+      const assetId = node.data?.assetId as string | undefined
+      const thumbnail = node.data?.thumbnail as string | undefined
+      if (assetId) {
+        fetch(withBasePath(`/api/assets/${assetId}`), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ used_in_canvas: false }),
+        }).then(() => {
+          window.dispatchEvent(new CustomEvent('asset-status-changed'))
+        }).catch(() => {})
+      } else if (thumbnail) {
+        fetch(withBasePath(`/api/assets/by-url`), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId, url: thumbnail, used_in_canvas: false }),
+        }).then(() => {
+          window.dispatchEvent(new CustomEvent('asset-status-changed'))
+        }).catch(() => {})
+      }
+    }
+  }, [allowDocumentMutation, allNodes, commands, projectId, selectedNodeIds])
+
   const duplicateSelected = useCallback(() => {
-    setNodes(ns => {
-      const selected = ns.filter(n => n.selected)
-      if (!selected.length) return ns
-      const copies = selected.map(n => {
-        // Strip shotId from the duplicate — otherwise the copy hijacks
-        // the shot tag and whatever it next generates becomes "the
-        // shot," overwriting the original's thumbnail in the timeline.
-        // Also strip the active-generation fields so the duplicate
-        // doesn't latch onto its parent's pending fal request.
-        const {
-          shotId: _droppedShotId,
-          pendingRequestId: _droppedReq,
-          pendingFalEndpoint: _droppedEndpoint,
-          ...cleanData
-        } = (n.data as Record<string, unknown>) || {}
-        void _droppedShotId
-        void _droppedReq
-        void _droppedEndpoint
-        return {
-          ...n,
-          id: makeId(),
-          position: { x: n.position.x + 40, y: n.position.y + 40 },
-          selected: true,
-          data: cleanData,
-        }
-      })
-      // Deselect originals
-      const deselected = ns.map(n => ({ ...n, selected: false }))
-      return [...deselected, ...copies]
-    })
-  }, [setNodes])
+    if (!allowDocumentMutation || selectedNodeIds.length === 0) return
+    const duplicateIds = commands.duplicateNodes(selectedNodeIds)
+    if (duplicateIds.length > 0) {
+      setSelectedNodeIds(duplicateIds)
+    }
+  }, [allowDocumentMutation, commands, selectedNodeIds])
 
   // Paste image file as reference node - uploads to R2 for persistence
   const pasteImageFile = useCallback(async (file: File, pos?: { x: number; y: number }) => {
+    if (!allowDocumentMutation) return
     const flowPos = pos || screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
     const nodeLabel = file.name.replace(/\.[^.]+$/, '')
     const n = makeNode('reference', flowPos, nodeLabel, activeSceneId)
@@ -823,7 +781,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
     const tempUrl = URL.createObjectURL(file)
     const mediaType = isAudioFile ? 'audio' : isVideoFile ? 'video' : 'image'
     n.data = { ...n.data, thumbnail: tempUrl, isUploading: true, mediaType }
-    setNodes(ns => [...ns, n])
+    commands.createNode(n)
     
     // Proxy every browser upload through the authenticated application route.
     // Browsers never contact R2 directly, so bucket CORS is irrelevant.
@@ -843,11 +801,11 @@ function CanvasInner({ projectId }: { projectId: string }) {
       const proxyUrl = withBasePath(url)
 
       // Update node with proxy URL
-      setNodes(ns => ns.map(node =>
-        node.id === n.id
-          ? { ...node, data: { ...node.data, thumbnail: proxyUrl, isUploading: false } }
-          : node
-      ))
+      commands.patchNodeData(n.id, {
+        thumbnail: proxyUrl,
+        isUploading: false,
+        uploadError: undefined,
+      })
 
       // Record in assets with proxy URL and mark as protected (used in canvas)
       const assetRes = await fetch(withBasePath('/api/assets'), {
@@ -862,11 +820,12 @@ function CanvasInner({ projectId }: { projectId: string }) {
       // node toolbar's "Add to folder" flow can pre-select it without
       // needing the modal to look it up by URL.
       if (assetData?.id) {
-        setNodes(ns => ns.map(node =>
-          node.id === n.id
-            ? { ...node, data: { ...node.data, assetId: assetData.id } }
-            : node
-        ))
+        commands.patchNodeData(n.id, {
+          thumbnail: proxyUrl,
+          isUploading: false,
+          uploadError: undefined,
+          assetId: assetData.id,
+        })
       }
 
       // Asset is now recorded and protected (used_in_canvas = true)
@@ -883,13 +842,12 @@ function CanvasInner({ projectId }: { projectId: string }) {
       toast.error(`${mediaType} upload failed: ${msg.split(':')[0]}. Drop again to retry.`)
       // Keep temp URL if upload fails — user can still work with it
       // for the current session, but it will not persist.
-      setNodes(ns => ns.map(node =>
-        node.id === n.id
-          ? { ...node, data: { ...node.data, isUploading: false, uploadError: true } }
-          : node
-      ))
+      commands.patchNodeData(n.id, {
+        isUploading: false,
+        uploadError: true,
+      })
     }
-  }, [screenToFlowPosition, setNodes, activeSceneId])
+  }, [allowDocumentMutation, screenToFlowPosition, commands, activeSceneId])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -925,28 +883,33 @@ function CanvasInner({ projectId }: { projectId: string }) {
       // Edit shortcuts
       if (ctrl && e.key === 'c') {
         e.preventDefault()
-        setNodes(ns => { clipboardNodes = ns.filter(n => n.selected); return ns })
+        const selectedIds = new Set(selectedNodeIds)
+        clipboardNodes = nodes
+          .filter((node) => selectedIds.has(node.id))
+          .map((node) => ({ ...node, data: { ...(node.data as Record<string, unknown>) } }))
       }
       if (ctrl && e.key === 'x') {
         e.preventDefault()
-        setNodes(ns => {
-          clipboardNodes = ns.filter(n => n.selected)
-          const selectedIds = new Set(clipboardNodes.map(n => n.id))
-          setEdges(es => es.filter(e => !selectedIds.has(e.source) && !selectedIds.has(e.target)))
-          return ns.filter(n => !n.selected)
-        })
+        const selectedIds = new Set(selectedNodeIds)
+        clipboardNodes = nodes
+          .filter((node) => selectedIds.has(node.id))
+          .map((node) => ({ ...node, data: { ...(node.data as Record<string, unknown>) } }))
+        deleteSelected()
       }
       // Ctrl+V for internal node clipboard — image paste is handled by onPaste
-      if (ctrl && e.key === 'v' && clipboardNodes.length) {
-        // Only paste nodes if there are copied nodes; image paste handled by onPaste event
-        const copies = clipboardNodes.map(n => ({
-          ...n,
+      if (allowDocumentMutation && ctrl && e.key === 'v' && clipboardNodes.length) {
+        const copies = clipboardNodes.map((node) => ({
+          ...node,
           id: makeId(),
-          position: { x: n.position.x + 40, y: n.position.y + 40 },
-          selected: true,
-          data: { ...n.data },
+          position: { x: node.position.x + 40, y: node.position.y + 40 },
+          data: { ...(node.data as Record<string, unknown>) },
         }))
-        setNodes(ns => [...ns.map(n => ({ ...n, selected: false })), ...copies])
+        commands.batch(({ createNode }) => {
+          for (const copy of copies) {
+            createNode(copy)
+          }
+        })
+        setSelectedNodeIds(copies.map((node) => node.id))
       }
       if (ctrl && e.key === 'd') { e.preventDefault(); duplicateSelected() }
 
@@ -971,16 +934,20 @@ function CanvasInner({ projectId }: { projectId: string }) {
         return
       }
       // No image in clipboard — paste copied nodes if any
-      if (clipboardNodes.length) {
+      if (allowDocumentMutation && clipboardNodes.length) {
         e.preventDefault()
-        const copies = clipboardNodes.map(n => ({
-          ...n,
+        const copies = clipboardNodes.map((node) => ({
+          ...node,
           id: makeId(),
-          position: { x: n.position.x + 40, y: n.position.y + 40 },
-          selected: true,
-          data: { ...n.data },
+          position: { x: node.position.x + 40, y: node.position.y + 40 },
+          data: { ...(node.data as Record<string, unknown>) },
         }))
-        setNodes(ns => [...ns.map(n => ({ ...n, selected: false })), ...copies])
+        commands.batch(({ createNode }) => {
+          for (const copy of copies) {
+            createNode(copy)
+          }
+        })
+        setSelectedNodeIds(copies.map((node) => node.id))
       }
     }
 
@@ -990,7 +957,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('paste', onPaste)
     }
-  }, [addNode, deleteSelected, duplicateSelected, pasteImageFile, setNodes, setEdges, undo, redo])
+  }, [addNode, allowDocumentMutation, commands, deleteSelected, duplicateSelected, nodes, pasteImageFile, redo, selectedNodeIds, undo])
 
   const onContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -1006,6 +973,24 @@ function CanvasInner({ projectId }: { projectId: string }) {
     vertical: [],
     horizontal: [],
   })
+
+  const remotePresence = useMemo(
+    () => projectRemotePresence(realtimePeers, { now: presenceNow }),
+    [realtimePeers, presenceNow],
+  )
+  const lockedNodeMembershipKey = useMemo(() => {
+    const locks = new Set<string>()
+    for (const peer of remotePresence) {
+      if (peer.lock?.nodeId) {
+        locks.add(peer.lock.nodeId)
+      }
+    }
+    return Array.from(locks).sort().join('\u0000')
+  }, [remotePresence])
+  const lockedNodeIds = useMemo(
+    () => new Set(lockedNodeMembershipKey ? lockedNodeMembershipKey.split('\u0000') : []),
+    [lockedNodeMembershipKey],
+  )
 
   const onNodeDrag = useCallback((_event: any, node: Node) => {
     const others = (nodes as Node[]).filter(n => n.id !== node.id)
@@ -1023,17 +1008,80 @@ function CanvasInner({ projectId }: { projectId: string }) {
     })
   }, [nodes])
 
+  const onNodeDragStart = useCallback((_event: any, node: Node) => {
+    presenceControllerRef.current?.startDragLock(node.id)
+  }, [])
+
   const onNodeDragStop = useCallback(() => {
     setDragGuides({ vertical: [], horizontal: [] })
+    presenceControllerRef.current?.stopDragLock()
+  }, [])
+
+  const handlePresencePointerMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    presenceControllerRef.current?.publishCursor(
+      screenToFlowPosition({ x: event.clientX, y: event.clientY }),
+    )
+  }, [screenToFlowPosition])
+
+  const handlePresencePointerLeave = useCallback(() => {
+    presenceControllerRef.current?.publishCursor(null)
   }, [])
 
   // Memoize the scene-filtered nodes/edges so they don't get a fresh
   // array reference on every unrelated re-render (which would force
   // React Flow to re-diff the whole graph each time).
-  const sceneNodes = useMemo(
-    () => (nodes as Node[]).filter(n => n.data.sceneId === activeSceneId),
-    [nodes, activeSceneId],
+  const sceneNodes = useMemo(() => {
+    const selectedIds = new Set(selectedNodeIds)
+    return (nodes as Node[]).map((node) => {
+      const nextNode = {
+        ...node,
+        selected: selectedIds.has(node.id),
+      }
+      if (!lockedNodeIds.has(node.id)) {
+        return nextNode
+      }
+
+      return {
+        ...nextNode,
+        draggable: false,
+        className: `${node.className ?? ''} ring-2 ring-amber-400/70 ring-offset-1 ring-offset-[#080A0C]`,
+      }
+    })
+  }, [lockedNodeIds, nodes, selectedNodeIds])
+  const selectedSceneNodeIds = useMemo(
+    () => sceneNodes.filter(node => node.selected).map(node => node.id),
+    [sceneNodes],
   )
+  selectedSceneNodeIdsRef.current = selectedSceneNodeIds
+
+  useEffect(() => {
+    presenceControllerRef.current?.publishSelection(selectedSceneNodeIds)
+  }, [selectedSceneNodeIds])
+
+  useEffect(() => {
+    const syncEditingPresence = (target: EventTarget | null) => {
+      const snapshot = createLocalPresenceSnapshot(selectedSceneNodeIdsRef.current, target)
+      presenceControllerRef.current?.publishEditing(snapshot.editing?.nodeId ?? null)
+    }
+
+    const handleFocusIn = (event: FocusEvent) => {
+      syncEditingPresence(event.target)
+    }
+    const handleFocusOut = () => {
+      window.setTimeout(() => {
+        syncEditingPresence(document.activeElement)
+      }, 0)
+    }
+
+    document.addEventListener('focusin', handleFocusIn)
+    document.addEventListener('focusout', handleFocusOut)
+
+    return () => {
+      document.removeEventListener('focusin', handleFocusIn)
+      document.removeEventListener('focusout', handleFocusOut)
+    }
+  }, [])
+
   const sceneEdges = useMemo(() => {
     const sceneNodeIds = new Set(sceneNodes.map(n => n.id))
     return (edges as Edge[]).filter(e => sceneNodeIds.has(e.source) && sceneNodeIds.has(e.target))
@@ -1090,13 +1138,25 @@ function CanvasInner({ projectId }: { projectId: string }) {
   }, [fitView])
 
   return (
-    <div className="flex flex-col h-screen bg-[#080A0C] overflow-hidden">
+    <CanvasCollaborationProvider
+      value={{
+        ...realtime,
+        commands,
+        undo,
+        redo,
+      }}
+    >
+      <div className="flex flex-col h-screen bg-[#080A0C] overflow-hidden">
       <OnboardingTour surface="canvas" />
       {/* Scene Timeline */}
       <SceneTimeline
         scenes={scenesWithShots}
         activeSceneId={activeSceneId}
-        onSceneChange={setActiveSceneId}
+        onSceneChange={(sceneId) => {
+          if (!allowDocumentMutation) return
+          commands.switchScene(sceneId)
+          setSelectedNodeIds([])
+        }}
         onAddScene={handleAddScene}
         onDeleteScene={handleDeleteScene}
         onShotClick={handleShotClick}
@@ -1107,8 +1167,9 @@ function CanvasInner({ projectId }: { projectId: string }) {
       <CanvasToolbar
         projectName={projectName}
         onProjectNameChange={handleProjectNameChange}
-        saveStatus={saveStatus === 'saving' ? 'unsaved' : saveStatus}
+        persistenceStatus={persistenceStatus}
         projectId={projectId}
+        readOnly={readOnly}
         jobsPanelOpen={jobsPanelOpen}
         onToggleJobsPanel={() => setJobsPanelOpen(v => !v)}
         activeJobCount={activeJobCount}
@@ -1118,7 +1179,15 @@ function CanvasInner({ projectId }: { projectId: string }) {
           clicks so the user can pan/zoom/edit while it stays open. */}
       <JobsPanel open={jobsPanelOpen} onClose={() => setJobsPanelOpen(false)} />
 
-      <div className="flex-1 relative" ref={flowRef} onDragOver={handleDragOver} onDrop={handleDrop} onDragLeave={handleDragLeave}>
+      <div
+        className="flex-1 relative"
+        ref={flowRef}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        onDragLeave={handleDragLeave}
+        onMouseMove={handlePresencePointerMove}
+        onMouseLeave={handlePresencePointerLeave}
+      >
         {isDragOver && (
           <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center border-2 border-dashed border-accent/60 bg-accent/5 rounded-lg">
             <div className="flex flex-col items-center gap-2 text-accent/80">
@@ -1145,7 +1214,10 @@ function CanvasInner({ projectId }: { projectId: string }) {
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
+              nodesDraggable={allowDocumentMutation}
+              nodesConnectable={allowDocumentMutation}
               isValidConnection={isValidConnection}
+              onNodeDragStart={onNodeDragStart}
               onNodeDrag={onNodeDrag}
               onNodeDragStop={onNodeDragStop}
               onNodeClick={() => {
@@ -1157,19 +1229,19 @@ function CanvasInner({ projectId }: { projectId: string }) {
                 window.dispatchEvent(new Event('closeStickerPickers'))
 
                 // Place sticker or comment if tool is active
-                if (activeTool === 'sticker' || activeTool === 'comment') {
+                if (allowDocumentMutation && (activeTool === 'sticker' || activeTool === 'comment')) {
                   const flowPos = screenToFlowPosition({ x: e.clientX, y: e.clientY })
                   addNode(activeTool, flowPos)
                   setActiveTool('select')
                   return
                 }
                 // Default: deselect all
-                setNodes(ns => ns.map(n => ({ ...n, selected: false })))
+                setSelectedNodeIds([])
               }}
               onEdgeClick={(e, edge) => {
                 // Cut tool: delete clicked edge
-                if (activeTool === 'cut') {
-                  setEdges(es => es.filter(ed => ed.id !== edge.id))
+                if (allowDocumentMutation && activeTool === 'cut') {
+                  commands.deleteEdge(edge.id)
                   return
                 }
               }}
@@ -1183,7 +1255,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
               maxZoom={4}
               style={{ 
                 background: '#0D0F12',
-                cursor: activeTool === 'cut' ? 'crosshair' :
+                cursor: !allowDocumentMutation ? 'default' : activeTool === 'cut' ? 'crosshair' :
                        activeTool === 'sticker' ? 'none' :
                        activeTool === 'comment' ? 'copy' : 'default'
               }}
@@ -1192,11 +1264,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
               // upload completion, and mention-editor state live in the node
               // components; viewport culling unmounted them and lost those tasks.
               edgeTypes={EDGE_TYPES}
-              defaultEdgeOptions={{
-                type: 'scissors',
-                style: { stroke: '#6B8FA8', strokeWidth: 2 },
-                animated: false,
-              }}
+              defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
             >
               <Background
                 variant={BackgroundVariant.Dots}
@@ -1228,6 +1296,12 @@ function CanvasInner({ projectId }: { projectId: string }) {
           )
         })()}
 
+        <RealtimePresenceOverlay
+          peers={remotePresence}
+          nodes={sceneNodes}
+          viewport={viewport}
+        />
+
         {/* Unified left toolbar with assets */}
         <LeftToolbar 
           onAddNode={addNode}
@@ -1235,8 +1309,8 @@ function CanvasInner({ projectId }: { projectId: string }) {
           activeTool={activeTool}
           onUndo={undo}
           onRedo={redo}
-          canUndo={past.length > 0}
-          canRedo={future.length > 0}
+          canUndo={!readOnly}
+          canRedo={!readOnly}
           assets={assets}
           onAssetsChange={setAssets}
           onSelectAsset={handleSelectAsset}
@@ -1301,7 +1375,8 @@ function CanvasInner({ projectId }: { projectId: string }) {
           />
         </>
       )}
-    </div>
+      </div>
+    </CanvasCollaborationProvider>
   )
 }
 

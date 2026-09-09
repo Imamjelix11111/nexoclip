@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { checkRequiredEnv } from '@/lib/env-check'
-import { SESSION_COOKIE_NAME, isSessionValid } from '@/lib/sessions'
 import { withBasePath } from '@/lib/base-path'
+import { isRequestAuthenticated } from '@/lib/main-session'
 
 // Paths that must stay reachable without a login cookie.
 // - /login: the login page itself
@@ -19,12 +19,24 @@ const PUBLIC_PATHS = [
   '/api/r2-image',
 ]
 
+function sanitizedHeaders(headers: Headers) {
+  const nextHeaders = new Headers(headers)
+  nextHeaders.delete('x-nexoclip-user-id')
+  nextHeaders.delete('x-nexoclip-user-verified')
+  return nextHeaders
+}
+
 export async function middleware(request: NextRequest) {
+  const forwardedHeaders = sanitizedHeaders(request.headers)
   const { pathname } = request.nextUrl
   const basePath = (process.env.NEXT_PUBLIC_BASE_PATH || '').replace(/\/$/, '')
   const appPath = basePath && (pathname === basePath || pathname.startsWith(`${basePath}/`))
     ? pathname.slice(basePath.length) || '/'
     : pathname
+
+  if (appPath.startsWith('/api/internal/')) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
 
   // First gate: refuse to boot if required env vars are missing. Sends
   // every request to /setup until the install is configured, so a
@@ -34,7 +46,7 @@ export async function middleware(request: NextRequest) {
   const envCheck = checkRequiredEnv()
   if (!envCheck.ok) {
     if (appPath === '/setup' || appPath.startsWith('/_next/')) {
-      return NextResponse.next()
+      return NextResponse.next({ request: { headers: forwardedHeaders } })
     }
     if (appPath.startsWith('/api/')) {
       return NextResponse.json(
@@ -45,12 +57,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL(withBasePath('/setup', basePath), request.url))
   }
 
-  // Second gate: validate the session token against the sessions table.
-  // The cookie value is now a random 256-bit token, not a static
-  // string, so a captured cookie can be invalidated server-side by
-  // logout / expiry.
-  const token = request.cookies.get(SESSION_COOKIE_NAME)?.value
-  const isAuthenticated = await isSessionValid(token)
+  // Accept either the legacy SPITE login cookie or a valid same-origin
+  // nexoclip session from the main app.
+  const isAuthenticated = await isRequestAuthenticated(request)
 
   const isPublic = PUBLIC_PATHS.some(
     (p) => appPath === p || appPath.startsWith(p + '/'),
@@ -61,12 +70,12 @@ export async function middleware(request: NextRequest) {
     if (appPath === '/login' || appPath === '/setup') {
       return NextResponse.redirect(new URL(withBasePath('/', basePath), request.url))
     }
-    return NextResponse.next()
+    return NextResponse.next({ request: { headers: forwardedHeaders } })
   }
 
   // Not logged in:
   if (isPublic) {
-    return NextResponse.next()
+    return NextResponse.next({ request: { headers: forwardedHeaders } })
   }
 
   // Block API routes with a clear 401 (no HTML redirect for data calls).

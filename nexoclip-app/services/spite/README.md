@@ -58,7 +58,7 @@ More at **[spite.run](https://spite.run)**.
 ## What it deliberately doesn't do
 
 - No video editing — SPITE is pre-production.
-- No real-time multi-user collaboration — single-user by design.
+- No cross-account multiplayer yet — realtime sync is currently scoped to your own account/tabs.
 - No automation that makes creative decisions for you.
 - No credit system, no markup, no subscription.
 
@@ -112,6 +112,20 @@ Where to find each value:
 Open your Neon project's SQL editor and paste the contents of
 [`database-setup.sql`](./database-setup.sql). Hit Run. The script is
 idempotent — re-running it is safe and won't touch existing data.
+
+### Realtime operations
+
+From `services/spite/`:
+
+```bash
+rtk npm run realtime:migrate
+rtk npm run realtime:recover-projections
+```
+
+- `realtime:migrate` reapplies the authoritative Yjs + projection schema safely.
+- `realtime:recover-projections` scans for `projected_seq < durable_seq` and rewrites compatibility projections from the authoritative Yjs document.
+
+Use the recovery command after a persistence outage, projector failure, or any deploy where compatibility reads lag behind realtime durable state.
 
 ### R2 bucket CORS (do this once, or uploads fail)
 

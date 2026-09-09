@@ -1,6 +1,6 @@
 'use client'
 
-import { Position, NodeProps, Handle, useReactFlow } from '@xyflow/react'
+import { Position, NodeProps, Handle } from '@xyflow/react'
 import { useParams } from 'next/navigation'
 import { Image as ImageIcon, UploadSimple, CircleNotch, VideoCamera, SpeakerHigh } from '@phosphor-icons/react'
 import { memo, useState, useEffect, useRef } from 'react'
@@ -10,11 +10,12 @@ import { useSceneShots } from './use-scene-shots'
 import { AddToFolderModal } from '../add-to-folder-modal'
 import { resolveNodeMediaUrl } from '@/lib/node-media'
 import { Lightbox } from '../lightbox'
+import { useCanvasCollaboration } from '../canvas-collaboration'
 
 function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
   const params = useParams()
   const projectId = (params?.id as string) || ''
-  const { setNodes } = useReactFlow()
+  const { createNextShot, patchNodeData, replaceShot } = useCanvasCollaboration()
   const [imageWidth, setImageWidth] = useState<number>((data.width as number) || 320)
   const [thumbnail, setThumbnail] = useState<string | null>(resolveNodeMediaUrl({ thumbnail: data.thumbnail }) || null)
   const widthRef = useRef(imageWidth)
@@ -27,10 +28,14 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
     widthRef.current = imageWidth
   }, [imageWidth])
 
+  useEffect(() => {
+    setImageWidth((data.width as number) || 320)
+  }, [data.width])
+
   // Sync thumbnail from data prop
   useEffect(() => {
     const nextThumbnail = resolveNodeMediaUrl({ thumbnail: data.thumbnail }) || null
-    if (nextThumbnail && nextThumbnail !== thumbnail) setThumbnail(nextThumbnail)
+    if (nextThumbnail !== thumbnail) setThumbnail(nextThumbnail)
   }, [data.thumbnail, thumbnail])
 
   // Reference nodes used to read/write `selectedShotId` while image and
@@ -56,31 +61,17 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
     // keeps the data object clean and matches the image/video-gen path.
     // Also strips the legacy `selectedShotId` so the two fields can't
     // drift apart for the same node from this point on.
-    setNodes(ns => ns.map(n => n.id === id ? {
-      ...n,
-      data: {
-        ...n.data,
-        shotId: shotId || undefined,
-        selectedShotId: undefined,
-      },
-    } : n))
+    patchNodeData(id, {
+      shotId: shotId || undefined,
+      selectedShotId: undefined,
+    })
   }
 
   // Take a shot over exclusively: assign it here and clear it from whatever
   // other node in the SAME scene currently holds it (under shotId or the legacy
   // selectedShotId field).
   const handleShotReplace = (shotId: string) => {
-    setNodes(ns => {
-      const self = ns.find(n => n.id === id)
-      const sceneId = (self?.data as any)?.sceneId as string | undefined
-      return ns.map(n => {
-        if (n.id === id) return { ...n, data: { ...n.data, shotId, selectedShotId: undefined } }
-        if (sceneId && (n.data as any)?.sceneId !== sceneId) return n
-        const sid = ((n.data as any)?.shotId || (n.data as any)?.selectedShotId) as string | undefined
-        if (sid === shotId) return { ...n, data: { ...n.data, shotId: undefined, selectedShotId: undefined } }
-        return n
-      })
-    })
+    replaceShot(id, shotId)
   }
 
   // Mirror image/video-gen handleNewShot: tag this node as the next
@@ -88,22 +79,7 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
   // Scenes are isolated by sceneId so two scenes can both have a
   // "Shot 1" without colliding.
   const handleNewShot = () => {
-    setNodes(ns => {
-      const self = ns.find(n => n.id === id)
-      const sceneId = (self?.data as any)?.sceneId as string | undefined
-      let maxNum = 0
-      for (const n of ns) {
-        if (sceneId && (n.data as any)?.sceneId !== sceneId) continue
-        const sid = (n.data as any)?.shotId || (n.data as any)?.selectedShotId
-        const m = String(sid || '').match(/^shot-(\d+)$/)
-        if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10))
-      }
-      const next = maxNum + 1
-      return ns.map(n => n.id === id ? {
-        ...n,
-        data: { ...n.data, shotId: `shot-${next}`, selectedShotId: undefined },
-      } : n)
-    })
+    createNextShot(id)
   }
 
   const handleAddToFolder = (type: 'character' | 'prop' | 'location') => {
@@ -139,7 +115,7 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
       // Use the ref value which was updated on every mousemove
       const finalWidth = widthRef.current
       setImageWidth(finalWidth)
-      setNodes(ns => ns.map(n => n.id === id ? { ...n, data: { ...n.data, width: finalWidth } } : n))
+      patchNodeData(id, { width: finalWidth })
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
     }

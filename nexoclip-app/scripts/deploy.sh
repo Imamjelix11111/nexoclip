@@ -9,12 +9,15 @@ cd "$(dirname "$0")/.."
 mode=$(stat -c '%a' .env.production)
 (( 10#$mode <= 600 )) || { echo ".env.production must be chmod 600." >&2; exit 1; }
 
+set -a; . ./.env.production; set +a; NODE_ENV=production npm run config:check
 compose=(docker compose --env-file .env.production -f docker-compose.prod.yml)
 "${compose[@]}" config --quiet
 [[ "${1:-}" != "--pull" ]] || "${compose[@]}" pull --ignore-buildable
 "${compose[@]}" build
 "${compose[@]}" up -d redis
 "${compose[@]}" run --rm nexoclip-migrate
+"${compose[@]}" run --rm spite-realtime-migrate
+"${compose[@]}" run --rm spite-ownership-migrate
 "${compose[@]}" run --rm scheduler-migrate
 "${compose[@]}" up -d --remove-orphans
 "${compose[@]}" ps

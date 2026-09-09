@@ -285,11 +285,12 @@ Run unit tests; run integration tests when `SPITE_TEST_DATABASE_URL` exists. Com
 - Create: `nexoclip-app/services/spite/realtime/projector.test.ts`
 
 **Interfaces:**
-- Produces `projectDocument(projectId, doc, targetSeq): Promise<void>`.
+- Produces `captureProjectionPayload(doc): CanvasProjection`.
+- Produces `projectDocument(projectId, projectionPayload, targetSeq): Promise<void>`.
 
 - [ ] **Step 1: Write failing projection tests**
 
-Assert one transaction replaces/upserts nodes and edges, updates scenes/active scene/project timestamp, and advances `projected_seq` only on success. Assert stale target sequences no-op and projection does not mutate encoded Yjs state.
+Assert one transaction replaces/upserts nodes and edges, updates scenes/active scene/project timestamp, and advances `projected_seq` only on success. Assert stale target sequences no-op, immutable captured payloads do not drift while projection waits on slow database work, coalesced older exact payloads may still project while `durable_seq` is newer, and capture does not mutate encoded Yjs state.
 
 - [ ] **Step 2: Verify RED**
 
@@ -297,7 +298,7 @@ Run the focused test.
 
 - [ ] **Step 3: Implement projection**
 
-Use `readCanvasProjection`; lock the document row; compare `targetSeq` to `projected_seq`; rewrite compatibility tables and metadata transactionally; update `projected_seq` last within the same transaction.
+Expose immutable capture separately with `captureProjectionPayload(doc)` at the durable boundary. `projectDocument(projectId, projectionPayload, targetSeq)` locks the document row, no-ops when `targetSeq <= projected_seq`, rejects only when `targetSeq > durable_seq`, permits idempotent projection of an exact older captured payload when `targetSeq < durable_seq`, rewrites compatibility tables and metadata transactionally, and updates `projected_seq` last within the same transaction.
 
 - [ ] **Step 4: Verify GREEN and commit**
 
@@ -311,6 +312,7 @@ Commit as `feat(spite): project Yjs canvas state`.
 
 **Interfaces:**
 - Produces `ProjectRuntime` methods `enqueue`, `canAcceptMutation`, `flush`, `scheduleProjection`, `compact`, and `shutdown`; emits `SYNCED | PERSISTING | PERSISTED | DEGRADED | READ_ONLY`.
+- `scheduleProjection` captures an immutable `CanvasProjection` payload at the exact durable sequence boundary before any slow projection work.
 
 - [ ] **Step 1: Write failing runtime tests with injected clock/repository**
 
@@ -788,3 +790,77 @@ Search for writes to `canvas_nodes`, `canvas_edges`, `projects.scenes`, and `act
 git add nexoclip-app docs
 git commit -m "test(spite): verify realtime CRDT canvas"
 ```
+
+## 2026-09-08 Task 7 Round 1 minor gap follow-up
+
+- Added explicit `constantTimeEqual` exports in both isolated Task 7 crypto modules:
+  - `nexoclip-app/src/lib/realtime/internalAuth.js`
+  - `nexoclip-app/services/spite/realtime/internal-auth.ts`
+- Added focused behavioral tests in both suites for:
+  - equal strings
+  - different lengths
+  - mismatch at first byte
+  - mismatch at last byte
+- Portability preserved: helper stays Web-Crypto-compatible string/byte comparison (no Node-only `timingSafeEqual` swap).
+- Intentional duplication remains in place for service isolation; shared package extraction is deferred as minor follow-up by design.
+
+## 2026-09-08 Task 8 Round 1 error-boundary follow-up
+
+- Added failing-first route tests for three unhandled throw/reject paths in `nexoclip-app/tests/realtime/realtimeTokenRoute.test.mjs`:
+  - `getSession` rejection
+  - `signAuthorization` throw
+  - `issueToken` throw
+- Added minimal catch boundaries in `nexoclip-app/app/api/auth/realtime-token/route.js`:
+  - Session lookup rejection -> safe JSON `502` (`Realtime authorization failed`)
+  - Canvas Auth signing failure -> safe JSON `502` (`Realtime authorization failed`)
+  - Local JWT issuance failure -> safe JSON `500` (`Realtime token issuance failed`)
+- Preserved existing boundary statuses and behavior:
+  - unauthenticated `401`
+  - invalid `projectId` `400`
+  - missing config `503`
+  - authorization denied `403`
+  - upstream/non-OK Canvas Auth `502`
+- Verified no sensitive leakage in new failure paths (error strings/secrets/internal config not returned in body).
+- Verification run (focused + Task 7 suites):
+  - `cd nexoclip-app && node --test tests/realtime/realtimeTokenRoute.test.mjs tests/realtime/internalAuth.test.mjs`
+  - `cd nexoclip-app/services/spite && npx --yes tsx --test realtime/auth.test.ts`
+
+## 2026-09-09 Task 19 Round 2 deploy preflight fix
+
+- Added failing-first deploy contract assertion in `nexoclip-app/tests/deployment/dockerDeployment.test.mjs` to require production env loading before config preflight:
+  - `set -a; . ./.env.production; set +a; NODE_ENV=production npm run config:check`
+  - preserved ordering guarantee: config check must run before `docker compose ... config --quiet`.
+- Updated `nexoclip-app/scripts/deploy.sh` preflight to source `.env.production` safely (after explicit presence check) and run config check with `NODE_ENV=production`.
+- Updated runbook command wording in `nexoclip-app/docs/production-runbook.md` to match deploy preflight contract.
+- Verification run:
+  - `cd nexoclip-app && rtk node --test tests/deployment/dockerDeployment.test.mjs tests/production/productionConfig.test.mjs` ✅
+  - `cd nexoclip-app && rtk bash -n scripts/deploy.sh` ✅
+  - `cd nexoclip-app && REALTIME_JWT_SECRET=dummy CANVAS_AUTH_URL=http://spite-realtime:3007/internal/authorize NEXOCLIP_INTERNAL_URL=http://nexoclip:3000 NEXT_PUBLIC_REALTIME_URL=/spite/ws rtk docker compose --env-file .env.production.example -f docker-compose.prod.yml config --quiet` ✅
+
+## 2026-09-09 Full verification hardening follow-up
+
+- Added failing-first regression coverage in `nexoclip-app/tests/api/jobsBuildSafety.test.mjs` to prove the root jobs route modules can be imported without `DATABASE_URL` at module evaluation time.
+- Updated both root jobs route factories to resolve `getPool()` lazily inside the request handler instead of during module initialization:
+  - `nexoclip-app/app/api/jobs/route.js`
+  - `nexoclip-app/app/api/jobs/[id]/route.js`
+- This fixes the production build failure seen during `rtk npm run build`, where Next evaluated the route modules while collecting page data and crashed on `DATABASE_URL is required` before any request existed.
+- Narrowed standalone Spite TypeScript verification to application source by excluding Next 16’s generated `.next/types/validator.ts` from `nexoclip-app/services/spite/tsconfig.json`. `next build` still runs Next’s own route/type validation; the exclusion only prevents plain `tsc --noEmit` from failing on the generated `./routes.js` import shim mismatch.
+- Refreshed inline route documentation to match the shipped projection/realtime behavior:
+  - `nexoclip-app/services/spite/app/api/projects/[projectId]/duplicate/route.ts`
+  - `nexoclip-app/services/spite/app/api/projects/[projectId]/canvas/route.ts`
+  - `nexoclip-app/services/spite/app/api/projects/[projectId]/canvas/snapshots/route.ts`
+- Boundary audit after the fixes:
+  - authoritative projection-table rewrites remain confined to `nexoclip-app/services/spite/realtime/projector.ts`
+  - destructive cleanup deletes remain only in project deletion / global clear-data handlers
+  - legacy canvas POST remains `410 Gone`
+  - no active `use-canvas-auto-save` caller remains
+- Full verification run:
+  - `cd nexoclip-app && rtk node --test tests/realtime/*.test.mjs tests/deployment/dockerDeployment.test.mjs tests/production/productionConfig.test.mjs tests/api/jobsBuildSafety.test.mjs` ✅
+  - `cd nexoclip-app && rtk npm run build` ✅
+  - `cd nexoclip-app/services/spite && rtk npm test` ✅
+  - `cd nexoclip-app/services/spite && rtk npm exec tsc -- --noEmit` ✅
+  - `cd nexoclip-app/services/spite && rtk npm run build` ✅
+- Non-blocking warnings still observed during verification:
+  - root app `next build` warns about optional `@valkey/valkey-glide` resolution from BullMQ
+  - Spite Next 16 build warns about inferred workspace root and deprecated `middleware` naming
+  - root node tests emit `MODULE_TYPELESS_PACKAGE_JSON` warnings for existing ESM `.js` files

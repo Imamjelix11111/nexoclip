@@ -8,8 +8,11 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export function createJobGetHandler({
-  getSession = getCurrentSession, getWorkspace = getDefaultWorkspace,
-  getJob = getJobService, pool = getPool(),
+  getSession = getCurrentSession,
+  getWorkspace = getDefaultWorkspace,
+  getJob = getJobService,
+  pool,
+  poolFactory = getPool,
 } = {}) {
   return async function GET(request, { params }) {
     const session = await getSession(request.cookies?.get(SESSION_COOKIE)?.value);
@@ -18,7 +21,8 @@ export function createJobGetHandler({
     if (!workspace?.id) return Response.json({ error: 'No workspace is available' }, { status: 403 });
 
     const { id } = await params;
-    const job = await getJob({ pool, workspaceId: workspace.id, id });
+    const resolvedPool = pool ?? poolFactory();
+    const job = await getJob({ pool: resolvedPool, workspaceId: workspace.id, id });
     if (!job) return Response.json({ error: 'Job not found' }, { status: 404 });
     return Response.json({ job });
   };

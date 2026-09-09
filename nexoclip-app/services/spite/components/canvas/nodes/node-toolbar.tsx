@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { NodeToolbar, Position, useReactFlow } from '@xyflow/react'
 import { toast } from 'sonner'
+import { useCanvasCollaboration } from '../canvas-collaboration'
 import {
   Play,
   CaretDown,
@@ -98,10 +99,11 @@ export function NodeActionToolbar({
   const [sortMenuOpen, setSortMenuOpen] = useState(false)
   const [moreMenuOpen, setMoreMenuOpen] = useState(false)
   const [addToMenuOpen, setAddToMenuOpen] = useState(false)
-  const { deleteElements, getNodes, setNodes, addNodes, addEdges } = useReactFlow()
+  const { getNodes } = useReactFlow()
+  const { activeSceneId, addNodes, commands, deleteNodes, patchNodes } = useCanvasCollaboration()
 
   const handleDelete = () => {
-    deleteElements({ nodes: [{ id: nodeId }] })
+    deleteNodes([nodeId])
     onDelete?.()
   }
 
@@ -128,7 +130,7 @@ export function NodeActionToolbar({
         selected: false,
         data: cleanData,
       }
-      addNodes(newNode)
+      addNodes([newNode as any])
     }
     onDuplicate?.()
   }
@@ -197,11 +199,9 @@ export function NodeActionToolbar({
       const row = Math.floor(idx / columns)
       posById.set(node.id, { x: anchorX + colX[col], y: anchorY + rowY[row] })
     })
-    setNodes(ns => ns.map(node => {
-      const next = posById.get(node.id)
-      if (!next) return node
-      return { ...node, position: next }
-    }))
+    patchNodes(
+      Array.from(posById.entries()).map(([id, position]) => ({ id, patch: { position } })),
+    )
     toast.success(`Arranged ${n} nodes — ${columns} × ${rowsCount}`)
   }
 
@@ -214,9 +214,11 @@ export function NodeActionToolbar({
         id: newNodeId,
         type: nodeType,
         position: { x: sourceNode.position.x + 500, y: sourceNode.position.y },
-        data: { label: `${nodeType} #${nodes.length + 1}` },
+        data: {
+          label: `${nodeType} #${nodes.length + 1}`,
+          sceneId: activeSceneId,
+        },
       }
-      addNodes(newNode)
       
       // Auto-connect based on type
       let sourceHandle = 'image-out'
@@ -229,14 +231,18 @@ export function NodeActionToolbar({
         targetHandle = 'video-in'
       }
       
-      addEdges({
-        id: `edge-${nodeId}-${newNodeId}`,
-        source: nodeId,
-        target: newNodeId,
-        sourceHandle,
-        targetHandle,
-        style: { stroke: '#6B8FA8', strokeWidth: 2 },
-        animated: true,
+      commands.batch(({ createNode, createEdge }) => {
+        createNode(newNode as any)
+        createEdge({
+          id: `edge-${nodeId}-${newNodeId}`,
+          source: nodeId,
+          target: newNodeId,
+          sourceHandle,
+          targetHandle,
+          style: { stroke: '#6B8FA8', strokeWidth: 2 },
+          animated: true,
+          data: {},
+        } as any)
       })
     }
     setConnectMenuOpen(false)

@@ -19,6 +19,8 @@ import { estimateGenerationCost, formatUSD, COST_CONFIRM_THRESHOLD_USD } from '@
 import { resolveNodeMediaUrl } from '@/lib/node-media'
 import { completeGenerationNode } from '@/lib/generation-node'
 import { ConnectedInputs } from '../connected-inputs'
+import { useCanvasCollaboration } from '../canvas-collaboration'
+import { createLocalStateSyncGuard } from '@/lib/local-state-sync'
 
 const IMAGE_MODELS = getImageModels()
 
@@ -177,8 +179,18 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
   // status check can't reschedule itself or apply a late result.
   const stopRef = useRef(false)
   const resizeStartRef = useRef<{ x: number; width: number } | null>(null)
-  const { setNodes, getEdges, getNodes } = useReactFlow()
+  const { getEdges, getNodes } = useReactFlow()
+  const { addEdges, addNodes, createNextShot, patchNodeData, replaceShot, updateNodeData } = useCanvasCollaboration()
   const updateNodeInternals = useUpdateNodeInternals()
+  const syncGuardRef = useRef(createLocalStateSyncGuard())
+  const patchPersistedNodeData = useCallback((patch: Record<string, unknown>) => {
+    if (!syncGuardRef.current.allowsPersistence()) return
+    patchNodeData(id, patch)
+  }, [id, patchNodeData])
+  const updatePersistedNodeData = useCallback((updater: (currentData: Record<string, unknown>) => Record<string, unknown>) => {
+    if (!syncGuardRef.current.allowsPersistence()) return
+    updateNodeData(id, updater)
+  }, [id, updateNodeData])
   
   // Check if there are any connected prompt nodes - compute fresh on each render
   // Accept edges that either have targetHandle='prompt-in' OR no targetHandle (for backward compatibility)
@@ -213,24 +225,31 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
       setIsResizing(false)
       resizeStartRef.current = null
       // Persist the width change
-      setNodes(ns => ns.map(n => n.id === id ? { 
-        ...n, 
-        data: { ...n.data, width: nodeWidth } 
-      } : n))
+      syncGuardRef.current.beginUserEdit()
+      patchPersistedNodeData({ width: nodeWidth })
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
     }
     
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('mouseup', handleMouseUp)
-  }, [nodeWidth, id, setNodes])
+  }, [id, nodeWidth, patchNodeData])
 
-  // Sync outputUrl from data prop (for loaded canvases)
   useEffect(() => {
-    if (data.outputUrl && data.outputUrl !== outputUrl) {
-      setOutputUrl(withBasePath(data.outputUrl as string))
-    }
-  }, [data.outputUrl])
+    const finishSync = syncGuardRef.current.beginPropSync()
+    setPrompt((data.prompt as string) || '')
+    setMentions((data.mentions as Mention[]) || [])
+    setModelId((data.modelId as string) || 'nano-banana-pro')
+    setAspectRatio((data.aspectRatio as string) || '')
+    setResolution((data.resolution as string) || '')
+    setNumImages((data.numImages as number) || 1)
+    setStatus((data.status as GenerationStatus) || ((data.outputUrl as string | undefined) ? 'completed' : 'idle'))
+    setError((data.error as string) || null)
+    setSubmittedAt((data.submittedAt as number) || undefined)
+    setNodeWidth((data.width as number) || 320)
+    setOutputUrl(resolveNodeMediaUrl({ outputUrl: data.outputUrl }) || null)
+    queueMicrotask(finishSync)
+  }, [data.aspectRatio, data.error, data.mentions, data.modelId, data.numImages, data.outputUrl, data.prompt, data.resolution, data.status, data.submittedAt, data.width])
 
   // Recover a result when the provider/R2 request succeeded but the browser
   // lost the submit response before it could attach the URL to this node.
@@ -248,10 +267,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
         setOutputUrl(completedUrl)
         setStatus('completed')
         setRequestId(null)
-        setNodes(ns => ns.map(n => n.id === id ? {
-          ...n,
-          data: completeGenerationNode(n.data as Record<string, unknown>, completedUrl),
-        } : n))
+        updatePersistedNodeData((currentData) => completeGenerationNode(currentData, completedUrl))
       })
       .catch(() => {})
     return () => { cancelled = true }
@@ -287,12 +303,9 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
   
   // Sync outputUrl TO node data when it changes (for connected nodes to read)
   useEffect(() => {
-    if (outputUrl && outputUrl !== data.outputUrl) {
-      setNodes(nodes => nodes.map(n => 
-        n.id === id ? { ...n, data: { ...n.data, outputUrl } } : n
-      ))
-    }
-  }, [outputUrl, id, setNodes, data.outputUrl])
+    if (!outputUrl || outputUrl === data.outputUrl) return
+    patchPersistedNodeData({ outputUrl })
+  }, [data.outputUrl, outputUrl, patchPersistedNodeData])
 
   // Get current model config
   const currentModel = useMemo(() => getModelById(modelId), [modelId])
@@ -317,6 +330,10 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
       return
     }
     if (prevModelIdRef.current !== currentModel.id) {
+      if (!syncGuardRef.current.allowsPersistence()) {
+        prevModelIdRef.current = currentModel.id
+        return
+      }
       setAspectRatio(currentModel.defaultAspectRatio)
       setResolution(currentModel.defaultResolution || '')
       prevModelIdRef.current = currentModel.id
@@ -334,26 +351,14 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     // Storing undefined keeps the data object clean (no stray empty
     // strings ending up in exports/snapshots) and matches every other
     // code path that checks for shotId via truthiness.
-    setNodes(ns => ns.map(n => n.id === id ? {
-      ...n,
-      data: { ...n.data, shotId: shotId || undefined },
-    } : n))
+    syncGuardRef.current.beginUserEdit()
+    patchPersistedNodeData({ shotId: shotId || undefined })
   }
 
   // Take a shot over exclusively: assign it here and unassign whatever other
   // node in the SAME scene currently holds it (shotId or legacy selectedShotId).
   const handleShotReplace = (shotId: string) => {
-    setNodes(ns => {
-      const self = ns.find(n => n.id === id)
-      const sceneId = (self?.data as any)?.sceneId as string | undefined
-      return ns.map(n => {
-        if (n.id === id) return { ...n, data: { ...n.data, shotId, selectedShotId: undefined } }
-        if (sceneId && (n.data as any)?.sceneId !== sceneId) return n
-        const sid = ((n.data as any)?.shotId || (n.data as any)?.selectedShotId) as string | undefined
-        if (sid === shotId) return { ...n, data: { ...n.data, shotId: undefined, selectedShotId: undefined } }
-        return n
-      })
-    })
+    replaceShot(id, shotId)
   }
 
   const handleNewShot = () => {
@@ -361,27 +366,14 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     // scene — so shots monotonically increase (shot 99 → New Shot creates
     // shot 100). Gaps between numbers are intentional and shown as empty
     // placeholders in the timeline.
-    setNodes(ns => {
-      const self = ns.find(n => n.id === id)
-      const sceneId = self?.data?.sceneId
-      let maxNum = 0
-      for (const n of ns) {
-        if (sceneId && n.data?.sceneId !== sceneId) continue
-        const m = String(n.data?.shotId || '').match(/^shot-(\d+)$/)
-        if (m) maxNum = Math.max(maxNum, parseInt(m[1]))
-      }
-      const next = maxNum + 1
-      return ns.map(n => n.id === id ? { ...n, data: { ...n.data, shotId: `shot-${next}` } } : n)
-    })
+    syncGuardRef.current.beginUserEdit()
+    createNextShot(id)
   }
 
   // Persist state changes to node data
   useEffect(() => {
-    setNodes(ns => ns.map(n => n.id === id ? {
-      ...n,
-      data: { ...n.data, prompt, modelId, aspectRatio, resolution, numImages, outputUrl, mentions, status, error, submittedAt }
-    } : n))
-  }, [prompt, modelId, aspectRatio, resolution, numImages, outputUrl, mentions, status, error, submittedAt, id, setNodes])
+    patchPersistedNodeData({ prompt, modelId, aspectRatio, resolution, numImages, outputUrl, mentions, status, error, submittedAt })
+  }, [aspectRatio, error, mentions, modelId, numImages, outputUrl, patchPersistedNodeData, prompt, resolution, status, submittedAt])
 
   // Auto-name: once a generation completes, replace the default
   // "Image Generator #N" label with the first few words of the prompt.
@@ -392,8 +384,8 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     if (current && !DEFAULT_IMAGE_LABEL.test(current)) return
     const derived = labelFromPrompt(prompt)
     if (!derived || derived === current) return
-    setNodes(ns => ns.map(n => n.id === id ? { ...n, data: { ...n.data, label: derived } } : n))
-  }, [outputUrl, prompt, data.label, id, setNodes])
+    patchPersistedNodeData({ label: derived })
+  }, [data.label, outputUrl, patchPersistedNodeData, prompt])
 
   const handleRename = () => {
     setLabelDraft((data.label as string) || '')
@@ -403,18 +395,22 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     const next = labelDraft.trim()
     setIsRenaming(false)
     if (!next) return
-    setNodes(ns => ns.map(n => n.id === id ? { ...n, data: { ...n.data, label: next } } : n))
+    syncGuardRef.current.beginUserEdit()
+    patchPersistedNodeData({ label: next })
   }
 
   // Drop the persisted in-flight job marker once a generation resolves
   // (success / failure / cancel) so a future refresh doesn't try to
   // resume a completed job.
   const clearPending = useCallback(() => {
-    setNodes(ns => ns.map(n => n.id === id ? {
-      ...n,
-      data: { ...n.data, pendingRequestId: undefined, pendingProvider: undefined, pendingProviderModel: undefined, pendingFalEndpoint: undefined, pendingStartedAt: undefined },
-    } : n))
-  }, [id, setNodes])
+    patchPersistedNodeData({
+      pendingRequestId: undefined,
+      pendingProvider: undefined,
+      pendingProviderModel: undefined,
+      pendingFalEndpoint: undefined,
+      pendingStartedAt: undefined,
+    })
+  }, [patchPersistedNodeData])
 
   // Poll for status
   const pollStatus = useCallback(async (reqId: string, providerId: string) => {
@@ -452,10 +448,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
           setOutputUrl(completedUrl)
           setStatus('completed')
           setRequestId(null)
-          setNodes(ns => ns.map(n => n.id === id ? {
-            ...n,
-            data: completeGenerationNode(n.data as Record<string, unknown>, completedUrl),
-          } : n))
+          updatePersistedNodeData((currentData) => completeGenerationNode(currentData, completedUrl))
           clearPending()
           // For batch generations, drop the extra results as duplicate nodes
           // laid out in a neat grid next to this one.
@@ -481,15 +474,14 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
                 data: { ...restData, outputUrl: withBasePath(url), width: w },
               }
             })
-            setNodes(ns => [...ns, ...(newNodes as any)])
-            // Mirror this node's incoming connections onto each duplicate
-            // (routed through the canvas, which owns the edge state).
+            addNodes(newNodes as any)
+            // Mirror this node's incoming connections onto each duplicate.
             const incoming = getEdges().filter(e => e.target === id)
             if (incoming.length) {
               const newEdges = newNodes.flatMap((nn, ni) =>
-                incoming.map((e, ei) => ({ ...e, id: `${nn.id}-e${ei}-${stamp}-${ni}`, target: nn.id }))
+                incoming.map((e, ei) => ({ ...e, id: `${nn.id}-e${ei}-${stamp}-${ni}`, target: nn.id, data: { ...(e.data as Record<string, unknown> | undefined) } }))
               )
-              window.dispatchEvent(new CustomEvent('frame-add-edges', { detail: { edges: newEdges } }))
+              addEdges(newEdges as any)
             }
           }
         } else {
@@ -598,10 +590,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
         setStatus('completed')
         setRequestId(null)
         setProgress(undefined)
-        setNodes(ns => ns.map(n => n.id === id ? {
-          ...n,
-          data: completeGenerationNode(n.data as Record<string, unknown>, completedUrl),
-        } : n))
+        updatePersistedNodeData((currentData) => completeGenerationNode(currentData, completedUrl))
         clearPending()
         toast.success('Result is ready — saved to your library.', { id: toastId })
         return
@@ -866,10 +855,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
         const completedUrl = withBasePath(completed[0].output.url)
         setOutputUrl(completedUrl)
         setStatus('completed')
-        setNodes(ns => ns.map(n => n.id === id ? {
-          ...n,
-          data: completeGenerationNode(n.data as Record<string, unknown>, completedUrl),
-        } : n))
+        updatePersistedNodeData((currentData) => completeGenerationNode(currentData, completedUrl))
         clearPending()
       }
       const firstEndpoint = ok[0].model || currentModel.providerModel
@@ -879,16 +865,12 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
       if (!completed.length) setStatus('in_queue')
       startTimeRef.current = startedAt
 
-      setNodes(ns => ns.map(n => n.id === id ? {
-        ...n,
-        data: {
-          ...n.data,
-          pendingRequestId: completed.length ? undefined : ok[0].request_id,
-          pendingProvider: completed.length ? undefined : (ok[0].provider || currentModel.provider),
-          pendingProviderModel: firstEndpoint,
-          pendingStartedAt: startedAt,
-        },
-      } : n))
+      patchPersistedNodeData({
+        pendingRequestId: completed.length ? undefined : ok[0].request_id,
+        pendingProvider: completed.length ? undefined : (ok[0].provider || currentModel.provider),
+        pendingProviderModel: firstEndpoint,
+        pendingStartedAt: startedAt,
+      })
 
       // Extra jobs spawn duplicate image nodes in a 3-column grid that each
       // poll their own request and fill in when done.
@@ -929,14 +911,14 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
             },
           }
         })
-        setNodes(ns => [...ns, ...(newNodes as any)])
+        addNodes(newNodes as any)
         // Mirror this node's incoming connections onto the duplicates.
         const incoming = getEdges().filter(e => e.target === id)
         if (incoming.length) {
           const newEdges = newNodes.flatMap((nn, ni) =>
-            incoming.map((e, ei) => ({ ...e, id: `${nn.id}-e${ei}-${stamp}-${ni}`, target: nn.id }))
+            incoming.map((e, ei) => ({ ...e, id: `${nn.id}-e${ei}-${stamp}-${ni}`, target: nn.id, data: { ...(e.data as Record<string, unknown> | undefined) } }))
           )
-          window.dispatchEvent(new CustomEvent('frame-add-edges', { detail: { edges: newEdges } }))
+          addEdges(newEdges as any)
         }
       }
     } catch (err: any) {
@@ -1150,7 +1132,11 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
           <MentionTextarea
             value={prompt}
             mentions={mentions}
-            onChange={(text, ms) => { setPrompt(text); setMentions(ms) }}
+            onChange={(text, ms) => {
+              syncGuardRef.current.beginUserEdit()
+              setPrompt(text)
+              setMentions(ms)
+            }}
             folders={folders}
             placeholder="Describe the image — type @ to reference a folder…"
             disabled={isGenerating}
@@ -1165,7 +1151,10 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
             {/* Num images counter */}
             <div className="flex items-center gap-0.5 px-1.5 h-6 rounded-md bg-white/5 text-[10px] font-mono text-muted-foreground">
               <button 
-                onClick={() => setNumImages(n => Math.max(1, n - 1))}
+                onClick={() => {
+                  syncGuardRef.current.beginUserEdit()
+                  setNumImages(n => Math.max(1, n - 1))
+                }}
                 disabled={isGenerating || numImages <= 1}
                 className="w-4 h-4 flex items-center justify-center hover:text-foreground disabled:opacity-30"
               >
@@ -1173,7 +1162,10 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
               </button>
               <span className="w-6 text-center">x{numImages}</span>
               <button
-                onClick={() => setNumImages(n => Math.min(12, n + 1))}
+                onClick={() => {
+                  syncGuardRef.current.beginUserEdit()
+                  setNumImages(n => Math.min(12, n + 1))
+                }}
                 disabled={isGenerating || numImages >= 12}
                 className="w-4 h-4 flex items-center justify-center hover:text-foreground disabled:opacity-30"
               >
@@ -1185,7 +1177,10 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
             <ControlSelect 
               value={currentModel?.name || modelId} 
               options={modelOptions}
-              onChange={setModelId}
+              onChange={(value) => {
+                syncGuardRef.current.beginUserEdit()
+                setModelId(value)
+              }}
               disabled={isGenerating}
             />
             
@@ -1194,7 +1189,10 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
               <ControlSelect 
                 value={aspectRatio || currentModel?.defaultAspectRatio || ''} 
                 options={aspectOptions}
-                onChange={setAspectRatio}
+                onChange={(value) => {
+                  syncGuardRef.current.beginUserEdit()
+                  setAspectRatio(value)
+                }}
                 disabled={isGenerating}
               />
             )}
@@ -1204,7 +1202,10 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
               <ControlSelect 
                 value={resolution || currentModel?.defaultResolution || ''} 
                 options={resolutionOptions}
-                onChange={setResolution}
+                onChange={(value) => {
+                  syncGuardRef.current.beginUserEdit()
+                  setResolution(value)
+                }}
                 disabled={isGenerating}
               />
             )}

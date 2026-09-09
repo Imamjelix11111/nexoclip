@@ -119,9 +119,9 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
     // Legacy reference nodes don't have data.assetId saved, so the caller
     // passes only assetUrl. Look the asset id up by URL so it can still be
     // pre-selected (and later added to a folder properly).
-    if (assetUrl) {
+    if (assetUrl && projectId) {
       let cancelled = false
-      fetch(withBasePath(`/api/assets/by-url?url=${encodeURIComponent(assetUrl)}`))
+      fetch(withBasePath(`/api/assets/by-url?projectId=${encodeURIComponent(projectId)}&url=${encodeURIComponent(assetUrl)}`))
         .then(r => r.json())
         .then(data => {
           if (cancelled || !data?.id) return

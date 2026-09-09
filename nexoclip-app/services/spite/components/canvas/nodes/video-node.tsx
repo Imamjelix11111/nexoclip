@@ -20,6 +20,8 @@ import { resolveNodeMediaUrl } from '@/lib/node-media'
 import { completeGenerationNode } from '@/lib/generation-node'
 import { ConnectedInputs } from '../connected-inputs'
 import { captureVideoThumbnail } from '@/lib/video-thumbnail'
+import { useCanvasCollaboration } from '../canvas-collaboration'
+import { createLocalStateSyncGuard } from '@/lib/local-state-sync'
 
 const VIDEO_MODELS = getVideoModels()
 
@@ -188,8 +190,18 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
   // Set true to immediately stop polling (cancel / unmount).
   const stopRef = useRef(false)
-  const { setNodes, getEdges, getNodes } = useReactFlow()
+  const { getEdges, getNodes } = useReactFlow()
+  const { addEdges, addNodes, createNextShot, patchNodeData, replaceShot, updateNodeData } = useCanvasCollaboration()
   const updateNodeInternals = useUpdateNodeInternals()
+  const syncGuardRef = useRef(createLocalStateSyncGuard())
+  const patchPersistedNodeData = useCallback((patch: Record<string, unknown>) => {
+    if (!syncGuardRef.current.allowsPersistence()) return
+    patchNodeData(id, patch)
+  }, [id, patchNodeData])
+  const updatePersistedNodeData = useCallback((updater: (currentData: Record<string, unknown>) => Record<string, unknown>) => {
+    if (!syncGuardRef.current.allowsPersistence()) return
+    updateNodeData(id, updater)
+  }, [id, updateNodeData])
   
   // Check connection states fresh on each render
   let hasConnectedPrompts = false
@@ -234,6 +246,27 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     currentModel?.category,
   ])
 
+  useEffect(() => {
+    const finishSync = syncGuardRef.current.beginPropSync()
+    setPrompt((data.prompt as string) || '')
+    setUpscaleMode((data.upscaleMode as 'standard' | 'creative') || 'standard')
+    setColormap((data.colormap as string) || 'grayscale')
+    setMentions((data.mentions as Mention[]) || [])
+    setModelId((data.modelId as string) || 'seedance-1.5')
+    setDuration((data.duration as string) || '')
+    setAspectRatio((data.aspectRatio as string) || '')
+    setResolution((data.resolution as string) || '')
+    setEnableAudio((data.enableAudio as boolean) || false)
+    setEnableLoop((data.enableLoop as boolean) || false)
+    setVoiceIds((data.voiceIds as string) || '')
+    setNumVideos((data.numVideos as number) || 1)
+    setStatus((data.status as GenerationStatus) || ((data.outputUrl as string | undefined) ? 'completed' : 'idle'))
+    setError((data.error as string) || null)
+    setSubmittedAt((data.submittedAt as number) || undefined)
+    setOutputUrl(resolveNodeMediaUrl({ outputUrl: data.outputUrl }) || null)
+    queueMicrotask(finishSync)
+  }, [data.aspectRatio, data.colormap, data.duration, data.enableAudio, data.enableLoop, data.error, data.mentions, data.modelId, data.numVideos, data.outputUrl, data.prompt, data.resolution, data.status, data.submittedAt, data.upscaleMode, data.voiceIds])
+
   // Kling v3 references ride the image-to-video endpoint, which requires a
   // first frame. Block generation (with a clear message) when refs are
   // connected but no first frame, so the user gets a helpful error not a
@@ -252,6 +285,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       return
     }
     if (prevModelIdRef.current !== currentModel.id) {
+      if (!syncGuardRef.current.allowsPersistence()) {
+        prevModelIdRef.current = currentModel.id
+        return
+      }
       setAspectRatio(currentModel.defaultAspectRatio)
       setDuration(currentModel.defaultDuration || '')
       setResolution(currentModel.defaultResolution || '')
@@ -269,26 +306,14 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
 
   const handleShotSelect = (shotId: string) => {
     // Empty string from the selector means "unassign from this shot".
-    setNodes(ns => ns.map(n => n.id === id ? {
-      ...n,
-      data: { ...n.data, shotId: shotId || undefined },
-    } : n))
+    syncGuardRef.current.beginUserEdit()
+    patchPersistedNodeData({ shotId: shotId || undefined })
   }
 
   // Take a shot over exclusively: assign it here and unassign whatever other
   // node in the SAME scene currently holds it (shotId or legacy selectedShotId).
   const handleShotReplace = (shotId: string) => {
-    setNodes(ns => {
-      const self = ns.find(n => n.id === id)
-      const sceneId = (self?.data as any)?.sceneId as string | undefined
-      return ns.map(n => {
-        if (n.id === id) return { ...n, data: { ...n.data, shotId, selectedShotId: undefined } }
-        if (sceneId && (n.data as any)?.sceneId !== sceneId) return n
-        const sid = ((n.data as any)?.shotId || (n.data as any)?.selectedShotId) as string | undefined
-        if (sid === shotId) return { ...n, data: { ...n.data, shotId: undefined, selectedShotId: undefined } }
-        return n
-      })
-    })
+    replaceShot(id, shotId)
   }
 
   const handleNewShot = () => {
@@ -296,27 +321,14 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     // scene — so shots monotonically increase (shot 99 → New Shot creates
     // shot 100). Gaps between numbers are intentional and shown as empty
     // placeholders in the timeline.
-    setNodes(ns => {
-      const self = ns.find(n => n.id === id)
-      const sceneId = self?.data?.sceneId
-      let maxNum = 0
-      for (const n of ns) {
-        if (sceneId && n.data?.sceneId !== sceneId) continue
-        const m = String(n.data?.shotId || '').match(/^shot-(\d+)$/)
-        if (m) maxNum = Math.max(maxNum, parseInt(m[1]))
-      }
-      const next = maxNum + 1
-      return ns.map(n => n.id === id ? { ...n, data: { ...n.data, shotId: `shot-${next}` } } : n)
-    })
+    syncGuardRef.current.beginUserEdit()
+    createNextShot(id)
   }
 
   // Persist state changes to node data
   useEffect(() => {
-    setNodes(ns => ns.map(n => n.id === id ? {
-      ...n,
-      data: { ...n.data, prompt, modelId, duration, aspectRatio, resolution, enableAudio, enableLoop, numVideos, outputUrl, mentions, upscaleMode, colormap, voiceIds, status, error, submittedAt }
-    } : n))
-  }, [prompt, modelId, duration, aspectRatio, resolution, enableAudio, enableLoop, numVideos, outputUrl, mentions, upscaleMode, colormap, voiceIds, status, error, submittedAt, id, setNodes])
+    patchPersistedNodeData({ prompt, modelId, duration, aspectRatio, resolution, enableAudio, enableLoop, numVideos, outputUrl, mentions, upscaleMode, colormap, voiceIds, status, error, submittedAt })
+  }, [aspectRatio, colormap, duration, enableAudio, enableLoop, error, mentions, modelId, numVideos, outputUrl, patchPersistedNodeData, prompt, resolution, status, submittedAt, upscaleMode, voiceIds])
 
   // Auto-name: once a generation completes, replace the default
   // "Video Generator #N" label with the first few words of the prompt.
@@ -327,8 +339,8 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     if (current && !DEFAULT_VIDEO_LABEL.test(current)) return
     const derived = labelFromPrompt(prompt)
     if (!derived || derived === current) return
-    setNodes(ns => ns.map(n => n.id === id ? { ...n, data: { ...n.data, label: derived } } : n))
-  }, [outputUrl, prompt, data.label, id, setNodes])
+    patchPersistedNodeData({ label: derived })
+  }, [data.label, outputUrl, patchPersistedNodeData, prompt])
 
   const handleRename = () => {
     setLabelDraft((data.label as string) || '')
@@ -338,7 +350,8 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     const next = labelDraft.trim()
     setIsRenaming(false)
     if (!next) return
-    setNodes(ns => ns.map(n => n.id === id ? { ...n, data: { ...n.data, label: next } } : n))
+    syncGuardRef.current.beginUserEdit()
+    patchPersistedNodeData({ label: next })
   }
 
   // Capture a freeze-frame from the rendered video so the scene-shot bar
@@ -351,13 +364,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     let cancelled = false
     captureVideoThumbnail(outputUrl).then(thumb => {
       if (cancelled || !thumb) return
-      setNodes(ns => ns.map(n => n.id === id ? {
-        ...n,
-        data: { ...n.data, videoThumbnail: thumb, videoThumbnailFor: outputUrl }
-      } : n))
+      patchPersistedNodeData({ videoThumbnail: thumb, videoThumbnailFor: outputUrl })
     })
     return () => { cancelled = true }
-  }, [outputUrl, data.videoThumbnail, data.videoThumbnailFor, id, setNodes])
+  }, [data.videoThumbnail, data.videoThumbnailFor, outputUrl, patchPersistedNodeData])
 
   // Resume polling on mount when this node has an in-flight job recorded —
   // either because it was spawned for a batch generation, or because the
@@ -382,11 +392,14 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
 
   // Clear the persisted in-flight job marker when the generation resolves.
   const clearPending = useCallback(() => {
-    setNodes(ns => ns.map(n => n.id === id ? {
-      ...n,
-      data: { ...n.data, pendingRequestId: undefined, pendingProvider: undefined, pendingProviderModel: undefined, pendingFalEndpoint: undefined, pendingStartedAt: undefined },
-    } : n))
-  }, [id, setNodes])
+    patchPersistedNodeData({
+      pendingRequestId: undefined,
+      pendingProvider: undefined,
+      pendingProviderModel: undefined,
+      pendingFalEndpoint: undefined,
+      pendingStartedAt: undefined,
+    })
+  }, [patchPersistedNodeData])
 
   // 10-minute soft timeout. Stops polling and marks the node failed, but
   // does NOT clear pendingRequestId — the user can click "Re-check
@@ -432,10 +445,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           setOutputUrl(completedUrl)
           setStatus('completed')
           setRequestId(null)
-          setNodes(ns => ns.map(n => n.id === id ? {
-            ...n,
-            data: completeGenerationNode(n.data as Record<string, unknown>, completedUrl),
-          } : n))
+          updatePersistedNodeData((currentData) => completeGenerationNode(currentData, completedUrl))
           clearPending()
         } else {
           setStatus('failed')
@@ -546,10 +556,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
         setStatus('completed')
         setRequestId(null)
         setProgress(undefined)
-        setNodes(ns => ns.map(n => n.id === id ? {
-          ...n,
-          data: completeGenerationNode(n.data as Record<string, unknown>, completedUrl),
-        } : n))
+        updatePersistedNodeData((currentData) => completeGenerationNode(currentData, completedUrl))
         clearPending()
         toast.success('Result is ready — saved to your library.', { id: toastId })
         return
@@ -882,16 +889,12 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
 
       // Persist the in-flight job onto the node so polling can resume
       // after a page refresh. Cleared when the generation resolves.
-      setNodes(ns => ns.map(n => n.id === id ? {
-        ...n,
-        data: {
-          ...n.data,
-          pendingRequestId: ok[0].request_id,
-          pendingProvider: ok[0].provider || currentModel.provider,
-          pendingProviderModel: firstEndpoint,
-          pendingStartedAt: startedAt,
-        },
-      } : n))
+      patchPersistedNodeData({
+        pendingRequestId: ok[0].request_id,
+        pendingProvider: ok[0].provider || currentModel.provider,
+        pendingProviderModel: firstEndpoint,
+        pendingStartedAt: startedAt,
+      })
 
       // Extra jobs become duplicate video nodes (in a grid) that each poll
       // their own request and fill in when done.
@@ -927,15 +930,14 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
             },
           }
         })
-        setNodes(ns => [...ns, ...(newNodes as any)])
-        // Mirror this node's incoming connections onto each duplicate
-        // (routed through the canvas, which owns the edge state).
+        addNodes(newNodes as any)
+        // Mirror this node's incoming connections onto each duplicate.
         const incoming = getEdges().filter(e => e.target === id)
         if (incoming.length) {
           const newEdges = newNodes.flatMap((nn, ni) =>
-            incoming.map((e, ei) => ({ ...e, id: `${nn.id}-e${ei}-${stamp}-${ni}`, target: nn.id }))
+            incoming.map((e, ei) => ({ ...e, id: `${nn.id}-e${ei}-${stamp}-${ni}`, target: nn.id, data: { ...(e.data as Record<string, unknown> | undefined) } }))
           )
-          window.dispatchEvent(new CustomEvent('frame-add-edges', { detail: { edges: newEdges } }))
+          addEdges(newEdges as any)
         }
       }
     } catch (err: any) {
@@ -1192,7 +1194,11 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
             <MentionTextarea
               value={prompt}
               mentions={mentions}
-              onChange={(text, ms) => { setPrompt(text); setMentions(ms) }}
+              onChange={(text, ms) => {
+                syncGuardRef.current.beginUserEdit()
+                setPrompt(text)
+                setMentions(ms)
+              }}
               folders={folders}
               placeholder="Describe the video — type @ to reference a folder…"
               disabled={isGenerating}
@@ -1212,7 +1218,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
             <input
               type="text"
               value={voiceIds}
-              onChange={e => setVoiceIds(e.target.value)}
+              onChange={e => {
+                syncGuardRef.current.beginUserEdit()
+                setVoiceIds(e.target.value)
+              }}
               placeholder="Voice IDs — paste from fal create-voice (max 2, comma-separated)"
               disabled={isGenerating}
               className="nodrag w-full bg-white/[0.03] border border-white/[0.06] rounded-md px-2 py-1.5 text-[11px] font-mono text-foreground/90 placeholder:text-muted-foreground/40 outline-none focus:border-accent/40 disabled:opacity-50"
@@ -1229,7 +1238,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
             {/* Video count counter */}
             <div className="flex items-center gap-0.5 px-1.5 h-6 rounded-md bg-white/5 text-[10px] font-mono text-muted-foreground">
               <button
-                onClick={() => setNumVideos(n => Math.max(1, n - 1))}
+                onClick={() => {
+                  syncGuardRef.current.beginUserEdit()
+                  setNumVideos(n => Math.max(1, n - 1))
+                }}
                 disabled={isGenerating || numVideos <= 1}
                 className="w-4 h-4 flex items-center justify-center hover:text-foreground disabled:opacity-30"
               >
@@ -1237,7 +1249,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
               </button>
               <span className="w-6 text-center">x{numVideos}</span>
               <button
-                onClick={() => setNumVideos(n => Math.min(12, n + 1))}
+                onClick={() => {
+                  syncGuardRef.current.beginUserEdit()
+                  setNumVideos(n => Math.min(12, n + 1))
+                }}
                 disabled={isGenerating || numVideos >= 12}
                 className="w-4 h-4 flex items-center justify-center hover:text-foreground disabled:opacity-30"
               >
@@ -1249,7 +1264,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
             <ControlSelect
               value={currentModel?.name || modelId}
               options={modelOptions}
-              onChange={setModelId}
+              onChange={(value) => {
+                syncGuardRef.current.beginUserEdit()
+                setModelId(value)
+              }}
               disabled={isGenerating}
             />
 
@@ -1261,7 +1279,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
                   { value: 'standard', label: 'Standard' },
                   { value: 'creative', label: 'Creative' },
                 ]}
-                onChange={(v) => setUpscaleMode(v as 'standard' | 'creative')}
+                onChange={(v) => {
+                  syncGuardRef.current.beginUserEdit()
+                  setUpscaleMode(v as 'standard' | 'creative')
+                }}
                 disabled={isGenerating}
               />
             )}
@@ -1279,7 +1300,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
                   { value: 'magma', label: 'Magma' },
                   { value: 'viridis', label: 'Viridis' },
                 ]}
-                onChange={setColormap}
+                onChange={(value) => {
+                  syncGuardRef.current.beginUserEdit()
+                  setColormap(value)
+                }}
                 disabled={isGenerating}
               />
             )}
@@ -1289,7 +1313,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
               <ControlSelect 
                 value={duration || currentModel?.defaultDuration || ''} 
                 options={durationOptions}
-                onChange={setDuration}
+                onChange={(value) => {
+                  syncGuardRef.current.beginUserEdit()
+                  setDuration(value)
+                }}
                 disabled={isGenerating}
               />
             )}
@@ -1299,7 +1326,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
               <ControlSelect 
                 value={aspectRatio || currentModel?.defaultAspectRatio || ''} 
                 options={aspectOptions}
-                onChange={setAspectRatio}
+                onChange={(value) => {
+                  syncGuardRef.current.beginUserEdit()
+                  setAspectRatio(value)
+                }}
                 disabled={isGenerating}
               />
             )}
@@ -1309,7 +1339,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
               <ControlSelect 
                 value={resolution || currentModel?.defaultResolution || ''} 
                 options={resolutionOptions}
-                onChange={setResolution}
+                onChange={(value) => {
+                  syncGuardRef.current.beginUserEdit()
+                  setResolution(value)
+                }}
                 disabled={isGenerating}
               />
             )}
@@ -1317,7 +1350,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
             {/* Audio toggle - only if model supports audio generation */}
             {currentModel?.supportsAudio && (
               <button
-                onClick={() => setEnableAudio(a => !a)}
+                onClick={() => {
+                  syncGuardRef.current.beginUserEdit()
+                  setEnableAudio(a => !a)
+                }}
                 disabled={isGenerating}
                 className={`flex items-center justify-center w-6 h-6 rounded-md transition-colors disabled:opacity-50 ${
                   enableAudio ? 'bg-accent/20 text-accent' : 'bg-white/5 hover:bg-white/10 text-muted-foreground'
@@ -1334,7 +1370,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
             {/* Loop toggle - only if model supports loop */}
             {currentModel?.supportsLoop && (
               <button
-                onClick={() => setEnableLoop(l => !l)}
+                onClick={() => {
+                  syncGuardRef.current.beginUserEdit()
+                  setEnableLoop(l => !l)
+                }}
                 disabled={isGenerating}
                 className={`flex items-center justify-center w-6 h-6 rounded-md transition-colors disabled:opacity-50 ${
                   enableLoop ? 'bg-accent/20 text-accent' : 'bg-white/5 hover:bg-white/10 text-muted-foreground'

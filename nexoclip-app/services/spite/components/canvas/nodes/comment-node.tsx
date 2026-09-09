@@ -1,15 +1,16 @@
 'use client'
 
 import { memo, useState, useRef, useEffect } from 'react'
-import { NodeProps, useReactFlow } from '@xyflow/react'
+import { NodeProps } from '@xyflow/react'
 import { X } from '@phosphor-icons/react'
+import { useCanvasCollaboration } from '../canvas-collaboration'
 
 function CommentNodeImpl({ id, data, selected }: NodeProps) {
   const [text, setText] = useState((data.text as string) || '')
   const [isEditing, setIsEditing] = useState(!data.text)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const measureRef = useRef<HTMLSpanElement>(null)
-  const { setNodes, deleteElements } = useReactFlow()
+  const { deleteNodes, patchNodeData } = useCanvasCollaboration()
 
   // Focus on mount if editing
   useEffect(() => {
@@ -19,14 +20,15 @@ function CommentNodeImpl({ id, data, selected }: NodeProps) {
     }
   }, [isEditing])
 
+  useEffect(() => {
+    if (isEditing) return
+    setText((data.text as string) || '')
+  }, [data.text, isEditing])
+
   // Save text to node data when done editing
   const handleFinishEditing = () => {
     setIsEditing(false)
-    setNodes(nodes => 
-      nodes.map(n => 
-        n.id === id ? { ...n, data: { ...n.data, text } } : n
-      )
-    )
+    patchNodeData(id, { text })
   }
 
   // Calculate width based on text content
@@ -53,7 +55,7 @@ function CommentNodeImpl({ id, data, selected }: NodeProps) {
       <button
         onClick={(e) => {
           e.stopPropagation()
-          deleteElements({ nodes: [{ id }] })
+          deleteNodes([id])
         }}
         className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-black/80 border border-white/20 text-white/80 hover:text-white hover:bg-red-500/80 hover:border-red-400/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
         aria-label="Delete comment"

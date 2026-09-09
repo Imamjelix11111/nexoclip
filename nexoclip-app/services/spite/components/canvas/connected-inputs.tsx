@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useReactFlow, useStore } from '@xyflow/react'
 import { X, LinkBreak, WarningCircle } from '@phosphor-icons/react'
 import { resolveNodeMediaUrl } from '@/lib/node-media'
+import { useCanvasCollaboration } from './canvas-collaboration'
 
 // A small count badge pinned just outside a media input handle. Click it to see
 // exactly what's wired into that input — thumbnails of each connected source —
@@ -27,7 +28,8 @@ interface Props {
 }
 
 export function ConnectedInputs({ nodeId, handleId, side, top, label = 'Connected' }: Props) {
-  const { getEdges, getNodes, setEdges } = useReactFlow()
+  const { getEdges, getNodes } = useReactFlow()
+  const { deleteEdges } = useCanvasCollaboration()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -76,7 +78,7 @@ export function ConnectedInputs({ nodeId, handleId, side, top, label = 'Connecte
         })
     : []
 
-  const disconnect = (edgeId: string) => setEdges((es) => es.filter((e) => e.id !== edgeId))
+  const disconnect = (edgeId: string) => deleteEdges([edgeId])
 
   const anyDead = items.some((i) => !i.url)
 
@@ -152,7 +154,14 @@ export function ConnectedInputs({ nodeId, handleId, side, top, label = 'Connecte
 
           {count > 1 && (
             <button
-              onClick={() => { setEdges((es) => es.filter((e) => !(e.target === nodeId && e.targetHandle === handleId))); setOpen(false) }}
+              onClick={() => {
+                deleteEdges(
+                  getEdges()
+                    .filter((edge) => edge.target === nodeId && edge.targetHandle === handleId)
+                    .map((edge) => edge.id),
+                )
+                setOpen(false)
+              }}
               className="mt-1.5 w-full flex items-center justify-center gap-1 h-6 rounded-md bg-white/5 hover:bg-red-500/15 hover:text-red-300 text-[9px] font-mono text-muted-foreground transition-colors"
             >
               <LinkBreak size={9} /> Disconnect all

@@ -1,157 +1,234 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getR2Client } from '@/lib/r2-upload'
-import { getDb } from '@/lib/db'
 import { DeleteObjectCommand } from '@aws-sdk/client-s3'
+import { NextRequest, NextResponse } from 'next/server'
 
-// Update mutable fields on an asset. Currently:
-//   used_in_canvas — protection flag (true = never auto-delete)
-//   recovered      — was this asset pulled back via the recovery flow?
-//                    Lets the UI badge it with a blue Lifebuoy. The
-//                    column is added idempotently in lib/r2-upload.ts.
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ assetId: string }> }
-) {
-  try {
-    const sql = getDb()
-    const { assetId } = await params
-    const body = await request.json()
-    const { used_in_canvas, recovered } = body as {
-      used_in_canvas?: boolean
-      recovered?: boolean
-    }
+import { getDb } from '@/lib/db'
+import { getAuthenticatedUser } from '@/lib/main-session'
+import {
+  assetNotFoundResponse,
+  findOwnedGenerationAsset,
+  unauthorizedResponse,
+} from '@/lib/project-ownership'
+import {
+  createInternalRealtimeClient,
+  projectionHasMediaReference,
+  type InternalRealtimeClient,
+} from '@/lib/realtime/internal-client'
+import { getR2Client } from '@/lib/r2-upload'
 
-    if (used_in_canvas !== undefined) {
-      const isProtected = used_in_canvas ?? true
-      const expiresAt = isProtected ? null : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-      await sql`
-        UPDATE generation_history
-        SET used_in_canvas = ${isProtected}, expires_at = ${expiresAt}
-        WHERE id = ${assetId}
-      `
-    }
+function assetKeyFromUrl(url: string | null): string | null {
+  if (!url) return null
 
-    if (recovered !== undefined) {
-      // Guard for old databases that don't yet have the recovered
-      // column — ALTER IF NOT EXISTS lets us self-migrate without
-      // failing the request.
-      await sql`ALTER TABLE generation_history ADD COLUMN IF NOT EXISTS recovered boolean DEFAULT false`
-      await sql`
-        UPDATE generation_history
-        SET recovered = ${recovered}
-        WHERE id = ${assetId}
-      `
-    }
+  const proxyMatch = url.match(/\/api\/r2-image\/(.+)$/)
+  if (proxyMatch) return proxyMatch[1] ?? null
 
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error('[assets] Update error:', error)
-    return NextResponse.json({ error: 'Failed to update asset' }, { status: 500 })
+  const uploadsMatch = url.match(/\/uploads\/[^/?#]+$/)
+  if (uploadsMatch) return uploadsMatch[0].slice(1)
+
+  return null
+}
+
+interface AssetRouteDeps {
+  getDb?: typeof getDb
+  getAuthenticatedUser?: typeof getAuthenticatedUser
+  getR2Client?: typeof getR2Client
+  createInternalRealtimeClient?: () => InternalRealtimeClient
+}
+
+export function createAssetRouteHandlers(deps: AssetRouteDeps = {}) {
+  const db = deps.getDb ?? getDb
+  const resolveUser = deps.getAuthenticatedUser ?? getAuthenticatedUser
+  const r2Client = deps.getR2Client ?? getR2Client
+  const internalRealtime = deps.createInternalRealtimeClient ?? createInternalRealtimeClient
+
+  return {
+    async GET(
+      request: Request,
+      { params }: { params: Promise<{ assetId: string }> },
+    ) {
+      try {
+        const user = await resolveUser(request)
+        if (!user) return unauthorizedResponse()
+
+        const sql = db()
+        const { assetId } = await params
+        const asset = await findOwnedGenerationAsset(sql, user.id, assetId)
+        if (!asset) return assetNotFoundResponse()
+
+        return NextResponse.json(asset)
+      } catch (error) {
+        console.error('[assets] Fetch error:', error)
+        return NextResponse.json({ error: 'Failed to fetch asset' }, { status: 500 })
+      }
+    },
+
+    async PATCH(
+      request: Request,
+      { params }: { params: Promise<{ assetId: string }> },
+    ) {
+      try {
+        const user = await resolveUser(request)
+        if (!user) return unauthorizedResponse()
+
+        const sql = db()
+        const { assetId } = await params
+        const asset = await findOwnedGenerationAsset(sql, user.id, assetId)
+        if (!asset) return assetNotFoundResponse()
+
+        const body = await request.json()
+        const { used_in_canvas, recovered } = body as {
+          used_in_canvas?: boolean
+          recovered?: boolean
+        }
+
+        if (used_in_canvas !== undefined) {
+          const isProtected = used_in_canvas ?? true
+          const expiresAt = isProtected ? null : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+          await sql`
+            UPDATE generation_history
+            SET used_in_canvas = ${isProtected}, expires_at = ${expiresAt}
+            WHERE id = ${assetId} AND project_id = ${asset.project_id}
+          `
+        }
+
+        if (recovered !== undefined) {
+          await sql`ALTER TABLE generation_history ADD COLUMN IF NOT EXISTS recovered boolean DEFAULT false`
+          await sql`
+            UPDATE generation_history
+            SET recovered = ${recovered}
+            WHERE id = ${assetId} AND project_id = ${asset.project_id}
+          `
+        }
+
+        return NextResponse.json({ success: true })
+      } catch (error) {
+        console.error('[assets] Update error:', error)
+        return NextResponse.json({ error: 'Failed to update asset' }, { status: 500 })
+      }
+    },
+
+    async DELETE(
+      request: Request,
+      { params }: { params: Promise<{ assetId: string }> },
+    ) {
+      try {
+        const user = await resolveUser(request)
+        if (!user) return unauthorizedResponse()
+
+        const sql = db()
+        const { assetId } = await params
+        const asset = await findOwnedGenerationAsset(sql, user.id, assetId)
+        if (!asset) {
+          return assetNotFoundResponse()
+        }
+
+        const removedRows = await sql`
+          DELETE FROM asset_folder_items WHERE asset_id = ${assetId}
+          RETURNING folder_id
+        ` as { folder_id: string }[]
+        const removedFromFolders = removedRows.length
+
+        const projectionSequence = await sql`
+          SELECT durable_seq, projected_seq
+          FROM canvas_yjs_documents
+          WHERE project_id = ${asset.project_id}
+        ` as Array<{ durable_seq: number; projected_seq: number }>
+
+        let assetStillReferenced = false
+        const projectionIsCurrent = projectionSequence.length > 0
+          && Number(projectionSequence[0].durable_seq) === Number(projectionSequence[0].projected_seq)
+
+        if (projectionIsCurrent) {
+          const canvasRefs = asset.r2_url
+            ? await sql`
+                SELECT 1 FROM canvas_nodes
+                WHERE projectId = ${asset.project_id}
+                  AND (
+                    data->>'assetId' = ${assetId}
+                    OR data->>'outputUrl' = ${asset.r2_url}
+                    OR data->>'thumbnail' = ${asset.r2_url}
+                  )
+                LIMIT 1
+              `
+            : await sql`
+                SELECT 1 FROM canvas_nodes
+                WHERE projectId = ${asset.project_id}
+                  AND data->>'assetId' = ${assetId}
+                LIMIT 1
+              `
+          assetStillReferenced = canvasRefs.length > 0
+        } else {
+          const authoritative = await internalRealtime().exportDocument({
+            userId: user.id,
+            projectId: asset.project_id,
+          })
+          assetStillReferenced = projectionHasMediaReference(authoritative.projection, {
+            assetId,
+            url: asset.r2_url,
+          })
+        }
+
+        if (assetStillReferenced) {
+          await sql`
+            UPDATE generation_history
+            SET used_in_canvas = true, expires_at = NULL
+            WHERE id = ${assetId} AND project_id = ${asset.project_id}
+          `
+          return NextResponse.json({
+            success: true,
+            kept: true,
+            reason: 'still_on_canvas',
+            removed_from_folders: removedFromFolders,
+          })
+        }
+
+        await sql`DELETE FROM generation_history WHERE id = ${assetId} AND project_id = ${asset.project_id}`
+
+        const key = assetKeyFromUrl(asset.r2_url)
+        if (key) {
+          try {
+            await r2Client().send(
+              new DeleteObjectCommand({
+                Bucket: process.env.R2_BUCKET_NAME!,
+                Key: key,
+              })
+            )
+          } catch (r2Error) {
+            console.error('[assets] R2 deletion failed:', r2Error)
+          }
+        }
+
+        return NextResponse.json({
+          success: true,
+          kept: false,
+          removed_from_folders: removedFromFolders,
+        })
+      } catch (error: any) {
+        console.error('[assets] Delete error:', error)
+        return NextResponse.json({ error: 'Failed to delete asset' }, { status: 500 })
+      }
+    },
   }
 }
 
-// DELETE /api/assets/[assetId]
-//
-// Behaviour requested by the user:
-//   - Always succeed if invoked.
-//   - First, remove the asset from every folder it sits in. Folder
-//     membership alone is no longer a reason to refuse deletion.
-//   - Then look at the actual canvas_nodes for this project: is the
-//     asset's r2_url (outputUrl/thumbnail) or id referenced by any node?
-//       * Yes → keep the generation_history row + R2 file alive. The
-//         response surfaces { kept: true, removed_from_folders }.
-//       * No  → hard-delete the row + the R2 object.
-//
-// (used_in_canvas is no longer the gate. That flag also goes true for
-// folder members via the folder API, which made the gate fire even
-// when the asset wasn't on a node — see the user report.)
+const handlers = createAssetRouteHandlers()
+
+export async function GET(
+  request: NextRequest,
+  context: { params: Promise<{ assetId: string }> },
+) {
+  return handlers.GET(request, context)
+}
+
+export async function PATCH(
+  request: NextRequest,
+  context: { params: Promise<{ assetId: string }> },
+) {
+  return handlers.PATCH(request, context)
+}
+
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ assetId: string }> },
+  context: { params: Promise<{ assetId: string }> },
 ) {
-  try {
-    const sql = getDb()
-    const { assetId } = await params
-
-    const asset = await sql`
-      SELECT r2_url FROM generation_history WHERE id = ${assetId}
-    ` as { r2_url: string | null }[]
-
-    if (!asset[0]) {
-      return NextResponse.json({ error: 'Asset not found' }, { status: 404 })
-    }
-    const r2Url = asset[0].r2_url
-
-    // Step 1: drop folder memberships unconditionally.
-    const removedRows = await sql`
-      DELETE FROM asset_folder_items WHERE asset_id = ${assetId}
-      RETURNING folder_id
-    ` as { folder_id: string }[]
-    const removedFromFolders = removedRows.length
-
-    // Step 2: is the asset still referenced by a canvas node anywhere?
-    // We check both the assetId match and any of the two URL fields that
-    // node data uses to point at media (outputUrl on generated nodes,
-    // thumbnail on uploaded/reference nodes).
-    const canvasRefs = r2Url
-      ? await sql`
-          SELECT 1 FROM canvas_nodes
-          WHERE data->>'assetId'   = ${assetId}
-             OR data->>'outputUrl' = ${r2Url}
-             OR data->>'thumbnail' = ${r2Url}
-          LIMIT 1
-        `
-      : await sql`
-          SELECT 1 FROM canvas_nodes
-          WHERE data->>'assetId' = ${assetId}
-          LIMIT 1
-        `
-
-    if (canvasRefs.length > 0) {
-      // Still on a node — keep the asset so the node doesn't lose its
-      // media. Folder rows are already gone above. Demote protection
-      // so it can age out normally if the node is later removed.
-      await sql`
-        UPDATE generation_history
-        SET used_in_canvas = true, expires_at = NULL
-        WHERE id = ${assetId}
-      `
-      return NextResponse.json({
-        success: true,
-        kept: true,
-        reason: 'still_on_canvas',
-        removed_from_folders: removedFromFolders,
-      })
-    }
-
-    // Step 3: not on a canvas — hard delete.
-    await sql`DELETE FROM generation_history WHERE id = ${assetId}`
-
-    if (r2Url) {
-      try {
-        // r2_url format: /api/r2-image/uploads/filename.png
-        const key = r2Url.replace('/api/r2-image/', '')
-        const s3 = getR2Client()
-        await s3.send(new DeleteObjectCommand({
-          Bucket: process.env.R2_BUCKET_NAME!,
-          Key: key,
-        }))
-      } catch (r2Error) {
-        console.error('[assets] R2 deletion failed:', r2Error)
-        // DB row is gone already; leftover R2 object is acceptable.
-      }
-    }
-
-    return NextResponse.json({
-      success: true,
-      kept: false,
-      removed_from_folders: removedFromFolders,
-    })
-  } catch (error: any) {
-    console.error('[assets] Delete error:', error)
-    return NextResponse.json(
-      { error: 'Failed to delete asset' },
-      { status: 500 },
-    )
-  }
+  return handlers.DELETE(request, context)
 }
