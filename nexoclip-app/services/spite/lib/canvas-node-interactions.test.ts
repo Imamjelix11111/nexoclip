@@ -17,6 +17,7 @@ const nodes: Node[] = [
   { id: 'prompt-empty', type: 'prompt', position: { x: 0, y: 0 }, data: { text: '   ' } },
   { id: 'image-1', type: 'image', position: { x: 50, y: 75 }, data: {} },
   { id: 'image-2', type: 'image', position: { x: 12, y: 34 }, data: { sceneId: 'scene-2' } },
+  { id: 'image-3', type: 'image', position: { x: 56, y: 78 }, data: { sceneId: 'scene-3' } },
 ]
 
 const edgeA: Edge = {
@@ -138,6 +139,13 @@ test('resolveFollowTarget uses the peer scene for a cursor without a selection',
   assert.deepEqual(resolveFollowTarget({ sceneId: 'scene-3', cursor: { x: 12, y: 34 } }, nodes), {
     sceneId: 'scene-3',
     point: { x: 12, y: 34 },
+  })
+})
+
+test('resolveFollowTarget ignores stale cross-scene selections when peer scene exists', () => {
+  assert.deepEqual(resolveFollowTarget({ sceneId: 'scene-3', selection: { nodeIds: ['image-2', 'image-3'] } }, nodes), {
+    sceneId: 'scene-3',
+    point: { x: 56, y: 78 },
   })
 })
 

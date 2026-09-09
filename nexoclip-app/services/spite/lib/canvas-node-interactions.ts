@@ -62,12 +62,13 @@ export function resolveFollowTarget(
   peer: FollowPeer,
   nodes: Node[],
 ): { sceneId?: string; point?: { x: number; y: number } } {
+  const peerSceneId = typeof peer.sceneId === 'string' && peer.sceneId.length > 0
+    ? peer.sceneId
+    : undefined
   const node = peer.selection?.nodeIds
     ?.map((nodeId) => nodes.find((node) => node.id === nodeId))
-    .find((node): node is Node => Boolean(node))
-  const sceneId = typeof peer.sceneId === 'string' && peer.sceneId.length > 0
-    ? peer.sceneId
-    : typeof node?.data.sceneId === 'string' ? node.data.sceneId : undefined
+    .find((node): node is Node => Boolean(node) && (!peerSceneId || node.data.sceneId === peerSceneId))
+  const sceneId = peerSceneId ?? (typeof node?.data.sceneId === 'string' ? node.data.sceneId : undefined)
   const point = peer.cursor ?? (node ? node.position : undefined)
 
   return { ...(sceneId ? { sceneId } : {}), ...(point ? { point } : {}) }

@@ -19,6 +19,7 @@ export function CanvasGuestList({ peers, scenes, onFollow }: CanvasGuestListProp
       <div className="space-y-1">
         {peers.map((peer) => {
           const sceneName = scenes.find((scene) => scene.id === peer.sceneId)?.name
+          const canFollow = Boolean(peer.sceneId && sceneName)
 
           return (
           <div key={peer.clientId} className="flex items-center gap-2 rounded px-2 py-1.5 text-xs text-foreground">
@@ -28,7 +29,7 @@ export function CanvasGuestList({ peers, scenes, onFollow }: CanvasGuestListProp
             <button
               type="button"
               onClick={() => onFollow(peer)}
-              disabled={!peer.sceneId}
+              disabled={!canFollow}
               className="rounded bg-white/10 px-2 py-1 text-[11px] font-medium hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Follow
