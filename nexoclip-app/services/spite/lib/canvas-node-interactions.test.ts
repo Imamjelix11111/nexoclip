@@ -134,6 +134,13 @@ test('resolveFollowTarget prefers cursor then selected node', () => {
   })
 })
 
+test('resolveFollowTarget uses the peer scene for a cursor without a selection', () => {
+  assert.deepEqual(resolveFollowTarget({ sceneId: 'scene-3', cursor: { x: 12, y: 34 } }, nodes), {
+    sceneId: 'scene-3',
+    point: { x: 12, y: 34 },
+  })
+})
+
 test('resolveFollowTarget falls back to the first selected node', () => {
   assert.deepEqual(resolveFollowTarget({ selection: { nodeIds: ['image-2'] } }, nodes), {
     sceneId: 'scene-2',

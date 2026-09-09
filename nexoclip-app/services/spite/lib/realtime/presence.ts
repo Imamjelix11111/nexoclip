@@ -57,6 +57,7 @@ export type PresencePeer = {
   selection?: unknown
   editing?: unknown
   lock?: unknown
+  sceneId?: unknown
 }
 
 export type RemotePresencePeer = {
@@ -68,6 +69,7 @@ export type RemotePresencePeer = {
   selection: PresenceSelection
   editing?: PresenceEditing
   lock?: PresenceLock
+  sceneId?: string
 }
 
 export type PresenceControllerOptions = {
@@ -138,6 +140,7 @@ export function projectRemotePresence(
       selection,
       editing,
       lock,
+      sceneId: readSceneId(peer.sceneId),
     }
   })
 }
@@ -249,6 +252,10 @@ class PresenceController {
     this.writeField('editing', nodeId ? { nodeId } : null)
   }
 
+  publishScene(sceneId: string): void {
+    this.writeField('sceneId', sceneId)
+  }
+
   startDragLock(nodeId: string): void {
     this.activeLockNodeId = nodeId
     this.publishLock(nodeId)
@@ -350,6 +357,10 @@ function readDisplayName(value: unknown): string {
   return typeof value === 'string' && value.trim().length > 0 ? value : 'Guest'
 }
 
+function readSceneId(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value : undefined
+}
+
 function readPoint(value: unknown): PresencePoint | undefined {
   if (!value || typeof value !== 'object') {
     return undefined
@@ -357,7 +368,7 @@ function readPoint(value: unknown): PresencePoint | undefined {
 
   const x = (value as { x?: unknown }).x
   const y = (value as { y?: unknown }).y
-  if (typeof x !== 'number' || typeof y !== 'number') {
+  if (typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y)) {
     return undefined
   }
 

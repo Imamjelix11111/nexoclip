@@ -228,6 +228,36 @@ test('createPresenceController publishes selection, editing, and drag lock lifec
   controller.destroy()
 })
 
+test('projectRemotePresence exposes a non-empty scene id and drops invalid values', () => {
+  const peers = projectRemotePresence([
+    { clientId: 1, sceneId: 'scene-2' },
+    { clientId: 2, sceneId: '' },
+    { clientId: 3, sceneId: '   ' },
+    { clientId: 4, sceneId: 42 },
+  ])
+
+  assert.equal(peers[0]?.sceneId, 'scene-2')
+  assert.equal(peers[1]?.sceneId, undefined)
+  assert.equal(peers[2]?.sceneId, undefined)
+  assert.equal(peers[3]?.sceneId, undefined)
+})
+
+test('projectRemotePresence drops non-finite cursor points', () => {
+  const peer = projectRemotePresence([{ clientId: 1, cursor: { x: Number.NaN, y: 2 } }])[0]
+
+  assert.equal(peer?.cursor, undefined)
+})
+
+test('createPresenceController publishes scene changes', () => {
+  const awareness = new FakeAwareness()
+  const controller = createPresenceController({ awareness, participantId: 'participant-alpha' })
+
+  controller.publishScene('scene-2')
+
+  assert.deepEqual(awareness.fieldWrites.at(-1), { key: 'sceneId', value: 'scene-2' })
+  controller.destroy()
+})
+
 test('projectRemotePresence drops expired locks using server time but keeps the participant visible', () => {
   const peers = projectRemotePresence(
     [

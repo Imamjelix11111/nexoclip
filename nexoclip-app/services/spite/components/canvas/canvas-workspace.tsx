@@ -40,6 +40,7 @@ import {
   getOrCreateParticipantHint,
   presenceSnapshotNeedsPublish,
   projectRemotePresence,
+  type RemotePresencePeer,
 } from '@/lib/realtime/presence'
 import {
   filterSelectedNodeIdsToVisible,
@@ -63,7 +64,9 @@ import { CommentNode } from './nodes/comment-node'
 import { StickerNode, getLastSticker } from './nodes/sticker-node'
 import { CompressNode } from './nodes/compress-node'
 import { RealtimePresenceOverlay } from './realtime-presence'
+import { CanvasGuestList } from './canvas-guest-list'
 import { CanvasCollaborationProvider } from './canvas-collaboration'
+import { resolveFollowTarget } from '@/lib/canvas-node-interactions'
 
 const NODE_TYPES: NodeTypes = {
   imageGen: ImageNode,
@@ -375,6 +378,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
     }
 
     presenceControllerRef.current = controller
+    controller.publishScene(activeSceneId)
     awareness.on?.('change', syncPresenceSnapshot)
     awareness.on?.('update', syncPresenceSnapshot)
     syncPresenceSnapshot()
@@ -392,6 +396,10 @@ function CanvasInner({ projectId }: { projectId: string }) {
       }
     }
   }, [awareness])
+
+  useEffect(() => {
+    presenceControllerRef.current?.publishScene(activeSceneId)
+  }, [activeSceneId])
 
   useEffect(() => {
     const loadData = async () => {
@@ -1133,6 +1141,18 @@ function CanvasInner({ projectId }: { projectId: string }) {
     }))
   }, [sceneNodes, sceneEdges, connectorAnim])
 
+  const handleFollowGuest = useCallback((peer: RemotePresencePeer) => {
+    const target = resolveFollowTarget(peer, allNodes as Node[])
+    if (!target.sceneId || !scenes.some((scene) => scene.id === target.sceneId)) {
+      return
+    }
+
+    commands.switchScene(target.sceneId)
+    if (target.point) {
+      setCenter(target.point.x, target.point.y, { zoom: viewport.zoom, duration: 300 })
+    }
+  }, [allNodes, commands, scenes, setCenter, viewport.zoom])
+
   const handleRecenter = useCallback(() => {
     fitView({ duration: 300, padding: 0.2 })
   }, [fitView])
@@ -1295,6 +1315,8 @@ function CanvasInner({ projectId }: { projectId: string }) {
             </ReactFlow>
           )
         })()}
+
+        <CanvasGuestList peers={remotePresence} scenes={scenes} onFollow={handleFollowGuest} />
 
         <RealtimePresenceOverlay
           peers={remotePresence}

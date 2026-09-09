@@ -10,6 +10,7 @@ type NodeSizeBounds = {
 type FollowPeer = {
   cursor?: { x: number; y: number }
   selection?: { nodeIds?: string[] }
+  sceneId?: string
 }
 
 export function resolveIncomingPrompt(nodeId: string, nodes: Node[], edges: Edge[]) {
@@ -64,7 +65,9 @@ export function resolveFollowTarget(
   const node = peer.selection?.nodeIds
     ?.map((nodeId) => nodes.find((node) => node.id === nodeId))
     .find((node): node is Node => Boolean(node))
-  const sceneId = typeof node?.data.sceneId === 'string' ? node.data.sceneId : undefined
+  const sceneId = typeof peer.sceneId === 'string' && peer.sceneId.length > 0
+    ? peer.sceneId
+    : typeof node?.data.sceneId === 'string' ? node.data.sceneId : undefined
   const point = peer.cursor ?? (node ? node.position : undefined)
 
   return { ...(sceneId ? { sceneId } : {}), ...(point ? { point } : {}) }
