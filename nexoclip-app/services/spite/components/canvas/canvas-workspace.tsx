@@ -147,7 +147,7 @@ function makeAssetId() { return `asset-${assetCount++}` }
 
 // Connection type validation rules
 const CONNECTION_RULES: Record<string, string[]> = {
-  'prompt-out': ['prompt-in'],
+  'prompt-out': ['prompt-in'], // shared text-input handle on Prompt, Image, and Video nodes
   'image-out': ['image-in', 'end-frame-in', 'reference-in'],
   'video-out': ['video-in'],
   // Audio reference → Kling 2.6 voice input. Without this the audio-out

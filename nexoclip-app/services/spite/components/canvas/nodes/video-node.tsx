@@ -10,11 +10,8 @@ import { NodeActionToolbar } from './node-toolbar'
 import { ShotSelector, type ShotOption } from './shot-selector'
 import { useSceneShots } from './use-scene-shots'
 import { Lightbox } from '../lightbox'
-import { MentionTextarea, type Mention } from '../mention-textarea'
-import { useProjectFolders } from '@/hooks/use-project-folders'
 import { labelFromPrompt, DEFAULT_VIDEO_LABEL } from '@/lib/auto-name'
 import { getVideoModels, getModelById, buildModelInput, type ModelConfig } from '@/lib/fal-models'
-import { compileMentionsForModel } from '@/lib/mention-prompt'
 import { estimateGenerationCost, formatUSD, COST_CONFIRM_THRESHOLD_USD } from '@/lib/fal-cost'
 import { resolveNodeMediaUrl } from '@/lib/node-media'
 import { completeGenerationNode } from '@/lib/generation-node'
@@ -22,6 +19,7 @@ import { ConnectedInputs } from '../connected-inputs'
 import { captureVideoThumbnail } from '@/lib/video-thumbnail'
 import { useCanvasCollaboration } from '../canvas-collaboration'
 import { createLocalStateSyncGuard } from '@/lib/local-state-sync'
+import { parseAspectRatio, resolveIncomingPrompt } from '@/lib/canvas-node-interactions'
 
 const VIDEO_MODELS = getVideoModels()
 
@@ -139,7 +137,6 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   const params = useParams()
   // Route segment is [id], so the param is `id` (not `projectId`).
   const projectId = params.id as string
-  const [prompt, setPrompt] = useState((data.prompt as string) || '')
   // Upscaler mode (only meaningful when modelId is 'topaz-video-upscale').
   // 'standard' hits the plug-n-play endpoint; 'creative' hits the
   // prompt-aware variant. Persists in node data so it survives reload.
@@ -150,8 +147,6 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   // safe to feed into a depth-conditioned model; the colormaps are for when you
   // want the depth pass itself as a visual element.
   const [colormap, setColormap] = useState<string>((data.colormap as string) || 'grayscale')
-  const [mentions, setMentions] = useState<Mention[]>((data.mentions as Mention[]) || [])
-  const { folders } = useProjectFolders(projectId)
   const [modelId, setModelId] = useState((data.modelId as string) || 'seedance-1.5')
   const [duration, setDuration] = useState((data.duration as string) || '')
   const [aspectRatio, setAspectRatio] = useState((data.aspectRatio as string) || '')
@@ -203,17 +198,17 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     updateNodeData(id, updater)
   }, [id, updateNodeData])
   
+  // Prompt text is read from the connected Text node at render and again
+  // immediately before submission; this node never owns a prompt.
+  const resolvedPrompt = resolveIncomingPrompt(id, getNodes(), getEdges())
+
   // Check connection states fresh on each render
-  let hasConnectedPrompts = false
   let hasConnectedFirstFrame = false
   let hasConnectedReferences = false
   let hasConnectedVideo = false
   try {
     const edges = getEdges()
     const allIncomingEdges = edges.filter(edge => edge.target === id)
-    hasConnectedPrompts = allIncomingEdges.some(e =>
-      e.targetHandle === 'prompt-in' || e.targetHandle === null || e.targetHandle === undefined
-    )
     hasConnectedFirstFrame = allIncomingEdges.some(e =>
       e.targetHandle === 'image-in' ||
       (e.sourceHandle === 'image-out' && e.targetHandle !== 'end-frame-in' && e.targetHandle !== 'reference-in' && e.targetHandle !== 'video-in')
@@ -248,10 +243,8 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
 
   useEffect(() => {
     const finishSync = syncGuardRef.current.beginPropSync()
-    setPrompt((data.prompt as string) || '')
     setUpscaleMode((data.upscaleMode as 'standard' | 'creative') || 'standard')
     setColormap((data.colormap as string) || 'grayscale')
-    setMentions((data.mentions as Mention[]) || [])
     setModelId((data.modelId as string) || 'seedance-1.5')
     setDuration((data.duration as string) || '')
     setAspectRatio((data.aspectRatio as string) || '')
@@ -265,7 +258,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     setSubmittedAt((data.submittedAt as number) || undefined)
     setOutputUrl(resolveNodeMediaUrl({ outputUrl: data.outputUrl }) || null)
     queueMicrotask(finishSync)
-  }, [data.aspectRatio, data.colormap, data.duration, data.enableAudio, data.enableLoop, data.error, data.mentions, data.modelId, data.numVideos, data.outputUrl, data.prompt, data.resolution, data.status, data.submittedAt, data.upscaleMode, data.voiceIds])
+  }, [data.aspectRatio, data.colormap, data.duration, data.enableAudio, data.enableLoop, data.error, data.modelId, data.numVideos, data.outputUrl, data.resolution, data.status, data.submittedAt, data.upscaleMode, data.voiceIds])
 
   // Kling v3 references ride the image-to-video endpoint, which requires a
   // first frame. Block generation (with a clear message) when refs are
@@ -327,8 +320,8 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
 
   // Persist state changes to node data
   useEffect(() => {
-    patchPersistedNodeData({ prompt, modelId, duration, aspectRatio, resolution, enableAudio, enableLoop, numVideos, outputUrl, mentions, upscaleMode, colormap, voiceIds, status, error, submittedAt })
-  }, [aspectRatio, colormap, duration, enableAudio, enableLoop, error, mentions, modelId, numVideos, outputUrl, patchPersistedNodeData, prompt, resolution, status, submittedAt, upscaleMode, voiceIds])
+    patchPersistedNodeData({ modelId, duration, aspectRatio, resolution, enableAudio, enableLoop, numVideos, outputUrl, upscaleMode, colormap, voiceIds, status, error, submittedAt })
+  }, [aspectRatio, colormap, duration, enableAudio, enableLoop, error, modelId, numVideos, outputUrl, patchPersistedNodeData, resolution, status, submittedAt, upscaleMode, voiceIds])
 
   // Auto-name: once a generation completes, replace the default
   // "Video Generator #N" label with the first few words of the prompt.
@@ -337,10 +330,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     if (!outputUrl) return
     const current = (data.label as string) || ''
     if (current && !DEFAULT_VIDEO_LABEL.test(current)) return
-    const derived = labelFromPrompt(prompt)
+    const derived = labelFromPrompt(resolvedPrompt.prompt)
     if (!derived || derived === current) return
     patchPersistedNodeData({ label: derived })
-  }, [data.label, outputUrl, patchPersistedNodeData, prompt])
+  }, [data.label, outputUrl, patchPersistedNodeData, resolvedPrompt.prompt])
 
   const handleRename = () => {
     setLabelDraft((data.label as string) || '')
@@ -423,7 +416,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       return true
     }
     try {
-        const response = await fetch(withBasePath(`/api/generate/status?request_id=${reqId}&provider=${encodeURIComponent((data.pendingProvider as string) || currentModel?.provider || 'byteplus')}&model=${encodeURIComponent(providerId)}&projectId=${projectId}&nodeId=${encodeURIComponent(id)}&prompt=${encodeURIComponent(prompt)}`))
+        const response = await fetch(withBasePath(`/api/generate/status?request_id=${reqId}&provider=${encodeURIComponent((data.pendingProvider as string) || currentModel?.provider || 'byteplus')}&model=${encodeURIComponent(providerId)}&projectId=${projectId}&nodeId=${encodeURIComponent(id)}&prompt=${encodeURIComponent(resolvedPrompt.prompt)}`))
       const result = await response.json()
 
       // Cancelled while this request was in flight — drop the result.
@@ -526,7 +519,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
 
     try {
       const response = await fetch(
-        withBasePath(`/api/generate/status?request_id=${requestId}&provider=${encodeURIComponent((data.pendingProvider as string) || currentModel.provider)}&model=${encodeURIComponent(pollProvider)}&projectId=${projectId}&nodeId=${encodeURIComponent(id)}&prompt=${encodeURIComponent(prompt)}`),
+        withBasePath(`/api/generate/status?request_id=${requestId}&provider=${encodeURIComponent((data.pendingProvider as string) || currentModel.provider)}&model=${encodeURIComponent(pollProvider)}&projectId=${projectId}&nodeId=${encodeURIComponent(id)}&prompt=${encodeURIComponent(resolvedPrompt.prompt)}`),
       )
       const result = await response.json()
 
@@ -589,8 +582,17 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   }
 
   const handleGenerate = async () => {
-    // Compile prompts from connected nodes and this node's prompt
-    let compiledPrompt = ''
+    const { connected, prompt: compiledPrompt } = resolveIncomingPrompt(id, getNodes(), getEdges())
+    const isUpscalerStandard =
+      modelId === 'topaz-video-upscale' && upscaleMode === 'standard'
+    if (!isUpscalerStandard && !connected) {
+      setError('Connect a Text node first')
+      return
+    }
+    if (!isUpscalerStandard && !compiledPrompt) {
+      setError('Enter text in the connected Text node')
+      return
+    }
     let connectedImageUrl: string | null = null
     let connectedEndImageUrl: string | null = null
     let connectedReferenceUrls: string[] = []
@@ -613,12 +615,6 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     try {
       const edges = getEdges()
       nodes = getNodes()
-
-      // Get all edges where target is this node's "prompt-in" handle
-      // Accept edges without targetHandle for backward compatibility (old connections)
-      const incomingPromptEdges = edges.filter(
-        edge => edge.target === id && (edge.targetHandle === 'prompt-in' || !edge.targetHandle)
-      )
 
       // End frame (its own handle) — matched first so it isn't mistaken for the first frame.
       const incomingEndFrameEdges = edges.filter(
@@ -691,34 +687,9 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           connectedAudioUrl = sourceAudioUrl
         }
       }
-      
-      // Sort by the order edges were created (which is their index in the array)
-      // This preserves connection order
-      incomingPromptEdges.forEach((edge, index) => {
-        const sourceNode = nodes.find(n => n.id === edge.source)
-        // For PromptNode, text is stored in data.text; for other nodes, use data.prompt
-        const sourcePrompt = (sourceNode?.data?.text || sourceNode?.data?.prompt) as string | undefined
-        if (sourcePrompt && typeof sourcePrompt === 'string') {
-          if (index > 0) compiledPrompt += ' '
-          compiledPrompt += sourcePrompt.trim()
-        }
-      })
-      
-      // Add this node's prompt at the end
-      if (prompt.trim()) {
-        if (compiledPrompt) compiledPrompt += ' '
-        compiledPrompt += prompt.trim()
-      }
     } catch (error) {
-      console.error('Error compiling prompts:', error)
-      compiledPrompt = prompt.trim()
+      console.error('Error reading connected media:', error)
     }
-
-    // Upscalers (Topaz Standard mode) don't take a prompt — a connected
-    // video on video-in is the readiness signal. Don't block submission
-    // here for those; let the server handle whatever's missing.
-    const isUpscalerStandard =
-      modelId === 'topaz-video-upscale' && upscaleMode === 'standard'
 
     // Failsafe: a media cord is attached but its source has nothing yet, so that
     // input would be silently dropped. Refuse rather than burn a paid render.
@@ -728,11 +699,6 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           ? 'A connected node has no image/video yet — generate or upload it first (that input would be ignored).'
           : `${deadMediaEdges} connected nodes have no image/video yet — generate or upload them first (those inputs would be ignored).`,
       )
-      return
-    }
-
-    if (!compiledPrompt && !isUpscalerStandard) {
-      setError('Please enter a prompt')
       return
     }
 
@@ -747,25 +713,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     setOutputUrl(null)
     setProgress(undefined)
 
-    // Folder-mention refs append to whatever the user wired into the
-    // pink reference-in handle. Local mentions are authoritative; @tags
-    // appearing only in the compiled prompt (e.g. forwarded by a connected
-    // prompt-node) fall back to "use every asset in the matched folder".
-    //
-    // compileMentionsForModel rewrites the prompt so each @FolderTag is
-    // replaced with the citation the target model understands and groups
-    // every mention's URLs so the server can build per-subject elements
-    // for element-based models (Kling v3). Wired pink-handle refs occupy
-    // the leading element/slot positions; folder mentions start after.
-    const compiled = compileMentionsForModel(
-      compiledPrompt,
-      mentions,
-      folders,
-      currentModel,
-      connectedReferenceUrls.length,
-    )
-    const wiredGroups = connectedReferenceUrls.map((url) => ({ urls: [url] }))
-    const referenceGroups = [...wiredGroups, ...compiled.refGroups]
+    const referenceGroups = connectedReferenceUrls.map((url) => ({ urls: [url] }))
 
     // Models whose references go to a SEPARATE endpoint (Seedance 2.0's
     // reference-to-video) cannot also take a first/end frame — fal's
@@ -784,10 +732,9 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     }
 
     try {
-      // Topaz upscaler never takes a prompt — its API uses a `model`
-      // parameter (Proteus vs Starlight HQ) to pick the variant. Force
-      // empty so any stale prompt in node state doesn't leak through.
-      const submitPrompt = modelId === 'topaz-video-upscale' ? '' : compiled.prompt
+      // Topaz Standard is a plug-and-play video transform. Creative and
+      // ordinary generation models use the resolved Text-node prompt.
+      const submitPrompt = isUpscalerStandard ? '' : compiledPrompt
 
       // Send RAW settings; the server builds the model-specific payload.
       const body = JSON.stringify({
@@ -918,11 +865,6 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
             position: { x: baseX + col * colGap, y: baseY + row * rowGap },
             data: {
               ...restData,
-              // Local prompt only — incoming edges are mirrored below so
-              // the upstream chain still feeds in at generate time.
-              // Storing the merged compiledPrompt here would double-apply
-              // the upstream every cycle and the text would grow.
-              prompt,
               pendingRequestId: res.request_id,
               pendingProvider: res.provider || currentModel.provider,
               pendingProviderModel: res.model || currentModel.providerModel,
@@ -960,6 +902,9 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     [currentModel, numVideos, duration],
   )
   const generateTooltip = useMemo(() => {
+    const isUpscalerStandard = modelId === 'topaz-video-upscale' && upscaleMode === 'standard'
+    if (!isUpscalerStandard && !resolvedPrompt.connected) return 'Connect a Text node first'
+    if (!isUpscalerStandard && !resolvedPrompt.prompt) return 'Enter text in the connected Text node'
     if (!currentModel) return 'Generate video'
     if (blockedNoFirstFrame) {
       return `${currentModel?.name} needs a first frame when references are connected — wire an image into the blue First frame handle.`
@@ -967,7 +912,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     const label = `Generate ${numVideos} video${numVideos === 1 ? '' : 's'}`
     if (!costEstimate.isKnown) return `${label}\n(price not estimated for this model)`
     return `${label}\nEstimated cost: ~${formatUSD(costEstimate.total)} (${formatUSD(costEstimate.perUnit)} each).\nReal cost depends on resolution, duration and model load.`
-  }, [currentModel, numVideos, costEstimate, blockedNoFirstFrame])
+  }, [blockedNoFirstFrame, costEstimate, currentModel, modelId, numVideos, resolvedPrompt.connected, resolvedPrompt.prompt, upscaleMode])
   const requestGenerate = () => {
     if (costEstimate.isKnown && costEstimate.total >= COST_CONFIRM_THRESHOLD_USD) {
       const msg =
@@ -1137,7 +1082,8 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       >
         {/* Preview area */}
         <div
-          className="min-h-[220px] bg-[#0a0c0f] flex items-center justify-center relative"
+          className="bg-[#0a0c0f] flex items-center justify-center relative overflow-hidden"
+          style={{ aspectRatio: String(parseAspectRatio(aspectRatio, currentModel?.defaultAspectRatio || '16:9')) }}
         >
           {outputUrl ? (
             <video
@@ -1154,10 +1100,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
                 e.stopPropagation()
                 setLightboxOpen(true)
               }}
-              className="w-full h-full object-contain cursor-zoom-in"
+              className="w-full h-full object-cover cursor-zoom-in"
             />
           ) : (
-            <div className="flex flex-col items-center gap-2">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
               {isGenerating ? (
                 <>
                   <CircleNotch size={24} className="animate-spin text-accent/60" />
@@ -1184,27 +1130,11 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           )}
         </div>
 
-        {/* Prompt input. @-mention any folder (Character/Prop/Location/General)
-            to attach its assets as references at generate time. Hidden for
-            the Topaz upscaler entirely — Topaz's API takes a model param
-            ('Proteus' for Standard, 'Starlight HQ' for Creative), not a
-            prompt, so showing the field would be misleading in either mode. */}
-        {modelId !== 'topaz-video-upscale' && (
-          <div className="px-3 pt-3 pb-2">
-            <MentionTextarea
-              value={prompt}
-              mentions={mentions}
-              onChange={(text, ms) => {
-                syncGuardRef.current.beginUserEdit()
-                setPrompt(text)
-                setMentions(ms)
-              }}
-              folders={folders}
-              placeholder="Describe the video — type @ to reference a folder…"
-              disabled={isGenerating}
-              className="nodrag w-full bg-transparent resize-none outline-none text-[12px] text-foreground/90 placeholder:text-muted-foreground/40 leading-relaxed disabled:opacity-50 cursor-text"
-              rows={2}
-            />
+        {(modelId !== 'topaz-video-upscale' || upscaleMode === 'creative') && (
+          <div className="px-3 pt-2 text-[10px] font-mono text-muted-foreground/60">
+            {resolvedPrompt.connected
+              ? resolvedPrompt.prompt || 'Enter text in the connected Text node'
+              : 'Connect a Text node first'}
           </div>
         )}
 
@@ -1418,16 +1348,12 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           ) : (
             <button
               onClick={requestGenerate}
-              // Upscalers are video-in, not prompt-in — the "needs a prompt or
-              // a connected prompt node" check would always reject them. A
-              // connected video on video-in is the upscaler's equivalent
-              // readiness signal.
               disabled={
                 isGenerating ||
                 blockedNoFirstFrame ||
-                (modelId === 'topaz-video-upscale'
+                (modelId === 'topaz-video-upscale' && upscaleMode === 'standard'
                   ? !hasConnectedVideo
-                  : !prompt.trim() && !hasConnectedPrompts)
+                  : !resolvedPrompt.connected || !resolvedPrompt.prompt)
               }
               className="w-6 h-6 rounded-full bg-accent/20 hover:bg-accent text-accent hover:text-accent-foreground flex items-center justify-center transition-colors accent-glow disabled:opacity-50 disabled:cursor-not-allowed"
               title={generateTooltip}
@@ -1438,25 +1364,6 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
         </div>
       </div>
 
-      {/* Resize handle - quarter circle arc hugging the corner */}
-      <div
-        className="nodrag absolute opacity-0 group-hover:opacity-100 transition-opacity cursor-se-resize"
-        style={{ bottom: -10, right: -10 }}
-        onMouseDown={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-          // TODO: Add resize logic if needed
-        }}
-      >
-        <svg width="28" height="28" viewBox="0 0 28 28">
-          <path
-            d="M 0 28 A 28 28 0 0 0 28 0"
-            fill="none"
-            stroke="rgba(255,255,255,0.5)"
-            strokeWidth="2"
-          />
-        </svg>
-      </div>
     </div>
   )
 }

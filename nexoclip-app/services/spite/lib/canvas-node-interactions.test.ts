@@ -10,8 +10,9 @@ import {
 } from './canvas-node-interactions'
 
 const nodes: Node[] = [
-  { id: 'prompt-a', type: 'prompt', position: { x: 0, y: 0 }, data: { prompt: ' alpha ' } },
-  { id: 'prompt-b', type: 'prompt', position: { x: 0, y: 0 }, data: { prompt: ' beta ' } },
+  { id: 'prompt-a', type: 'prompt', position: { x: 0, y: 0 }, data: { text: ' alpha ' } },
+  { id: 'prompt-b', type: 'prompt', position: { x: 0, y: 0 }, data: { text: ' beta ' } },
+  { id: 'prompt-empty', type: 'prompt', position: { x: 0, y: 0 }, data: { text: '   ' } },
   { id: 'image-1', type: 'image', position: { x: 50, y: 75 }, data: {} },
   { id: 'image-2', type: 'image', position: { x: 12, y: 34 }, data: { sceneId: 'scene-2' } },
 ]
@@ -36,6 +37,20 @@ test('resolveIncomingPrompt uses the first prompt edge by ID', () => {
   })
 })
 
+test('resolveIncomingPrompt reports no connection without a prompt edge', () => {
+  assert.deepEqual(resolveIncomingPrompt('image-1', nodes, []), {
+    connected: false,
+    prompt: '',
+  })
+})
+
+test('resolveIncomingPrompt reports a connected empty Text node', () => {
+  assert.deepEqual(resolveIncomingPrompt('image-1', nodes, [{ ...edgeA, source: 'prompt-empty' }]), {
+    connected: true,
+    prompt: '',
+  })
+})
+
 test('resolveIncomingPrompt ignores non-prompt source nodes', () => {
   assert.deepEqual(resolveIncomingPrompt('image-1', nodes, [{ ...edgeA, source: 'image-2' }]), {
     connected: false,
@@ -43,12 +58,23 @@ test('resolveIncomingPrompt ignores non-prompt source nodes', () => {
   })
 })
 
-test('parseAspectRatio falls back for malformed values', () => {
-  assert.equal(parseAspectRatio('bad', '16:9'), 16 / 9)
+test('resolveIncomingPrompt ignores legacy edges without the prompt-in target', () => {
+  assert.deepEqual(resolveIncomingPrompt('image-1', nodes, [{ ...edgeA, targetHandle: null }]), {
+    connected: false,
+    prompt: '',
+  })
 })
 
-test('parseAspectRatio accepts positive numeric ratios', () => {
-  assert.equal(parseAspectRatio('4:3', '16:9'), 4 / 3)
+test('parseAspectRatio parses a landscape ratio', () => {
+  assert.equal(parseAspectRatio('16:9', '1:1'), 16 / 9)
+})
+
+test('parseAspectRatio parses a portrait ratio', () => {
+  assert.equal(parseAspectRatio('9:16', '1:1'), 9 / 16)
+})
+
+test('parseAspectRatio falls back for malformed values', () => {
+  assert.equal(parseAspectRatio('bad', '16:9'), 16 / 9)
 })
 
 test('clampNodeSize raises dimensions below their minimum bounds', () => {

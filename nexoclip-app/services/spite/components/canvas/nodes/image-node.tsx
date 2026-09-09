@@ -10,17 +10,15 @@ import { NodeActionToolbar } from './node-toolbar'
 import { ShotSelector, type ShotOption } from './shot-selector'
 import { useSceneShots } from './use-scene-shots'
 import { Lightbox } from '../lightbox'
-import { MentionTextarea, type Mention } from '../mention-textarea'
-import { useProjectFolders } from '@/hooks/use-project-folders'
 import { labelFromPrompt, DEFAULT_IMAGE_LABEL } from '@/lib/auto-name'
 import { getImageModels, getModelById, buildModelInput, type ModelConfig } from '@/lib/fal-models'
-import { compileMentionsForModel } from '@/lib/mention-prompt'
 import { estimateGenerationCost, formatUSD, COST_CONFIRM_THRESHOLD_USD } from '@/lib/fal-cost'
 import { resolveNodeMediaUrl } from '@/lib/node-media'
 import { completeGenerationNode } from '@/lib/generation-node'
 import { ConnectedInputs } from '../connected-inputs'
 import { useCanvasCollaboration } from '../canvas-collaboration'
 import { createLocalStateSyncGuard } from '@/lib/local-state-sync'
+import { parseAspectRatio, resolveIncomingPrompt } from '@/lib/canvas-node-interactions'
 
 const IMAGE_MODELS = getImageModels()
 
@@ -138,9 +136,6 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
   const params = useParams()
   // Route segment is [id], so the param is `id` (not `projectId`).
   const projectId = params.id as string
-  const [prompt, setPrompt] = useState((data.prompt as string) || '')
-  const [mentions, setMentions] = useState<Mention[]>((data.mentions as Mention[]) || [])
-  const { folders } = useProjectFolders(projectId)
   const [modelId, setModelId] = useState((data.modelId as string) || 'nano-banana-pro')
   const [aspectRatio, setAspectRatio] = useState((data.aspectRatio as string) || '')
   const [resolution, setResolution] = useState((data.resolution as string) || '')
@@ -166,10 +161,6 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
   )
   // The exact fal queue path to poll, as told to us by the submit response.
   const [providerModel, setProviderModel] = useState<string | null>(null)
-  const [imageAspect, setImageAspect] = useState<number | null>(null) // null = no image yet
-  const [nodeWidth, setNodeWidth] = useState<number>((data.width as number) || 320)
-  const [isResizing, setIsResizing] = useState(false)
-  const [showResizeHandle, setShowResizeHandle] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [isRenaming, setIsRenaming] = useState(false)
   const [labelDraft, setLabelDraft] = useState('')
@@ -178,7 +169,6 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
   // Set true to immediately stop polling (cancel / unmount), so an in-flight
   // status check can't reschedule itself or apply a late result.
   const stopRef = useRef(false)
-  const resizeStartRef = useRef<{ x: number; width: number } | null>(null)
   const { getEdges, getNodes } = useReactFlow()
   const { addEdges, addNodes, createNextShot, patchNodeData, replaceShot, updateNodeData } = useCanvasCollaboration()
   const updateNodeInternals = useUpdateNodeInternals()
@@ -192,53 +182,12 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     updateNodeData(id, updater)
   }, [id, updateNodeData])
   
-  // Check if there are any connected prompt nodes - compute fresh on each render
-  // Accept edges that either have targetHandle='prompt-in' OR no targetHandle (for backward compatibility)
-  let hasConnectedPrompts = false
-  try {
-    const edges = getEdges()
-    const allIncomingEdges = edges.filter(edge => edge.target === id)
-    const incomingPromptEdges = allIncomingEdges.filter(edge => 
-      edge.targetHandle === 'prompt-in' || edge.targetHandle === null || edge.targetHandle === undefined
-    )
-    hasConnectedPrompts = incomingPromptEdges.length > 0
-  } catch (err) {
-    console.log('Error checking connected prompts:', err)
-    hasConnectedPrompts = false
-  }
-
-  // Handle mouse move for resize
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsResizing(true)
-    resizeStartRef.current = { x: e.clientX, width: nodeWidth }
-    
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      if (!resizeStartRef.current) return
-      const delta = moveEvent.clientX - resizeStartRef.current.x
-      const newWidth = Math.max(240, Math.min(800, resizeStartRef.current.width + delta))
-      setNodeWidth(newWidth)
-    }
-    
-    const handleMouseUp = () => {
-      setIsResizing(false)
-      resizeStartRef.current = null
-      // Persist the width change
-      syncGuardRef.current.beginUserEdit()
-      patchPersistedNodeData({ width: nodeWidth })
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
-    
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-  }, [id, nodeWidth, patchNodeData])
+  // Prompt text is read from the connected Text node at render and again
+  // immediately before recovery/submission; this node never owns a prompt.
+  const resolvedPrompt = resolveIncomingPrompt(id, getNodes(), getEdges())
 
   useEffect(() => {
     const finishSync = syncGuardRef.current.beginPropSync()
-    setPrompt((data.prompt as string) || '')
-    setMentions((data.mentions as Mention[]) || [])
     setModelId((data.modelId as string) || 'nano-banana-pro')
     setAspectRatio((data.aspectRatio as string) || '')
     setResolution((data.resolution as string) || '')
@@ -246,18 +195,17 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     setStatus((data.status as GenerationStatus) || ((data.outputUrl as string | undefined) ? 'completed' : 'idle'))
     setError((data.error as string) || null)
     setSubmittedAt((data.submittedAt as number) || undefined)
-    setNodeWidth((data.width as number) || 320)
     setOutputUrl(resolveNodeMediaUrl({ outputUrl: data.outputUrl }) || null)
     queueMicrotask(finishSync)
-  }, [data.aspectRatio, data.error, data.mentions, data.modelId, data.numImages, data.outputUrl, data.prompt, data.resolution, data.status, data.submittedAt, data.width])
+  }, [data.aspectRatio, data.error, data.modelId, data.numImages, data.outputUrl, data.resolution, data.status, data.submittedAt])
 
   // Recover a result when the provider/R2 request succeeded but the browser
   // lost the submit response before it could attach the URL to this node.
   useEffect(() => {
     const since = data.submittedAt as number | undefined
-    if (outputUrl || !since || !prompt.trim()) return
+    if (outputUrl || !since || !resolvedPrompt.prompt) return
     let cancelled = false
-    const params = new URLSearchParams({ projectId, type: 'image', prompt, since: String(since) })
+    const params = new URLSearchParams({ projectId, type: 'image', prompt: resolvedPrompt.prompt, since: String(since) })
     fetch(withBasePath(`/api/generate/latest?${params}`))
       .then(res => res.ok ? res.json() : null)
       .then(result => {
@@ -372,8 +320,8 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
 
   // Persist state changes to node data
   useEffect(() => {
-    patchPersistedNodeData({ prompt, modelId, aspectRatio, resolution, numImages, outputUrl, mentions, status, error, submittedAt })
-  }, [aspectRatio, error, mentions, modelId, numImages, outputUrl, patchPersistedNodeData, prompt, resolution, status, submittedAt])
+    patchPersistedNodeData({ modelId, aspectRatio, resolution, numImages, outputUrl, status, error, submittedAt })
+  }, [aspectRatio, error, modelId, numImages, outputUrl, patchPersistedNodeData, resolution, status, submittedAt])
 
   // Auto-name: once a generation completes, replace the default
   // "Image Generator #N" label with the first few words of the prompt.
@@ -382,10 +330,10 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     if (!outputUrl) return
     const current = (data.label as string) || ''
     if (current && !DEFAULT_IMAGE_LABEL.test(current)) return
-    const derived = labelFromPrompt(prompt)
+    const derived = labelFromPrompt(resolvedPrompt.prompt)
     if (!derived || derived === current) return
     patchPersistedNodeData({ label: derived })
-  }, [data.label, outputUrl, patchPersistedNodeData, prompt])
+  }, [data.label, outputUrl, patchPersistedNodeData, resolvedPrompt.prompt])
 
   const handleRename = () => {
     setLabelDraft((data.label as string) || '')
@@ -424,7 +372,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
       return true
     }
     try {
-        const response = await fetch(withBasePath(`/api/generate/status?request_id=${reqId}&provider=${encodeURIComponent((data.pendingProvider as string) || currentModel?.provider || 'byteplus')}&model=${encodeURIComponent(providerId)}&projectId=${projectId}&nodeId=${encodeURIComponent(id)}&prompt=${encodeURIComponent(prompt)}`))
+        const response = await fetch(withBasePath(`/api/generate/status?request_id=${reqId}&provider=${encodeURIComponent((data.pendingProvider as string) || currentModel?.provider || 'byteplus')}&model=${encodeURIComponent(providerId)}&projectId=${projectId}&nodeId=${encodeURIComponent(id)}&prompt=${encodeURIComponent(resolvedPrompt.prompt)}`))
       const result = await response.json()
 
       // Cancelled while this request was in flight — drop the result.
@@ -457,8 +405,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
             const self = getNodes().find(n => n.id === id)
             const baseX = self?.position?.x ?? 0
             const baseY = self?.position?.y ?? 0
-            const w = (self?.data?.width as number) || nodeWidth || 320
-            const colGap = w + 40
+            const colGap = 360
             const rowGap = 520
             const cols = 3
             const stamp = Date.now()
@@ -471,7 +418,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
                 id: `${id}-v${stamp}-${idx}`,
                 type: 'imageGen',
                 position: { x: baseX + col * colGap, y: baseY + row * rowGap },
-                data: { ...restData, outputUrl: withBasePath(url), width: w },
+                data: { ...restData, outputUrl: withBasePath(url) },
               }
             })
             addNodes(newNodes as any)
@@ -561,7 +508,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
 
     try {
       const response = await fetch(
-        withBasePath(`/api/generate/status?request_id=${requestId}&provider=${encodeURIComponent((data.pendingProvider as string) || currentModel.provider)}&model=${encodeURIComponent(pollProvider)}&projectId=${projectId}&nodeId=${encodeURIComponent(id)}&prompt=${encodeURIComponent(prompt)}`),
+        withBasePath(`/api/generate/status?request_id=${requestId}&provider=${encodeURIComponent((data.pendingProvider as string) || currentModel.provider)}&model=${encodeURIComponent(pollProvider)}&projectId=${projectId}&nodeId=${encodeURIComponent(id)}&prompt=${encodeURIComponent(resolvedPrompt.prompt)}`),
       )
       const result = await response.json()
 
@@ -623,8 +570,15 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
   }
 
   const handleGenerate = async () => {
-    // Compile prompts from connected nodes and this node's prompt
-    let compiledPrompt = ''
+    const { connected, prompt: compiledPrompt } = resolveIncomingPrompt(id, getNodes(), getEdges())
+    if (!connected) {
+      setError('Connect a Text node first')
+      return
+    }
+    if (!compiledPrompt && !currentModel?.optionalPrompt) {
+      setError('Enter text in the connected Text node')
+      return
+    }
     let connectedImageUrl: string | null = null
     const connectedImageUrls: string[] = []
     let deadImageEdges = 0
@@ -632,12 +586,6 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     try {
       const edges = getEdges()
       const nodes = getNodes()
-      
-      // Get all edges where target is this node's "prompt-in" handle
-      // Accept edges without targetHandle for backward compatibility (old connections)
-      const incomingPromptEdges = edges.filter(
-        edge => edge.target === id && (edge.targetHandle === 'prompt-in' || !edge.targetHandle)
-      )
       
       // Get connected image input (from image-in handle on THIS node)
       const incomingImageEdges = edges.filter(
@@ -666,26 +614,8 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
         connectedImageUrl = connectedImageUrls[0] ?? null
       }
       
-      // Sort by the order edges were created (which is their index in the array)
-      // This preserves connection order
-      incomingPromptEdges.forEach((edge, index) => {
-        const sourceNode = nodes.find(n => n.id === edge.source)
-        // For PromptNode, text is stored in data.text; for other nodes, use data.prompt
-        const sourcePrompt = (sourceNode?.data?.text || sourceNode?.data?.prompt) as string | undefined
-        if (sourcePrompt && typeof sourcePrompt === 'string') {
-          if (index > 0) compiledPrompt += ' '
-          compiledPrompt += sourcePrompt.trim()
-        }
-      })
-      
-      // Add this node's prompt at the end
-      if (prompt.trim()) {
-        if (compiledPrompt) compiledPrompt += ' '
-        compiledPrompt += prompt.trim()
-      }
     } catch (error) {
-      console.error('Error compiling prompts:', error)
-      compiledPrompt = prompt.trim()
+      console.error('Error reading connected media:', error)
     }
 
     // Failsafe: an image cord is attached but its source has no image yet, so
@@ -700,11 +630,6 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
       return
     }
 
-    if (!compiledPrompt && !currentModel?.optionalPrompt) {
-      setError('Please enter a prompt')
-      return
-    }
-
     if (!currentModel) {
       setError('Please select a model')
       return
@@ -716,21 +641,8 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     setOutputUrl(null)
     setProgress(undefined)
 
-    // Folder-mention refs: every selected asset URL across all local
-    // @mentions, plus any @Folder tokens appearing in the compiled prompt
-    // (forwarded from a connected prompt-node — those use the folder's
-    // full asset list since the prompt-node has no per-asset picker).
-    //
-    // compileMentionsForModel returns ordered reference *groups* (one per
-    // mention) AND a prompt with each @FolderTag rewritten to the binding
-    // form the target model understands. For unsupported models the
-    // rewrite degrades to the plain folder name and no URLs are sent —
-    // tagging still works in the UI but only models with real reference
-    // support attach the images.
-    //
-    // For image_urls-style image models (Nano Banana etc.) the first slot
-    // is reserved for the connected primary frame, so mentions start at
-    // slot 1 when connectedImageUrl is present.
+    // For image_urls-style models, the first connected image is the primary
+    // frame and additional connected image cords become reference groups.
     // How many image slots the connected cords already occupy. Models whose
     // image input is a LIST (image_urls) can carry every connected image;
     // single-slot (image_url) models can only take the first, and anything
@@ -742,13 +654,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
       currentModel?.imageParam === 'image_urls'
         ? (connectedImageUrl ? 1 : 0) + extraConnected.length
         : connectedImageUrl ? 1 : 0
-    const compiled = compileMentionsForModel(
-      compiledPrompt,
-      mentions,
-      folders,
-      currentModel,
-      usedSlots,
-    )
+    const compiled = { prompt: compiledPrompt, refGroups: [] as Array<{ urls: string[] }> }
 
     // Extra connected images go ahead of folder-mention refs (they're the more
     // explicit intent), then the mention groups keep their order.
@@ -879,8 +785,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
         const self = getNodes().find(nd => nd.id === id)
         const baseX = self?.position?.x ?? 0
         const baseY = self?.position?.y ?? 0
-        const w = (self?.data?.width as number) || nodeWidth || 320
-        const colGap = w + 40
+        const colGap = 360
         const rowGap = 520
         const cols = 3
         const stamp = Date.now()
@@ -895,14 +800,6 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
             position: { x: baseX + col * colGap, y: baseY + row * rowGap },
             data: {
               ...restData,
-              // Duplicates carry this node's LOCAL prompt only — the
-              // upstream chain is preserved by mirroring incoming edges
-              // below, so the next generation merges upstream + local
-              // again exactly like the original. Storing the merged
-              // compiledPrompt here would double-apply the upstream
-              // (upstream + (upstream + local) + …) and the text would
-              // grow every cycle.
-              prompt,
               outputUrl: res.output?.url ? withBasePath(res.output.url) : undefined,
               pendingRequestId: res.status === 'COMPLETED' ? undefined : res.request_id,
               pendingProvider: res.status === 'COMPLETED' ? undefined : (res.provider || currentModel.provider),
@@ -938,11 +835,13 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     [currentModel, numImages],
   )
   const generateTooltip = useMemo(() => {
+    if (!resolvedPrompt.connected) return 'Connect a Text node first'
+    if (!resolvedPrompt.prompt && !currentModel?.optionalPrompt) return 'Enter text in the connected Text node'
     if (!currentModel) return 'Generate image'
     const label = `Generate ${numImages} image${numImages === 1 ? '' : 's'}`
     if (!costEstimate.isKnown) return `${label}\n(price not estimated for this model)`
     return `${label}\nEstimated cost: ~${formatUSD(costEstimate.total)} (${formatUSD(costEstimate.perUnit)} each).\nReal cost depends on resolution and model load.`
-  }, [currentModel, numImages, costEstimate])
+  }, [currentModel, numImages, costEstimate, resolvedPrompt.connected, resolvedPrompt.prompt])
   const requestGenerate = () => {
     if (costEstimate.isKnown && costEstimate.total >= COST_CONFIRM_THRESHOLD_USD) {
       const msg =
@@ -991,10 +890,8 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
 
   return (
     <div 
-      className="relative group" 
-      style={{ width: nodeWidth }}
-      onMouseEnter={() => setShowResizeHandle(true)}
-      onMouseLeave={() => !isResizing && setShowResizeHandle(false)}
+      className="relative group"
+      style={{ width: 320 }}
     >
       <NodeActionToolbar
         nodeId={id}
@@ -1089,6 +986,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
         {/* Preview area - image displays at natural aspect ratio */}
         <div
           className="bg-[#0a0c0f] relative overflow-hidden"
+          style={{ aspectRatio: String(parseAspectRatio(aspectRatio, currentModel?.defaultAspectRatio || '1:1')) }}
           onDoubleClick={() => { if (outputUrl) setLightboxOpen(true) }}
         >
           {outputUrl ? (
@@ -1097,17 +995,13 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
               alt="Generated"
               loading="lazy"
               decoding="async"
-              className="w-full h-auto cursor-zoom-in"
-              onLoad={(e) => {
-                const img = e.target as HTMLImageElement
-                setImageAspect(img.naturalWidth / img.naturalHeight)
-              }}
+              className="w-full h-full object-cover cursor-zoom-in"
               onError={() => {
                 // Image failed to load - could be stale URL
               }}
             />
           ) : (
-            <div className="flex flex-col items-center justify-center gap-2 min-h-[220px]">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
               {isGenerating ? (
                 <>
                   <CircleNotch size={24} className="animate-spin text-accent/60" />
@@ -1126,23 +1020,10 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
           )}
         </div>
 
-        {/* Prompt input. @-mention any folder (Character/Prop/Location/General)
-            to attach its assets as references at generate time. */}
-        <div className="px-3 pt-3 pb-2">
-          <MentionTextarea
-            value={prompt}
-            mentions={mentions}
-            onChange={(text, ms) => {
-              syncGuardRef.current.beginUserEdit()
-              setPrompt(text)
-              setMentions(ms)
-            }}
-            folders={folders}
-            placeholder="Describe the image — type @ to reference a folder…"
-            disabled={isGenerating}
-            className="nodrag w-full bg-transparent resize-none outline-none text-[12px] text-foreground/90 placeholder:text-muted-foreground/40 leading-relaxed disabled:opacity-50 cursor-text"
-            rows={2}
-          />
+        <div className="px-3 pt-2 text-[10px] font-mono text-muted-foreground/60">
+          {resolvedPrompt.connected
+            ? resolvedPrompt.prompt || 'Enter text in the connected Text node'
+            : 'Connect a Text node first'}
         </div>
 
         {/* Controls - Dynamic based on model */}
@@ -1244,7 +1125,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
           ) : (
             <button
               onClick={requestGenerate}
-              disabled={isGenerating || (!prompt.trim() && !hasConnectedPrompts && !currentModel?.optionalPrompt)}
+              disabled={isGenerating || !resolvedPrompt.connected || (!resolvedPrompt.prompt && !currentModel?.optionalPrompt)}
               className="w-6 h-6 rounded-full bg-accent/20 hover:bg-accent text-accent hover:text-accent-foreground flex items-center justify-center transition-colors accent-glow disabled:opacity-50 disabled:cursor-not-allowed"
               title={generateTooltip}
             >
@@ -1254,23 +1135,6 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
         </div>
       </div>
 
-      {/* Resize handle - quarter circle arc hugging the corner */}
-      <div
-        className={`nodrag absolute transition-opacity duration-200 cursor-se-resize ${
-          showResizeHandle || isResizing ? 'opacity-100' : 'opacity-0'
-        }`}
-        style={{ bottom: -10, right: -10 }}
-        onMouseDown={handleResizeStart}
-      >
-        <svg width="28" height="28" viewBox="0 0 28 28">
-          <path
-            d="M 0 28 A 28 28 0 0 0 28 0"
-            fill="none"
-            stroke="rgba(255,255,255,0.5)"
-            strokeWidth="2"
-          />
-        </svg>
-      </div>
     </div>
   )
 }

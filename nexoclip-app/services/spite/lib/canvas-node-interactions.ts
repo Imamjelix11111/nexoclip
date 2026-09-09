@@ -18,7 +18,7 @@ export function resolveIncomingPrompt(nodeId: string, nodes: Node[], edges: Edge
     .sort((left, right) => left.id.localeCompare(right.id))[0]
   const source = edge && nodes.find((node) => node.id === edge.source && node.type === 'prompt')
 
-  return { connected: Boolean(source), prompt: String(source?.data.prompt ?? '').trim() }
+  return { connected: Boolean(source), prompt: String(source?.data.text ?? '').trim() }
 }
 
 export function parseAspectRatio(value: string, fallback: string): number {
