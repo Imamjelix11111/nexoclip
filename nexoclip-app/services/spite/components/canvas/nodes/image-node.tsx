@@ -49,11 +49,11 @@ function ControlSelect({
   }, [])
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="nodrag nopan relative">
       <button 
         onClick={() => !disabled && setOpen(!open)}
         disabled={disabled}
-        className="flex items-center gap-1 px-2 h-6 rounded-md bg-white/5 hover:bg-white/10 text-[10px] font-mono text-muted-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="nodrag nopan flex items-center gap-1 px-2 h-6 rounded-md bg-white/5 hover:bg-white/10 text-[10px] font-mono text-muted-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {value}
         <CaretDown size={8} weight="bold" />
@@ -64,7 +64,7 @@ function ControlSelect({
             <button
               key={opt.value}
               onClick={() => { onChange(opt.value); setOpen(false) }}
-              className={`w-full text-left px-3 py-1.5 text-[10px] font-mono hover:bg-white/10 transition-colors ${opt.value === value ? 'text-accent' : 'text-muted-foreground'}`}
+              className={`nodrag nopan w-full text-left px-3 py-1.5 text-[10px] font-mono hover:bg-white/10 transition-colors ${opt.value === value ? 'text-accent' : 'text-muted-foreground'}`}
             >
               {opt.label}
             </button>
@@ -894,9 +894,9 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
   const resolutionOptions = currentModel?.resolutions?.map(r => ({ value: r, label: r })) || []
 
   return (
-    <div 
+    <div
       className="relative group"
-      style={{ width: 320 }}
+      style={{ width: 360 }}
     >
       <NodeActionToolbar
         nodeId={id}
@@ -1024,8 +1024,10 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
             </div>
           )}
         </div>
+      </div>
 
-        <div className="px-3 pt-2 text-[10px] font-mono text-muted-foreground/60">
+      <div className="mt-2 rounded-xl border border-white/10 bg-[#0D0F12] px-3 pt-2 shadow-sm">
+        <div className="text-[10px] font-mono text-muted-foreground/60">
           {resolvedPrompt.connected
             ? resolvedPrompt.prompt || 'Enter text in the connected Text node'
             : 'Connect a Text node first'}
@@ -1078,6 +1080,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
                 onChange={(value) => {
                   syncGuardRef.current.beginUserEdit()
                   setAspectRatio(value)
+                  patchPersistedNodeData({ aspectRatio: value })
                 }}
                 disabled={isGenerating}
               />
