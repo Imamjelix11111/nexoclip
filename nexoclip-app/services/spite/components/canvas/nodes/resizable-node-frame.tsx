@@ -7,11 +7,22 @@ import { clampNodeSize } from '@/lib/canvas-node-interactions'
 
 type NodeData = Record<string, unknown>
 type NodeSize = { width: number; height: number }
+type ResizeSession = { pointerId: number; startX: number; startY: number; size: NodeSize }
 type NodeSizeBounds = {
   minWidth: number
   minHeight: number
   maxWidth: number
   maxHeight: number
+}
+
+export function createResizeSession(pointerId: number, startX: number, startY: number, size: NodeSize): ResizeSession {
+  return { pointerId, startX, startY, size }
+}
+
+export function finalizeResize(session: ResizeSession | null, pointerId: number, cancelled: boolean) {
+  if (!session || session.pointerId !== pointerId) return null
+
+  return { session: null, size: session.size, shouldPersist: !cancelled }
 }
 
 type ResizableNodeFrameProps = {
@@ -39,7 +50,7 @@ export function ResizableNodeFrame({
   }, bounds)
   const [size, setSize] = useState(sizeFromData)
   const sizeRef = useRef(sizeFromData)
-  const resizeRef = useRef<{ startX: number; startY: number; size: NodeSize } | null>(null)
+  const resizeRef = useRef<ResizeSession | null>(null)
 
   useEffect(() => {
     sizeRef.current = sizeFromData
@@ -49,13 +60,13 @@ export function ResizableNodeFrame({
   const startResize = (event: PointerEvent<HTMLDivElement>) => {
     event.preventDefault()
     event.stopPropagation()
-    resizeRef.current = { startX: event.clientX, startY: event.clientY, size: sizeRef.current }
+    resizeRef.current = createResizeSession(event.pointerId, event.clientX, event.clientY, sizeRef.current)
     event.currentTarget.setPointerCapture(event.pointerId)
   }
 
   const resize = (event: PointerEvent<HTMLDivElement>) => {
     const start = resizeRef.current
-    if (!start) return
+    if (!start || start.pointerId !== event.pointerId) return
     const nextSize = clampNodeSize({
       width: start.size.width + event.clientX - start.startX,
       height: start.size.height + event.clientY - start.startY,
@@ -65,12 +76,23 @@ export function ResizableNodeFrame({
   }
 
   const finishResize = (event: PointerEvent<HTMLDivElement>) => {
-    if (!resizeRef.current) return
-    resizeRef.current = null
+    const finalization = finalizeResize(resizeRef.current, event.pointerId, false)
+    if (!finalization) return
+
+    resizeRef.current = finalization.session
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
     patchNodeData(nodeId, sizeRef.current)
+  }
+
+  const cancelResize = (event: PointerEvent<HTMLDivElement>) => {
+    const finalization = finalizeResize(resizeRef.current, event.pointerId, true)
+    if (!finalization) return
+
+    resizeRef.current = finalization.session
+    sizeRef.current = finalization.size
+    setSize(finalization.size)
   }
 
   return (
@@ -82,6 +104,8 @@ export function ResizableNodeFrame({
         onPointerDown={startResize}
         onPointerMove={resize}
         onPointerUp={finishResize}
+        onPointerCancel={cancelResize}
+        onLostPointerCapture={cancelResize}
       >
         <svg className="absolute right-1 bottom-1" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
           <path d="M 1 9 L 9 1 M 5 9 L 9 5" stroke="rgba(255,255,255,0.5)" strokeWidth="1" />
