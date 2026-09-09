@@ -57,6 +57,7 @@ type InternalRequestInput = {
   projectId: string
   action: string
   body?: Record<string, unknown>
+  headers?: Record<string, string>
 }
 
 type InternalRequestFactoryOptions = {
@@ -97,7 +98,10 @@ export function createInternalRealtimeClient(options: InternalRequestFactoryOpti
 
     const response = await fetchFn(url, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        ...(input.headers ?? {}),
+      },
       body: JSON.stringify({
         ...payload,
         signature: signAuthorization(payload, secret),
@@ -147,8 +151,12 @@ export function createInternalRealtimeClient(options: InternalRequestFactoryOpti
         userId: input.userId,
         projectId: input.projectId,
         action: 'replace-document',
+        headers: {
+          'X-Canvas-Source': 'projection',
+        },
         body: {
           projection: input.projection,
+          source: 'projection',
         },
       })
     },
