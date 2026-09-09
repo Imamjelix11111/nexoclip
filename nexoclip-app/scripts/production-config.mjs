@@ -8,6 +8,7 @@ const requiredProduction = [
   'CANVAS_AUTH_HMAC_SECRET',
   'REALTIME_JWT_SECRET',
   'NEXOCLIP_INTERNAL_URL',
+  'NEXT_PUBLIC_REALTIME_URL',
 ];
 
 const PUBLIC_DATABASE_PATTERN = /(postgres(?:ql)?:\/\/|DATABASE_URL(?:_[A-Z0-9_]+)?|password=|sslmode=)/i;

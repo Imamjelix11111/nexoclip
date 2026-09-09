@@ -110,13 +110,16 @@ test('Docker context excludes secrets and Spite Dockerfile exposes Node 22 web/r
   assert.match(dockerfile, /^EXPOSE 3007$/m);
 });
 
-test('deploy script validates the host and runs migrations before startup', () => {
+test('deploy script validates the host and runs config + migrations before startup', () => {
   const script = read('scripts/deploy.sh');
   assert.match(script, /^#!\/usr\/bin\/env bash\nset -Eeuo pipefail/);
   assert.match(script, /uname -m/);
   assert.match(script, /x86_64\/AMD64/);
   assert.match(script, /stat -c '%a' \.env\.production/);
+  assert.match(script, /npm run config:check/);
   assert.match(script, /config --quiet/);
+  assert.ok(script.indexOf('npm run config:check') < script.indexOf('"${compose[@]}" config --quiet'));
+  assert.ok(script.indexOf('"${compose[@]}" config --quiet') < script.indexOf('run --rm nexoclip-migrate'));
   assert.ok(script.indexOf('"${compose[@]}" build') < script.indexOf('run --rm nexoclip-migrate'));
   assert.ok(script.indexOf('run --rm nexoclip-migrate') < script.indexOf('run --rm spite-realtime-migrate'));
   assert.ok(script.indexOf('run --rm spite-realtime-migrate') < script.indexOf('run --rm spite-ownership-migrate'));
@@ -151,21 +154,21 @@ test('Compose isolates databases, routes websocket traffic privately, and shares
 
   assert.match(blocks.nexoclip, /DATABASE_URL_NEXOCLIP: \$\{DATABASE_URL_NEXOCLIP\}/);
   assert.doesNotMatch(blocks.nexoclip, /DATABASE_URL_SPITE:/);
-  assert.match(blocks.nexoclip, /CANVAS_AUTH_URL: \$\{CANVAS_AUTH_URL:-http:\/\/spite-realtime:3007\/internal\/authorize\}/);
+  assert.match(blocks.nexoclip, /CANVAS_AUTH_URL: \$\{CANVAS_AUTH_URL:\?CANVAS_AUTH_URL is required\}/);
   assert.match(blocks.nexoclip, /CANVAS_AUTH_HMAC_SECRET: \$\{CANVAS_AUTH_HMAC_SECRET\}/);
-  assert.match(blocks.nexoclip, /REALTIME_JWT_SECRET: \$\{REALTIME_JWT_SECRET\}/);
+  assert.match(blocks.nexoclip, /REALTIME_JWT_SECRET: \$\{REALTIME_JWT_SECRET:\?REALTIME_JWT_SECRET is required\}/);
 
   assert.match(blocks.spite, /DATABASE_URL_SPITE: \$\{DATABASE_URL_SPITE\}/);
   assert.doesNotMatch(blocks.spite, /DATABASE_URL_NEXOCLIP:/);
-  assert.match(blocks.spite, /NEXOCLIP_INTERNAL_URL: \$\{NEXOCLIP_INTERNAL_URL:-http:\/\/nexoclip:3000\}/);
-  assert.match(blocks.spite, /CANVAS_AUTH_URL: \$\{CANVAS_AUTH_URL:-http:\/\/spite-realtime:3007\/internal\/authorize\}/);
+  assert.match(blocks.spite, /NEXOCLIP_INTERNAL_URL: \$\{NEXOCLIP_INTERNAL_URL:\?NEXOCLIP_INTERNAL_URL is required\}/);
+  assert.match(blocks.spite, /CANVAS_AUTH_URL: \$\{CANVAS_AUTH_URL:\?CANVAS_AUTH_URL is required\}/);
   assert.match(blocks.spite, /CANVAS_AUTH_HMAC_SECRET: \$\{CANVAS_AUTH_HMAC_SECRET\}/);
-  assert.match(blocks.spite, /NEXT_PUBLIC_REALTIME_URL: \$\{NEXT_PUBLIC_REALTIME_URL:-\/spite\/ws\}/);
+  assert.match(blocks.spite, /NEXT_PUBLIC_REALTIME_URL: \$\{NEXT_PUBLIC_REALTIME_URL:\?NEXT_PUBLIC_REALTIME_URL is required\}/);
 
   assert.match(blocks['spite-realtime'], /DATABASE_URL_SPITE: \$\{DATABASE_URL_SPITE\}/);
   assert.doesNotMatch(blocks['spite-realtime'], /DATABASE_URL_NEXOCLIP:/);
   assert.match(blocks['spite-realtime'], /PORT: 3007/);
-  assert.match(blocks['spite-realtime'], /REALTIME_JWT_SECRET: \$\{REALTIME_JWT_SECRET\}/);
+  assert.match(blocks['spite-realtime'], /REALTIME_JWT_SECRET: \$\{REALTIME_JWT_SECRET:\?REALTIME_JWT_SECRET is required\}/);
   assert.match(blocks['spite-realtime'], /CANVAS_AUTH_HMAC_SECRET: \$\{CANVAS_AUTH_HMAC_SECRET\}/);
   assert.match(blocks['spite-realtime'], /SPITE_REALTIME_MAX_QUEUED_UPDATES: \$\{SPITE_REALTIME_MAX_QUEUED_UPDATES:-256\}/);
   assert.match(blocks['spite-realtime'], /SPITE_REALTIME_MAX_QUEUED_BYTES: \$\{SPITE_REALTIME_MAX_QUEUED_BYTES:-524288\}/);

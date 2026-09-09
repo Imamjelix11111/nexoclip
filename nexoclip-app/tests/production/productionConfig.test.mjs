@@ -25,7 +25,6 @@ test('rejects missing realtime secrets and public database credentials without e
     DATABASE_URL_SPITE: 'postgres://user:pass@db.example/spite',
     MUAPI_API_KEY: 'secret-value',
     LOCAL_OBJECT_STORAGE_SECRET: 'development-only-change-me',
-    NEXT_PUBLIC_REALTIME_URL: 'postgres://public:public@db.example/spite',
     NEXT_PUBLIC_DATABASE_URL_SPITE: 'postgres://public:public@db.example/spite',
   });
 

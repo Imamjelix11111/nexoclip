@@ -9,6 +9,7 @@ cd "$(dirname "$0")/.."
 mode=$(stat -c '%a' .env.production)
 (( 10#$mode <= 600 )) || { echo ".env.production must be chmod 600." >&2; exit 1; }
 
+npm run config:check
 compose=(docker compose --env-file .env.production -f docker-compose.prod.yml)
 "${compose[@]}" config --quiet
 [[ "${1:-}" != "--pull" ]] || "${compose[@]}" pull --ignore-buildable
