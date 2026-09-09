@@ -67,7 +67,7 @@ export function resolveFollowTarget(
     : undefined
   const node = peer.selection?.nodeIds
     ?.map((nodeId) => nodes.find((node) => node.id === nodeId))
-    .find((node): node is Node => Boolean(node) && (!peerSceneId || node.data.sceneId === peerSceneId))
+    .find((node): node is Node => node !== undefined && (!peerSceneId || node.data.sceneId === peerSceneId))
   const sceneId = peerSceneId ?? (typeof node?.data.sceneId === 'string' ? node.data.sceneId : undefined)
   const point = peer.cursor ?? (node ? node.position : undefined)
 
