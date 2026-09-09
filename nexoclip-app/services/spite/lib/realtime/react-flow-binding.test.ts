@@ -15,6 +15,7 @@ import { LOCAL_REACT_FLOW_ORIGIN, createReactFlowBinding } from './react-flow-bi
 import {
   getOrCreateRealtimeCanvasRoom,
   releaseRealtimeCanvasRoom,
+  resolveRealtimeWebsocketUrl,
 } from '../../hooks/use-realtime-canvas'
 
 const PROJECT_ID = '550e8400-e29b-41d4-a716-446655440000'
@@ -188,6 +189,34 @@ test('binding writes local React Flow changes into Yjs while retaining hidden-sc
   assert.notEqual(latestSnapshot.nodes, snapshots[0].nodes)
 
   unsubscribe()
+  binding.destroy()
+})
+
+test('binding ignores repeated React Flow measurements and positions that do not change durable state', () => {
+  const doc = createCanvasDocument()
+  upsertNode(doc, {
+    id: 'measured-node',
+    type: 'prompt',
+    position: { x: 10, y: 20 },
+    width: 320,
+    height: 180,
+    data: { sceneId: 'scene-1' },
+  })
+
+  const binding = createReactFlowBinding(doc)
+  let documentUpdates = 0
+  doc.on('update', () => {
+    documentUpdates += 1
+  })
+
+  binding.applyNodeChanges([
+    { type: 'position', id: 'measured-node', position: { x: 10, y: 20 }, dragging: false },
+    { type: 'dimensions', id: 'measured-node', dimensions: { width: 320, height: 180 }, setAttributes: true },
+  ] as any)
+  binding.patchNodeData('measured-node', { sceneId: 'scene-1' })
+  binding.updateNodeData('measured-node', (data) => ({ ...data }))
+
+  assert.equal(documentUpdates, 0)
   binding.destroy()
 })
 
@@ -508,6 +537,36 @@ test('undo manager tracks only local binding origin', () => {
   assert.equal(projection.nodes.some((node) => node.id === 'remote-node'), true)
 
   binding.destroy()
+})
+
+test('resolveRealtimeWebsocketUrl prefers configured public realtime URL', () => {
+  const previous = process.env.NEXT_PUBLIC_REALTIME_URL
+  process.env.NEXT_PUBLIC_REALTIME_URL = 'ws://127.0.0.1:3008'
+
+  try {
+    assert.equal(
+      resolveRealtimeWebsocketUrl(new URL('http://localhost:3101/spite')),
+      'ws://127.0.0.1:3008/',
+    )
+  } finally {
+    if (previous === undefined) delete process.env.NEXT_PUBLIC_REALTIME_URL
+    else process.env.NEXT_PUBLIC_REALTIME_URL = previous
+  }
+})
+
+test('resolveRealtimeWebsocketUrl falls back to same-origin websocket path', () => {
+  const previous = process.env.NEXT_PUBLIC_REALTIME_URL
+  delete process.env.NEXT_PUBLIC_REALTIME_URL
+
+  try {
+    assert.equal(
+      resolveRealtimeWebsocketUrl(new URL('http://localhost:3101/spite')),
+      'ws://localhost:3101/spite/ws',
+    )
+  } finally {
+    if (previous === undefined) delete process.env.NEXT_PUBLIC_REALTIME_URL
+    else process.env.NEXT_PUBLIC_REALTIME_URL = previous
+  }
 })
 
 test('realtime room emits one awareness update per awareness event', () => {

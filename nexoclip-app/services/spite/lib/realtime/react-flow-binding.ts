@@ -457,15 +457,18 @@ function patchNodeRecord(doc: Y.Doc, nodeId: string, patch: NodePatch): void {
 
   if (isPosition(patch.position)) {
     if (Number.isFinite(Number(patch.position.x))) {
-      existing.set('positionX', Number(patch.position.x))
+      setOrDelete(existing, 'positionX', Number(patch.position.x))
     }
     if (Number.isFinite(Number(patch.position.y))) {
-      existing.set('positionY', Number(patch.position.y))
+      setOrDelete(existing, 'positionY', Number(patch.position.y))
     }
   }
 
   if (patch.data !== undefined) {
-    existing.set('data', ensureRecord(patch.data))
+    const nextData = ensureRecord(patch.data)
+    if (!jsonEqual(ensureRecord(existing.get('data')), nextData)) {
+      existing.set('data', nextData)
+    }
   }
 
   for (const [key, value] of Object.entries(patch)) {
@@ -504,7 +507,9 @@ function updateNodeDataRecord(doc: Y.Doc, nodeId: string, updater: NodeDataUpdat
       delete nextData[key]
     }
   }
-  existing.set('data', nextData)
+  if (!jsonEqual(currentData, nextData)) {
+    existing.set('data', nextData)
+  }
 }
 
 function replaceShotRecord(doc: Y.Doc, nodeId: string, shotId: string): void {
@@ -732,10 +737,12 @@ function buildEdgeMap(edge: EdgeInput): Y.Map<unknown> {
 
 function setOrDelete(map: Y.Map<unknown>, key: string, value: unknown): void {
   if (value === undefined) {
-    map.delete(key)
+    if (map.has(key)) map.delete(key)
     return
   }
-  map.set(key, value)
+  if (!Object.is(map.get(key), value)) {
+    map.set(key, value)
+  }
 }
 
 function ensureRecord(value: unknown): JsonRecord {
@@ -743,6 +750,24 @@ function ensureRecord(value: unknown): JsonRecord {
     return {}
   }
   return { ...(value as JsonRecord) }
+}
+
+function jsonEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true
+  if (typeof left !== 'object' || left === null || typeof right !== 'object' || right === null) {
+    return false
+  }
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left) && Array.isArray(right) &&
+      left.length === right.length && left.every((value, index) => jsonEqual(value, right[index]))
+  }
+
+  const leftRecord = left as JsonRecord
+  const rightRecord = right as JsonRecord
+  const leftKeys = Object.keys(leftRecord).filter((key) => leftRecord[key] !== undefined)
+  const rightKeys = Object.keys(rightRecord).filter((key) => rightRecord[key] !== undefined)
+  return leftKeys.length === rightKeys.length &&
+    leftKeys.every((key) => Object.hasOwn(rightRecord, key) && jsonEqual(leftRecord[key], rightRecord[key]))
 }
 
 function isPosition(value: unknown): value is Position {

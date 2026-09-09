@@ -84,6 +84,11 @@ const EDGE_TYPES: EdgeTypes = {
 // React Flow's edge memoization and re-renders all edges. One shared object
 // keeps the identity stable.
 const EDGE_STYLE = { stroke: '#aec3d2' } as const
+const DEFAULT_EDGE_OPTIONS = {
+  type: 'scissors',
+  style: EDGE_STYLE,
+  animated: false,
+} as const
 
 // Restores AND persists the viewport (pan + zoom) per-project via localStorage,
 // so a project reopens exactly where you left it. Lives in its own leaf so that
@@ -1306,11 +1311,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
               // upload completion, and mention-editor state live in the node
               // components; viewport culling unmounted them and lost those tasks.
               edgeTypes={EDGE_TYPES}
-              defaultEdgeOptions={{
-                type: 'scissors',
-                style: { stroke: '#6B8FA8', strokeWidth: 2 },
-                animated: false,
-              }}
+              defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
             >
               <Background
                 variant={BackgroundVariant.Dots}

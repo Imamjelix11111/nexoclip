@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict'
+import { randomUUID } from 'node:crypto'
 import test from 'node:test'
 
+import { Pool } from '@neondatabase/serverless'
 import { HocuspocusProvider } from '@hocuspocus/provider'
 import * as Y from 'yjs'
 
 import {
+  CURRENT_SCHEMA_VERSION,
   createCanvasDocument,
   deleteNode,
   patchNode,
@@ -12,15 +15,20 @@ import {
   upsertNode,
   type CanvasProjection,
 } from '../lib/realtime/document'
+import { applyRealtimeSchema } from '../scripts/migrate-realtime.mjs'
 import { issueRealtimeToken } from './auth'
-import type { DatabaseAdapter, QueryResult } from './db'
+import { createDatabaseAdapter, type DatabaseAdapter, type QueryResult } from './db'
+import { projectDocument as persistProjection } from './projector'
 import { ProjectRuntime, type ProjectRuntimeState } from './project-runtime'
 import { createRealtimeServer } from './server'
+import { YjsRepository } from './yjs-repository'
 
 const JWT_SECRET = 'jwt-secret'
 const CANVAS_AUTH_SECRET = 'canvas-secret'
 const PROJECT_ID = '550e8400-e29b-41d4-a716-446655440000'
 const OWNER_USER_ID = '550e8400-e29b-41d4-a716-446655440001'
+const databaseUrl = process.env.SPITE_TEST_DATABASE_URL
+const integrationSkip = databaseUrl ? undefined : 'SPITE_TEST_DATABASE_URL is not set'
 
 type LoadedProjectDocument = {
   doc: Y.Doc
@@ -51,6 +59,14 @@ type ProviderClient = {
     | { type: 'STATUS'; status: ProjectRuntimeState; projectId: string }
     | { type: 'ACK'; status: 'PERSISTED'; projectId: string; seq: number }
   >
+  getSyncCount(): number
+}
+
+type DatabaseIntegrationContext = {
+  pool: Pool
+  database: DatabaseAdapter
+  repository: YjsRepository
+  projectIds: string[]
 }
 
 type ProjectState = {
@@ -224,6 +240,16 @@ async function waitFor(predicate: () => boolean, timeoutMs = 2_500): Promise<voi
   }
 }
 
+async function waitForAsync(predicate: () => Promise<boolean>, timeoutMs = 2_500): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (!(await predicate())) {
+    if (Date.now() >= deadline) {
+      throw new Error('Timed out waiting for condition')
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+}
+
 function parseStatelessMessage(payload: string) {
   try {
     return JSON.parse(payload) as ProviderClient['statelessMessages'][number]
@@ -237,11 +263,13 @@ async function connectProvider({
   name,
   token,
   document = new Y.Doc(),
+  maxAttempts = 1,
 }: {
   url: string
   name: string
   token: string | (() => Promise<string>)
   document?: Y.Doc
+  maxAttempts?: number
 }): Promise<ProviderClient> {
   let syncedResolve!: () => void
   let outcomeResolve!: (value: 'authenticated' | 'authenticationFailed' | 'closed') => void
@@ -254,6 +282,7 @@ async function connectProvider({
     outcomeReject = reject
   })
   const statelessMessages: ProviderClient['statelessMessages'] = []
+  let syncCount = 0
 
   let settled = false
   const settle = (value: 'authenticated' | 'authenticationFailed' | 'closed') => {
@@ -275,7 +304,7 @@ async function connectProvider({
     initialDelay: 0,
     minDelay: 0,
     factor: 1,
-    maxAttempts: 1,
+    maxAttempts,
     jitter: false,
     messageReconnectTimeout: 2_000,
     onAuthenticated() {
@@ -288,7 +317,9 @@ async function connectProvider({
       settle('closed')
     },
     onSynced({ state }: { state: boolean }) {
-      if (state) syncedResolve()
+      if (!state) return
+      syncCount += 1
+      syncedResolve()
     },
     onStateless({ payload }: { payload: string }) {
       const parsed = parseStatelessMessage(payload)
@@ -302,7 +333,14 @@ async function connectProvider({
     outcomeReject(error)
   })
 
-  return { provider, document, synced, outcome, statelessMessages }
+  return {
+    provider,
+    document,
+    synced,
+    outcome,
+    statelessMessages,
+    getSyncCount: () => syncCount,
+  }
 }
 
 function findNode(doc: Y.Doc, nodeId: string) {
@@ -317,6 +355,32 @@ function findParticipantStates(provider: HocuspocusProvider, participantId: stri
 
 function setAwarenessState(client: ProviderClient, state: Record<string, unknown>): void {
   client.provider.awareness?.setLocalState(state)
+}
+
+function forceCloseProviderSocket(provider: HocuspocusProvider): boolean {
+  const websocketProvider = (provider as any).configuration?.websocketProvider
+  const candidates = [
+    websocketProvider?.webSocket,
+    websocketProvider?.websocket,
+    (provider as any).webSocket,
+    (provider as any).websocket,
+    (provider as any).websocketProvider?.webSocket,
+    (provider as any).websocketProvider?.websocket,
+  ]
+
+  for (const socket of candidates) {
+    if (!socket) continue
+    if (typeof socket.terminate === 'function') {
+      socket.terminate()
+      return true
+    }
+    if (typeof socket.close === 'function') {
+      socket.close()
+      return true
+    }
+  }
+
+  return false
 }
 
 function createRuntimeFactory(repository: InMemoryRealtimeRepository, overrides: Partial<ConstructorParameters<typeof ProjectRuntime>[0]['config']> = {}) {
@@ -349,11 +413,81 @@ function createRuntimeFactory(repository: InMemoryRealtimeRepository, overrides:
     })
 }
 
-test('real realtime collaboration converges across more than three clients for different-node, same-field, and delete/edit races', async () => {
+function createDatabaseRuntimeFactory(
+  repository: YjsRepository,
+  database: DatabaseAdapter,
+  overrides: Partial<ConstructorParameters<typeof ProjectRuntime>[0]['config']> = {},
+) {
+  return ({ projectId, doc, onStateChange }: { projectId: string; doc: Y.Doc; onStateChange?: (state: ProjectRuntimeState) => void }) =>
+    new ProjectRuntime({
+      projectId,
+      doc,
+      repository,
+      projectDocument: async (targetProjectId, projection, targetSeq) => {
+        await persistProjection(targetProjectId, projection, targetSeq, { database })
+      },
+      onStateChange,
+      random: () => 0,
+      config: {
+        batchWindowMs: 0,
+        retryBaseMs: 10,
+        retryMaxMs: 10,
+        retryJitterRatio: 0,
+        projectionDebounceMs: 0,
+        projectionRetryBaseMs: 10,
+        projectionRetryMaxMs: 10,
+        snapshotIdleMs: 0,
+        snapshotIntervalMs: 0,
+        compactAfterUpdates: 10_000,
+        compactAfterBytes: 10_000_000,
+        maxQueuedUpdates: 64,
+        maxQueuedBytes: 1_000_000,
+        ...overrides,
+      },
+    })
+}
+
+function databaseIntegrationTest(
+  name: string,
+  fn: (context: DatabaseIntegrationContext) => Promise<void>,
+): void {
+  test(name, { skip: integrationSkip }, async () => {
+    assert.ok(databaseUrl)
+    await applyRealtimeSchema({ databaseUrl })
+
+    const pool = new Pool({ connectionString: databaseUrl })
+    const database = createDatabaseAdapter({ pool, ownsPool: false })
+    const repository = new YjsRepository({ database })
+    const projectIds: string[] = []
+
+    try {
+      await fn({ pool, database, repository, projectIds })
+    } finally {
+      for (const projectId of projectIds.reverse()) {
+        await pool.query('DELETE FROM projects WHERE id = $1', [projectId])
+      }
+      await pool.end()
+    }
+  })
+}
+
+test('real realtime collaboration converges across more than three clients for existing-node moves, same-field winner, and delete/edit races; then survives in-memory restart', async () => {
   const repository = new InMemoryRealtimeRepository()
   repository.setOwner(PROJECT_ID, OWNER_USER_ID)
 
   const seeded = createCanvasDocument()
+  upsertNode(seeded, {
+    id: 'move-node-a',
+    type: 'prompt',
+    position: { x: 1, y: 2 },
+    data: { label: 'A' },
+  })
+  upsertNode(seeded, {
+    id: 'move-node-b',
+    type: 'prompt',
+    position: { x: 3, y: 4 },
+    data: { label: 'B' },
+  })
   upsertNode(seeded, {
     id: 'shared-node',
     type: 'prompt',
@@ -368,9 +502,9 @@ test('real realtime collaboration converges across more than three clients for d
   })
   repository.seedProject(PROJECT_ID, seeded)
 
-  const server = createRealtimeServer({
+  const createServer = (port = 0) => createRealtimeServer({
     address: '127.0.0.1',
-    port: 0,
+    port,
     env: {
       REALTIME_TOKEN_SECRET: JWT_SECRET,
       CANVAS_AUTH_SECRET,
@@ -380,7 +514,9 @@ test('real realtime collaboration converges across more than three clients for d
     createRuntime: createRuntimeFactory(repository),
   })
 
+  let server = createServer()
   await server.listen()
+  const restartPort = Number(new URL(server.wsUrl).port)
   const token = (await issueRealtimeToken({ userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
   const clients = await Promise.all([
     connectProvider({ url: server.wsUrl, name: roomName(), token }),
@@ -394,21 +530,16 @@ test('real realtime collaboration converges across more than three clients for d
     await Promise.all(clients.map((client) => client.synced))
     assert.equal(server.getConnectionCount(), 5)
 
-    upsertNode(clients[0].document, {
-      id: 'alpha-node',
-      type: 'image',
-      position: { x: 101, y: 201 },
-      data: { label: 'alpha' },
-    })
-    upsertNode(clients[1].document, {
-      id: 'beta-node',
-      type: 'video',
-      position: { x: 202, y: 303 },
-      data: { label: 'beta' },
-    })
+    patchNode(clients[0].document, 'move-node-a', { positionX: 101, positionY: 201 })
+    patchNode(clients[1].document, 'move-node-b', { positionX: 202, positionY: 303 })
 
-    await waitFor(() => clients.every((client) => !!findNode(client.document, 'alpha-node')))
-    await waitFor(() => clients.every((client) => !!findNode(client.document, 'beta-node')))
+    await waitFor(() => {
+      return clients.every((client) => {
+        const a = findNode(client.document, 'move-node-a')
+        const b = findNode(client.document, 'move-node-b')
+        return a?.position.x === 101 && a.position.y === 201 && b?.position.x === 202 && b.position.y === 303
+      })
+    })
 
     patchNode(clients[2].document, 'shared-node', { type: 'image' })
     patchNode(clients[3].document, 'shared-node', { type: 'video' })
@@ -417,22 +548,40 @@ test('real realtime collaboration converges across more than three clients for d
       const types = clients.map((client) => findNode(client.document, 'shared-node')?.type)
       return types.every((type) => type === types[0] && (type === 'image' || type === 'video'))
     })
+    const sharedWinner = findNode(clients[0].document, 'shared-node')?.type
 
     deleteNode(clients[1].document, 'race-node')
     patchNode(clients[4].document, 'race-node', { data: { label: 'after' } })
 
     await waitFor(() => clients.every((client) => !findNode(client.document, 'race-node')))
 
-    const finalProjection = readCanvasProjection(clients[0].document)
-    assert.equal(finalProjection.nodes.some((node) => node.id === 'alpha-node'), true)
-    assert.equal(finalProjection.nodes.some((node) => node.id === 'beta-node'), true)
-    assert.equal(finalProjection.nodes.some((node) => node.id === 'race-node'), false)
-    assert.ok(['image', 'video'].includes(findNode(clients[0].document, 'shared-node')?.type ?? ''))
-  } finally {
     for (const client of clients) {
       client.provider.destroy()
     }
     await waitFor(() => server.getConnectionCount() === 0)
+    await server.destroy()
+
+    server = createServer(restartPort)
+    await server.listen()
+
+    const restarted = await connectProvider({ url: server.wsUrl, name: roomName(), token })
+    try {
+      await restarted.synced
+      const restartedProjection = readCanvasProjection(restarted.document)
+      assert.equal(findNode(restarted.document, 'move-node-a')?.position.x, 101)
+      assert.equal(findNode(restarted.document, 'move-node-a')?.position.y, 201)
+      assert.equal(findNode(restarted.document, 'move-node-b')?.position.x, 202)
+      assert.equal(findNode(restarted.document, 'move-node-b')?.position.y, 303)
+      assert.equal(findNode(restarted.document, 'shared-node')?.type, sharedWinner)
+      assert.equal(restartedProjection.nodes.some((node) => node.id === 'race-node'), false)
+    } finally {
+      restarted.provider.destroy()
+      await waitFor(() => server.getConnectionCount() === 0)
+    }
+  } finally {
+    for (const client of clients) {
+      client.provider.destroy()
+    }
     await server.destroy()
   }
 })
@@ -479,14 +628,22 @@ test('same-user sockets get separate participant identities and disconnect clean
     await waitFor(() => findParticipantStates(observer.provider, 'shared-participant').length === 2)
     const participantStates = findParticipantStates(observer.provider, 'shared-participant')
     const names = participantStates.map((state) => state.name).sort()
+    const survivingAlpha = participantStates.find(
+      (state) => state.cursor?.x === 1 && state.cursor?.y === 2,
+    )
 
     assert.deepEqual(names, ['Guest 1', 'Guest 2'])
     assert.equal(participantStates.every((state) => state.userId === OWNER_USER_ID), true)
+    assert.ok(survivingAlpha)
 
     beta.provider.destroy()
     await waitFor(() => server.getConnectionCount() === 2)
     await waitFor(() => findParticipantStates(observer.provider, 'shared-participant').length === 1)
-    assert.equal(findParticipantStates(observer.provider, 'shared-participant')[0]?.name, 'Guest 1')
+
+    const remainingState = findParticipantStates(observer.provider, 'shared-participant')[0]
+    assert.equal(remainingState?.name, survivingAlpha.name)
+    assert.deepEqual(remainingState?.cursor, { x: 1, y: 2 })
+    assert.equal(remainingState?.userId, OWNER_USER_ID)
   } finally {
     alpha.provider.destroy()
     observer.provider.destroy()
@@ -495,14 +652,14 @@ test('same-user sockets get separate participant identities and disconnect clean
   }
 })
 
-test('provider async JWT callback runs again on reconnect', async () => {
+test('same provider reconnects after forced socket/server closes, reruns async JWT callback, and resumes sync', async () => {
   const repository = new InMemoryRealtimeRepository()
   repository.setOwner(PROJECT_ID, OWNER_USER_ID)
   repository.seedProject(PROJECT_ID, createCanvasDocument())
 
-  const server = createRealtimeServer({
+  const createServer = (port = 0) => createRealtimeServer({
     address: '127.0.0.1',
-    port: 0,
+    port,
     env: {
       REALTIME_TOKEN_SECRET: JWT_SECRET,
       CANVAS_AUTH_SECRET,
@@ -512,7 +669,9 @@ test('provider async JWT callback runs again on reconnect', async () => {
     createRuntime: createRuntimeFactory(repository),
   })
 
+  let server = createServer()
   await server.listen()
+  const restartPort = Number(new URL(server.wsUrl).port)
 
   let tokenCalls = 0
   const token = async () => {
@@ -520,32 +679,56 @@ test('provider async JWT callback runs again on reconnect', async () => {
     return (await issueRealtimeToken({ userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
   }
 
-  const first = await connectProvider({
+  const client = await connectProvider({
     url: server.wsUrl,
     name: roomName(),
     token,
+    maxAttempts: 200,
   })
 
   try {
-    await first.synced
+    await client.synced
     await waitFor(() => tokenCalls === 1)
 
-    first.provider.destroy()
-    await waitFor(() => server.getConnectionCount() === 0)
+    const socketClosed = forceCloseProviderSocket(client.provider)
+    assert.equal(socketClosed, true)
+    await waitFor(() => tokenCalls >= 2)
+    await waitFor(() => client.getSyncCount() >= 2)
+    await waitFor(() => server.getConnectionCount() === 1)
 
-    const second = await connectProvider({
+    await server.destroy()
+
+    server = createServer(restartPort)
+    await server.listen()
+
+    await waitFor(() => tokenCalls >= 3)
+    await waitFor(() => server.getConnectionCount() === 1)
+    await waitFor(() => client.getSyncCount() >= 3)
+
+    upsertNode(client.document, {
+      id: 'reconnected-node',
+      type: 'prompt',
+      position: { x: 77, y: 88 },
+      data: { label: 'reconnected' },
+    })
+
+    await waitFor(() => repository.getDurableSeq(PROJECT_ID) >= 1)
+
+    const verifier = await connectProvider({
       url: server.wsUrl,
       name: roomName(),
-      token,
+      token: (await issueRealtimeToken({ userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token,
     })
     try {
-      await second.synced
-      await waitFor(() => tokenCalls >= 2)
+      await verifier.synced
+      await waitFor(() => !!findNode(verifier.document, 'reconnected-node'))
     } finally {
-      second.provider.destroy()
-      await waitFor(() => server.getConnectionCount() === 0)
+      verifier.provider.destroy()
+      await waitFor(() => server.getConnectionCount() === 1)
     }
   } finally {
+    client.provider.destroy()
+    await waitFor(() => server.getConnectionCount() === 0)
     await server.destroy()
   }
 })
@@ -619,6 +802,82 @@ test('hard restart rehydrates from snapshot plus updates and catches projection 
   }
 })
 
+databaseIntegrationTest('DB-backed hard restart rehydrates from snapshot plus updates and catches projection lag up to durable seq', async ({
+  pool,
+  database,
+  repository,
+  projectIds,
+}) => {
+  const projectId = await createProject(pool, { userId: OWNER_USER_ID })
+  projectIds.push(projectId)
+
+  const createServer = () => createRealtimeServer({
+    address: '127.0.0.1',
+    port: 0,
+    env: {
+      REALTIME_TOKEN_SECRET: JWT_SECRET,
+      CANVAS_AUTH_SECRET,
+    },
+    repository,
+    database: new FakeAuthorizationDatabase(),
+    createRuntime: createDatabaseRuntimeFactory(repository, database),
+  })
+
+  let server = createServer()
+  await server.listen()
+  const token = (await issueRealtimeToken({ userId: OWNER_USER_ID, projectId }, JWT_SECRET)).token
+  const first = await connectProvider({ url: server.wsUrl, name: roomName(projectId), token })
+
+  try {
+    await first.synced
+
+    upsertNode(first.document, {
+      id: 'snapshotted-node',
+      type: 'prompt',
+      position: { x: 10, y: 10 },
+      data: { label: 'snapshot' },
+    })
+    await waitFor(() => first.statelessMessages.some((message) => message.type === 'ACK' && message.seq === 1))
+    await repository.compact(projectId, Y.encodeStateAsUpdate(first.document), 1, CURRENT_SCHEMA_VERSION)
+
+    upsertNode(first.document, {
+      id: 'tail-node',
+      type: 'image',
+      position: { x: 20, y: 20 },
+      data: { label: 'tail' },
+    })
+    await waitFor(() => first.statelessMessages.some((message) => message.type === 'ACK' && message.seq === 2))
+    await pool.query('UPDATE canvas_yjs_documents SET projected_seq = 0 WHERE project_id = $1', [projectId])
+
+    first.provider.destroy()
+    await waitFor(() => server.getConnectionCount() === 0)
+    await server.destroy()
+
+    server = createServer()
+    await server.listen()
+
+    const restarted = await connectProvider({ url: server.wsUrl, name: roomName(projectId), token })
+    try {
+      await restarted.synced
+      await waitFor(() => !!findNode(restarted.document, 'snapshotted-node'))
+      await waitFor(() => !!findNode(restarted.document, 'tail-node'))
+      await waitForAsync(async () => {
+        const state = await loadDocumentState(pool, projectId)
+        return state.durableSeq === 2 && state.projectedSeq === 2
+      })
+
+      assert.equal(findNode(restarted.document, 'snapshotted-node')?.data.label, 'snapshot')
+      assert.equal(findNode(restarted.document, 'tail-node')?.data.label, 'tail')
+      assert.deepEqual(await loadProjectedNodeIds(pool, projectId), ['snapshotted-node', 'tail-node'])
+    } finally {
+      restarted.provider.destroy()
+      await waitFor(() => server.getConnectionCount() === 0)
+    }
+  } finally {
+    await server.destroy()
+  }
+})
+
 test('persistence outage degrades to bounded read-only and recovers back to persisted writable collaboration', async () => {
   const repository = new InMemoryRealtimeRepository()
   repository.setOwner(PROJECT_ID, OWNER_USER_ID)
@@ -643,7 +902,7 @@ test('persistence outage degrades to bounded read-only and recovers back to pers
   await server.listen()
   const token = (await issueRealtimeToken({ userId: OWNER_USER_ID, projectId: PROJECT_ID }, JWT_SECRET)).token
   const first = await connectProvider({ url: server.wsUrl, name: roomName(), token })
-  const second = await connectProvider({ url: server.wsUrl, name: roomName(), token })
+  let second = await connectProvider({ url: server.wsUrl, name: roomName(), token })
 
   try {
     await Promise.all([first.synced, second.synced])
@@ -674,6 +933,18 @@ test('persistence outage degrades to bounded read-only and recovers back to pers
     await new Promise((resolve) => setTimeout(resolve, 100))
     assert.equal(findNode(first.document, 'blocked-3'), undefined)
 
+    const blockedVisibleLocally = !!findNode(second.document, 'blocked-3')
+    assert.equal(first.statelessMessages.some((message) => message.type === 'STATUS' && message.status === 'READ_ONLY'), true)
+    assert.equal(second.statelessMessages.some((message) => message.type === 'STATUS' && message.status === 'READ_ONLY'), true)
+
+    if (blockedVisibleLocally) {
+      second.provider.destroy()
+      await waitFor(() => server.getConnectionCount() === 1)
+      second = await connectProvider({ url: server.wsUrl, name: roomName(), token })
+      await second.synced
+      assert.equal(findNode(second.document, 'blocked-3'), undefined)
+    }
+
     repository.appendFailuresRemaining = 0
     await waitFor(() => first.statelessMessages.some((message) => message.type === 'ACK' && message.seq === 1))
     await waitFor(() => first.statelessMessages.some((message) => message.type === 'STATUS' && message.status === 'SYNCED'))
@@ -699,3 +970,124 @@ test('persistence outage degrades to bounded read-only and recovers back to pers
     await server.destroy()
   }
 })
+
+async function loadDocumentState(
+  pool: Pool,
+  projectId: string,
+): Promise<{ snapshotSeq: number; durableSeq: number; projectedSeq: number }> {
+  const result = await pool.query<{
+    snapshot_seq: number | string
+    durable_seq: number | string
+    projected_seq: number | string
+  }>(
+    `
+      SELECT snapshot_seq, durable_seq, projected_seq
+      FROM canvas_yjs_documents
+      WHERE project_id = $1
+    `,
+    [projectId],
+  )
+
+  const row = result.rows[0]
+  assert.ok(row, `expected durable document for project ${projectId}`)
+  return {
+    snapshotSeq: Number(row.snapshot_seq),
+    durableSeq: Number(row.durable_seq),
+    projectedSeq: Number(row.projected_seq),
+  }
+}
+
+async function loadProjectedNodeIds(pool: Pool, projectId: string): Promise<string[]> {
+  const result = await pool.query<{ nodeid: string }>(
+    `
+      SELECT nodeId
+      FROM canvas_nodes
+      WHERE projectId = $1::text
+      ORDER BY nodeId ASC
+    `,
+    [projectId],
+  )
+
+  return result.rows.map((row) => row.nodeid)
+}
+
+async function createProject(
+  pool: Pool,
+  {
+    userId = randomUUID(),
+    scenes = [{ id: 'scene-1', name: 'Scene 1' }],
+    activeSceneId = 'scene-1',
+    legacyNodes = [],
+    legacyEdges = [],
+  }: {
+    userId?: string
+    scenes?: Array<{ id: string; name: string }>
+    activeSceneId?: string | null
+    legacyNodes?: Array<{
+      id: string
+      type: string
+      positionX: number
+      positionY: number
+      data: Record<string, unknown>
+    }>
+    legacyEdges?: Array<{
+      id: string
+      source: string
+      target: string
+      sourceHandle: string | null
+      targetHandle: string | null
+      animated: boolean
+      data: Record<string, unknown>
+    }>
+  } = {},
+): Promise<string> {
+  const projectId = randomUUID()
+
+  await pool.query(
+    `
+      INSERT INTO projects (id, userid, name, description, scenes, active_scene_id, createdat, updatedat)
+      VALUES ($1, $2, $3, '', $4::jsonb, $5, NOW(), NOW())
+    `,
+    [projectId, userId, `Project ${projectId}`, JSON.stringify(scenes), activeSceneId],
+  )
+
+  for (const node of legacyNodes) {
+    await pool.query(
+      `
+        INSERT INTO canvas_nodes (projectId, nodeId, type, position_x, position_y, data)
+        VALUES ($1::text, $2, $3, $4, $5, $6::jsonb)
+      `,
+      [projectId, node.id, node.type, node.positionX, node.positionY, JSON.stringify(node.data)],
+    )
+  }
+
+  for (const edge of legacyEdges) {
+    await pool.query(
+      `
+        INSERT INTO canvas_edges (
+          projectId,
+          edgeId,
+          source,
+          target,
+          sourceHandle,
+          targetHandle,
+          animated,
+          data
+        )
+        VALUES ($1::text, $2, $3, $4, $5, $6, $7, $8::jsonb)
+      `,
+      [
+        projectId,
+        edge.id,
+        edge.source,
+        edge.target,
+        edge.sourceHandle,
+        edge.targetHandle,
+        edge.animated,
+        JSON.stringify(edge.data),
+      ],
+    )
+  }
+
+  return projectId
+}

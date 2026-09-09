@@ -58,7 +58,7 @@ More at **[spite.run](https://spite.run)**.
 ## What it deliberately doesn't do
 
 - No video editing — SPITE is pre-production.
-- No real-time multi-user collaboration — single-user by design.
+- No cross-account multiplayer yet — realtime sync is currently scoped to your own account/tabs.
 - No automation that makes creative decisions for you.
 - No credit system, no markup, no subscription.
 

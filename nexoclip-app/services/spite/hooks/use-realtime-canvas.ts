@@ -228,6 +228,15 @@ export function parseRealtimeCanvasStatusMessage(
 }
 
 export function resolveRealtimeWebsocketUrl(locationLike = globalThis.location): string {
+  const configuredUrl = process.env.NEXT_PUBLIC_REALTIME_URL?.trim()
+  if (configuredUrl) {
+    try {
+      return new URL(configuredUrl).toString()
+    } catch {
+      // Fall back to the deployment's same-origin websocket proxy.
+    }
+  }
+
   if (!locationLike) {
     return withBasePath('/spite/ws')
   }
