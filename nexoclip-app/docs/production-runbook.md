@@ -81,6 +81,24 @@ If `config:check` fails, deployment must stop before any migration or `up`.
 
 Caddy should be the only service exposing host ports; internal services remain private on the Compose network.
 
+### Spite realtime operational commands
+
+From `nexoclip-app/services/spite/` on the deployment checkout:
+
+```bash
+rtk npm run realtime:migrate
+rtk npm run realtime:recover-projections
+```
+
+Use `realtime:migrate` before starting or re-starting `spite` / `spite-realtime` after schema changes.
+Use `realtime:recover-projections` when `canvas_yjs_documents.projected_seq` lags `durable_seq` after a projector/persistence incident; it rebuilds compatibility tables from the authoritative Yjs document.
+
+After either command, re-check:
+
+```bash
+rtk curl http://127.0.0.1:3007/healthz
+```
+
 ## 6) Secrets and examples
 
 - Keep real values only in `.env.production` (never commit it).

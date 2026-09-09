@@ -37,7 +37,7 @@ type RealtimeRepository = Pick<
 >
 
 type RealtimeRuntime = Pick<ProjectRuntime, 'enqueue'> &
-  Partial<Pick<ProjectRuntime, 'canAcceptMutation' | 'flush' | 'compact' | 'shutdown'>>
+  Partial<Pick<ProjectRuntime, 'canAcceptMutation' | 'flush' | 'compact' | 'shutdown' | 'scheduleProjection'>>
 
 type RuntimeFactory = (options: {
   projectId: string
@@ -244,6 +244,9 @@ export function createRealtimeServer(options: RealtimeServerOptions = {}): Realt
 
       rooms.set(context.projectId, room)
       applyRoomReadOnly(room, shuttingDown || !runtimeCanAcceptMutation(runtime))
+      if (loaded.projectedSeq < loaded.durableSeq && typeof runtime.scheduleProjection === 'function') {
+        runtime.scheduleProjection(loaded.durableSeq)
+      }
 
       return room.doc
     },
