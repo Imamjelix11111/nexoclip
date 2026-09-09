@@ -12,36 +12,102 @@ const serviceBlock = (compose, name, nextName) => {
   return compose.slice(start, end === -1 ? undefined : end);
 };
 
-test('production compose is AMD64 and exposes only Caddy', () => {
+const serviceBlocks = (compose, names) => Object.fromEntries(
+  names.map((name, index) => [name, serviceBlock(compose, name, names[index + 1])]),
+);
+
+function publicEnvLines(text) {
+  return text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('NEXT_PUBLIC_') || line.startsWith('ARG NEXT_PUBLIC_') || line.startsWith('ENV NEXT_PUBLIC_'));
+}
+
+test('production compose is AMD64 and exposes only Caddy plus declared private services', () => {
   const compose = read('docker-compose.prod.yml');
-  const names = ['caddy', 'redis', 'nexoclip-migrate', 'scheduler-migrate', 'vimax', 'ai-clip', 'nexoclip', 'spite', 'scheduler', 'storyboard-worker'];
-  names.forEach((name, index) => {
-    const block = serviceBlock(compose, name, names[index + 1]);
+  const names = [
+    'caddy',
+    'redis',
+    'nexoclip-migrate',
+    'scheduler-migrate',
+    'spite-realtime-migrate',
+    'spite-ownership-migrate',
+    'vimax',
+    'ai-clip',
+    'nexoclip',
+    'spite',
+    'spite-realtime',
+    'scheduler',
+    'storyboard-worker',
+  ];
+  const blocks = serviceBlocks(compose, names);
+
+  for (const [name, block] of Object.entries(blocks)) {
     assert.match(block, /platform: linux\/amd64/);
     if (name === 'caddy') assert.match(block, /ports:/);
     else assert.doesNotMatch(block, /\n\s+ports:/);
-  });
+  }
+
+  assert.match(blocks['spite-realtime'], /\n\s+expose:\n\s+- "3007"/);
+  assert.match(blocks['spite-realtime-migrate'], /target: migrate-realtime/);
+  assert.match(blocks['spite-ownership-migrate'], /target: node-runtime/);
 });
 
-test('deployment files and routes exist', () => {
-  for (const path of ['Caddyfile', '.dockerignore', '.env.production.example', 'services/spite/Dockerfile', 'services/free-ai-social-media-scheduler/Dockerfile', 'services/ai-clip/Dockerfile']) {
+test('deployment files, routes, and documented realtime env exist', () => {
+  for (const path of [
+    'Caddyfile',
+    '.dockerignore',
+    '.env.example',
+    '.env.production.example',
+    'services/spite/Dockerfile',
+    'services/free-ai-social-media-scheduler/Dockerfile',
+    'services/ai-clip/Dockerfile',
+  ]) {
     assert.equal(existsSync(path), true, `missing ${path}`);
   }
+
   const caddy = read('Caddyfile');
   assert.match(caddy, /handle_path \/ai-clip-api\/\*/);
+  assert.match(caddy, /handle \/spite\/ws\*/);
   assert.match(caddy, /handle \/spite\*/);
+  assert.ok(caddy.indexOf('handle /spite/ws') < caddy.indexOf('handle /spite*'));
+  assert.match(caddy, /respond \/spite\/api\/internal\/\* 404/);
+  assert.doesNotMatch(caddy, /reverse_proxy[^\n]*internal\/authorize/);
+  assert.doesNotMatch(caddy, /reverse_proxy[^\n]*internal\/document/);
   assert.match(caddy, /handle \/scheduler\*/);
 
+  const envExample = read('.env.example');
+  assert.match(envExample, /^NEXT_PUBLIC_REALTIME_URL=\/spite\/ws$/m);
+
   const productionEnv = read('.env.production.example');
-  assert.match(productionEnv, /^SPITE_OWNER_USER_ID=/m);
+  for (const name of [
+    'SPITE_OWNER_USER_ID',
+    'CANVAS_AUTH_URL',
+    'CANVAS_AUTH_HMAC_SECRET',
+    'REALTIME_JWT_SECRET',
+    'NEXOCLIP_INTERNAL_URL',
+    'NEXT_PUBLIC_REALTIME_URL',
+    'SPITE_REALTIME_MAX_QUEUED_UPDATES',
+    'SPITE_REALTIME_MAX_QUEUED_BYTES',
+    'SPITE_REALTIME_SNAPSHOT_INTERVAL_MS',
+    'SPITE_REALTIME_COMPACT_AFTER_UPDATES',
+  ]) {
+    assert.match(productionEnv, new RegExp(`^${name}=`, 'm'));
+  }
   assert.match(productionEnv, /^# SPITE_ALLOW_DETERMINISTIC_FIRST_USER=1$/m);
 });
 
-test('Docker context excludes secrets', () => {
+test('Docker context excludes secrets and Spite Dockerfile exposes Node 22 web/realtime targets', () => {
   const ignore = read('.dockerignore');
   assert.match(ignore, /^\.env\*$/m);
   assert.match(ignore, /^!\.env\.example$/m);
   assert.match(ignore, /^!\.env\.production\.example$/m);
+
+  const dockerfile = read('services/spite/Dockerfile');
+  assert.match(dockerfile, /^FROM node:22-bookworm-slim AS base$/m);
+  assert.match(dockerfile, /^FROM base AS realtime$/m);
+  assert.match(dockerfile, /^FROM base AS migrate-realtime$/m);
+  assert.match(dockerfile, /^EXPOSE 3007$/m);
 });
 
 test('deploy script validates the host and runs migrations before startup', () => {
@@ -52,21 +118,76 @@ test('deploy script validates the host and runs migrations before startup', () =
   assert.match(script, /stat -c '%a' \.env\.production/);
   assert.match(script, /config --quiet/);
   assert.ok(script.indexOf('"${compose[@]}" build') < script.indexOf('run --rm nexoclip-migrate'));
-  assert.ok(script.indexOf('run --rm nexoclip-migrate') < script.indexOf('up -d --remove-orphans'));
+  assert.ok(script.indexOf('run --rm nexoclip-migrate') < script.indexOf('run --rm spite-realtime-migrate'));
+  assert.ok(script.indexOf('run --rm spite-realtime-migrate') < script.indexOf('run --rm spite-ownership-migrate'));
+  assert.ok(script.indexOf('run --rm spite-ownership-migrate') < script.indexOf('up -d --remove-orphans'));
   assert.ok(script.indexOf('run --rm scheduler-migrate') < script.indexOf('up -d --remove-orphans'));
   assert.match(script, /"\$\{compose\[@\]\}" ps/);
 });
 
-test('Compose protects stateful services and separates databases', () => {
+test('Compose isolates databases, routes websocket traffic privately, and shares only required secrets', () => {
   const compose = read('docker-compose.prod.yml');
-  assert.match(serviceBlock(compose, 'caddy', 'redis'), /\$\{HTTP_PORT:-80\}:80/);
-  assert.match(serviceBlock(compose, 'redis', 'nexoclip-migrate'), /--requirepass/);
-  assert.match(serviceBlock(compose, 'redis', 'nexoclip-migrate'), /redis-cli -a/);
-  assert.match(serviceBlock(compose, 'nexoclip-migrate', 'scheduler-migrate'), /DATABASE_URL_NEXOCLIP/);
-  assert.match(serviceBlock(compose, 'scheduler-migrate', 'vimax'), /DATABASE_URL_SCHEDULER/);
-  assert.match(serviceBlock(compose, 'spite', 'scheduler'), /DATABASE_URL_SPITE/);
-  assert.match(serviceBlock(compose, 'ai-clip', 'nexoclip'), /\/healthz/);
-  assert.match(serviceBlock(compose, 'vimax', 'ai-clip'), /\/healthz/);
+  const names = [
+    'caddy',
+    'redis',
+    'nexoclip-migrate',
+    'scheduler-migrate',
+    'spite-realtime-migrate',
+    'spite-ownership-migrate',
+    'vimax',
+    'ai-clip',
+    'nexoclip',
+    'spite',
+    'spite-realtime',
+    'scheduler',
+    'storyboard-worker',
+  ];
+  const blocks = serviceBlocks(compose, names);
+
+  assert.match(blocks.caddy, /\$\{HTTP_PORT:-80\}:80/);
+  assert.match(blocks.caddy, /spite-realtime: \{ condition: service_healthy \}/);
+  assert.match(blocks.redis, /--requirepass/);
+  assert.match(blocks.redis, /redis-cli -a/);
+
+  assert.match(blocks.nexoclip, /DATABASE_URL_NEXOCLIP: \$\{DATABASE_URL_NEXOCLIP\}/);
+  assert.doesNotMatch(blocks.nexoclip, /DATABASE_URL_SPITE:/);
+  assert.match(blocks.nexoclip, /CANVAS_AUTH_URL: \$\{CANVAS_AUTH_URL:-http:\/\/spite-realtime:3007\/internal\/authorize\}/);
+  assert.match(blocks.nexoclip, /CANVAS_AUTH_HMAC_SECRET: \$\{CANVAS_AUTH_HMAC_SECRET\}/);
+  assert.match(blocks.nexoclip, /REALTIME_JWT_SECRET: \$\{REALTIME_JWT_SECRET\}/);
+
+  assert.match(blocks.spite, /DATABASE_URL_SPITE: \$\{DATABASE_URL_SPITE\}/);
+  assert.doesNotMatch(blocks.spite, /DATABASE_URL_NEXOCLIP:/);
+  assert.match(blocks.spite, /NEXOCLIP_INTERNAL_URL: \$\{NEXOCLIP_INTERNAL_URL:-http:\/\/nexoclip:3000\}/);
+  assert.match(blocks.spite, /CANVAS_AUTH_URL: \$\{CANVAS_AUTH_URL:-http:\/\/spite-realtime:3007\/internal\/authorize\}/);
+  assert.match(blocks.spite, /CANVAS_AUTH_HMAC_SECRET: \$\{CANVAS_AUTH_HMAC_SECRET\}/);
+  assert.match(blocks.spite, /NEXT_PUBLIC_REALTIME_URL: \$\{NEXT_PUBLIC_REALTIME_URL:-\/spite\/ws\}/);
+
+  assert.match(blocks['spite-realtime'], /DATABASE_URL_SPITE: \$\{DATABASE_URL_SPITE\}/);
+  assert.doesNotMatch(blocks['spite-realtime'], /DATABASE_URL_NEXOCLIP:/);
+  assert.match(blocks['spite-realtime'], /PORT: 3007/);
+  assert.match(blocks['spite-realtime'], /REALTIME_JWT_SECRET: \$\{REALTIME_JWT_SECRET\}/);
+  assert.match(blocks['spite-realtime'], /CANVAS_AUTH_HMAC_SECRET: \$\{CANVAS_AUTH_HMAC_SECRET\}/);
+  assert.match(blocks['spite-realtime'], /SPITE_REALTIME_MAX_QUEUED_UPDATES: \$\{SPITE_REALTIME_MAX_QUEUED_UPDATES:-256\}/);
+  assert.match(blocks['spite-realtime'], /SPITE_REALTIME_MAX_QUEUED_BYTES: \$\{SPITE_REALTIME_MAX_QUEUED_BYTES:-524288\}/);
+  assert.match(blocks['spite-realtime'], /SPITE_REALTIME_SNAPSHOT_INTERVAL_MS: \$\{SPITE_REALTIME_SNAPSHOT_INTERVAL_MS:-30000\}/);
+  assert.match(blocks['spite-realtime'], /SPITE_REALTIME_COMPACT_AFTER_UPDATES: \$\{SPITE_REALTIME_COMPACT_AFTER_UPDATES:-128\}/);
+  assert.match(blocks['spite-realtime'], /\/healthz/);
+
+  assert.match(blocks['spite-realtime-migrate'], /DATABASE_URL_SPITE: \$\{DATABASE_URL_SPITE\}/);
+  assert.match(blocks['spite-ownership-migrate'], /DATABASE_URL_NEXOCLIP: \$\{DATABASE_URL_NEXOCLIP\}/);
+  assert.match(blocks['spite-ownership-migrate'], /DATABASE_URL_SPITE: \$\{DATABASE_URL_SPITE\}/);
+  assert.match(blocks['spite-ownership-migrate'], /SPITE_OWNER_USER_ID: \$\{SPITE_OWNER_USER_ID\}/);
+
+  assert.match(blocks.spite, /spite-realtime-migrate: \{ condition: service_completed_successfully \}/);
+  assert.match(blocks.spite, /spite-ownership-migrate: \{ condition: service_completed_successfully \}/);
+  assert.match(blocks['spite-realtime'], /spite-realtime-migrate: \{ condition: service_completed_successfully \}/);
+  assert.match(blocks['spite-realtime'], /spite-ownership-migrate: \{ condition: service_completed_successfully \}/);
+
+  const publicLines = publicEnvLines(`${compose}\n${read('services/spite/Dockerfile')}\n${read('Dockerfile')}`);
+  for (const line of publicLines) {
+    assert.doesNotMatch(line, /(DATABASE_URL|postgres(?:ql)?:\/\/)/i, `public build/env line must not contain DB credentials: ${line}`);
+  }
+
   for (const volume of ['redis-data', 'vimax-tenants', 'ai-clip-output', 'caddy-data', 'caddy-config']) {
     assert.match(compose, new RegExp(`^  ${volume}:`, 'm'));
   }

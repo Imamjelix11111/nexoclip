@@ -15,6 +15,8 @@ compose=(docker compose --env-file .env.production -f docker-compose.prod.yml)
 "${compose[@]}" build
 "${compose[@]}" up -d redis
 "${compose[@]}" run --rm nexoclip-migrate
+"${compose[@]}" run --rm spite-realtime-migrate
+"${compose[@]}" run --rm spite-ownership-migrate
 "${compose[@]}" run --rm scheduler-migrate
 "${compose[@]}" up -d --remove-orphans
 "${compose[@]}" ps

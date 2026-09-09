@@ -14,6 +14,7 @@ services:
     depends_on:
       nexoclip: { condition: service_healthy }
       spite: { condition: service_healthy }
+      spite-realtime: { condition: service_healthy }
       scheduler: { condition: service_healthy }
       ai-clip: { condition: service_healthy }
 
@@ -50,6 +51,33 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL_SCHEDULER}
       DIRECT_URL: ${DIRECT_URL_SCHEDULER}
+
+  spite-realtime-migrate:
+    platform: linux/amd64
+    build:
+      context: services/spite
+      target: migrate-realtime
+    restart: "no"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL_SPITE: ${DATABASE_URL_SPITE}
+      DATABASE_URL: ${DATABASE_URL_SPITE}
+
+  spite-ownership-migrate:
+    platform: linux/amd64
+    build:
+      context: .
+      target: node-runtime
+    command: ["node", "scripts/migrate-spite-ownership.mjs"]
+    restart: "no"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL_NEXOCLIP: ${DATABASE_URL_NEXOCLIP}
+      DATABASE_URL_SPITE: ${DATABASE_URL_SPITE}
+      SPITE_OWNER_USER_ID: ${SPITE_OWNER_USER_ID}
+    depends_on:
+      nexoclip-migrate: { condition: service_completed_successfully }
+      spite-realtime-migrate: { condition: service_completed_successfully }
 
   vimax:
     platform: linux/amd64
@@ -106,6 +134,7 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      DATABASE_URL_NEXOCLIP: ${DATABASE_URL_NEXOCLIP}
       DATABASE_URL: ${DATABASE_URL_NEXOCLIP}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       LOCAL_OBJECT_STORAGE_SECRET: ${LOCAL_OBJECT_STORAGE_SECRET}
@@ -121,6 +150,11 @@ services:
       VIMAX_RUNTIME_URL: http://vimax:4173
       VIMAX_RUNTIME_TOKEN: ${VIMAX_RUNTIME_TOKEN}
       R2_PUBLIC_URL: ${R2_PUBLIC_URL}
+      CANVAS_AUTH_URL: ${CANVAS_AUTH_URL:-http://spite-realtime:3007/internal/authorize}
+      CANVAS_AUTH_HMAC_SECRET: ${CANVAS_AUTH_HMAC_SECRET}
+      CANVAS_AUTH_SECRET: ${CANVAS_AUTH_HMAC_SECRET}
+      REALTIME_JWT_SECRET: ${REALTIME_JWT_SECRET}
+      REALTIME_TOKEN_SECRET: ${REALTIME_JWT_SECRET}
     depends_on:
       redis: { condition: service_healthy }
       nexoclip-migrate: { condition: service_completed_successfully }
@@ -136,11 +170,14 @@ services:
     platform: linux/amd64
     build:
       context: services/spite
+      target: web
       args:
         NEXT_PUBLIC_BASE_PATH: /spite
+        NEXT_PUBLIC_REALTIME_URL: ${NEXT_PUBLIC_REALTIME_URL:-/spite/ws}
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      DATABASE_URL_SPITE: ${DATABASE_URL_SPITE}
       DATABASE_URL: ${DATABASE_URL_SPITE}
       APP_PASSWORD: ${SPITE_APP_PASSWORD}
       CRON_SECRET: ${SPITE_CRON_SECRET}
@@ -151,8 +188,48 @@ services:
       R2_BUCKET_NAME: ${R2_BUCKET_NAME}
       R2_PUBLIC_URL: ${R2_PUBLIC_URL}
       R2_PROXY_SIGNING_SECRET: ${R2_PROXY_SIGNING_SECRET}
+      NEXOCLIP_INTERNAL_URL: ${NEXOCLIP_INTERNAL_URL:-http://nexoclip:3000}
+      CANVAS_AUTH_URL: ${CANVAS_AUTH_URL:-http://spite-realtime:3007/internal/authorize}
+      CANVAS_AUTH_HMAC_SECRET: ${CANVAS_AUTH_HMAC_SECRET}
+      CANVAS_AUTH_SECRET: ${CANVAS_AUTH_HMAC_SECRET}
+      NEXT_PUBLIC_REALTIME_URL: ${NEXT_PUBLIC_REALTIME_URL:-/spite/ws}
+    depends_on:
+      spite-realtime-migrate: { condition: service_completed_successfully }
+      spite-ownership-migrate: { condition: service_completed_successfully }
+      spite-realtime: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3005/spite/login').then(r=>{if(r.status>=500)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
+  spite-realtime:
+    platform: linux/amd64
+    build:
+      context: services/spite
+      target: realtime
+    restart: unless-stopped
+    expose:
+      - "3007"
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3007
+      DATABASE_URL_SPITE: ${DATABASE_URL_SPITE}
+      DATABASE_URL: ${DATABASE_URL_SPITE}
+      CANVAS_AUTH_HMAC_SECRET: ${CANVAS_AUTH_HMAC_SECRET}
+      CANVAS_AUTH_SECRET: ${CANVAS_AUTH_HMAC_SECRET}
+      REALTIME_JWT_SECRET: ${REALTIME_JWT_SECRET}
+      REALTIME_TOKEN_SECRET: ${REALTIME_JWT_SECRET}
+      SPITE_REALTIME_MAX_QUEUED_UPDATES: ${SPITE_REALTIME_MAX_QUEUED_UPDATES:-256}
+      SPITE_REALTIME_MAX_QUEUED_BYTES: ${SPITE_REALTIME_MAX_QUEUED_BYTES:-524288}
+      SPITE_REALTIME_SNAPSHOT_INTERVAL_MS: ${SPITE_REALTIME_SNAPSHOT_INTERVAL_MS:-30000}
+      SPITE_REALTIME_COMPACT_AFTER_UPDATES: ${SPITE_REALTIME_COMPACT_AFTER_UPDATES:-128}
+    depends_on:
+      spite-realtime-migrate: { condition: service_completed_successfully }
+      spite-ownership-migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3007/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 20
