@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import { Position, NodeProps, Handle } from '@xyflow/react'
 import { TextT } from '@phosphor-icons/react'
 import { NodeActionToolbar } from './node-toolbar'
+import { ResizableNodeFrame } from './resizable-node-frame'
 import { MentionTextarea, type Mention, type MentionTextareaRef } from '../mention-textarea'
 import { useProjectFolders } from '@/hooks/use-project-folders'
 import { useCanvasCollaboration } from '../canvas-collaboration'
@@ -90,7 +91,12 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative" style={{ width: 340 }}>
+    <ResizableNodeFrame
+      nodeId={id}
+      data={data}
+      defaultSize={{ width: 340, height: 192 }}
+      bounds={{ minWidth: 180, minHeight: 96, maxWidth: 900, maxHeight: 900 }}
+    >
       <NodeActionToolbar nodeId={id} selected={selected} />
 
       {/* Node label */}
@@ -102,12 +108,12 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
           and video nodes — keeps drag-origin detection robust against
           card content that might be added later. */}
       <Handle type="source" id="prompt-out" position={Position.Right} style={{ top: 85, right: 0, opacity: 0, width: 24, height: 24, zIndex: 5 }} />
-      <HandleIcon icon={TextT} color="rgba(107,143,168,0.8)" style={{ top: 85, left: 340 }} />
+      <HandleIcon icon={TextT} color="rgba(107,143,168,0.8)" style={{ top: 85, left: '100%' }} />
 
       {/* Card content */}
       <div
         ref={cardRef}
-        className="relative flex flex-col rounded-xl overflow-hidden transition-all duration-200"
+        className="relative flex h-full w-full flex-col rounded-xl overflow-hidden transition-all duration-200"
         style={{
           background: '#0D0F12',
           border: selected ? '1.5px solid rgba(107,143,168,0.85)' : '1.5px solid rgba(107,143,168,0.25)',
@@ -142,7 +148,7 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
           />
         )}
       </div>
-    </div>
+    </ResizableNodeFrame>
   )
 }
 

@@ -51,10 +51,17 @@ test('parseAspectRatio accepts positive numeric ratios', () => {
   assert.equal(parseAspectRatio('4:3', '16:9'), 4 / 3)
 })
 
-test('clampNodeSize constrains each dimension to its bounds', () => {
+test('clampNodeSize raises dimensions below their minimum bounds', () => {
   assert.deepEqual(
-    clampNodeSize({ width: 80, height: 900 }, { minWidth: 100, maxWidth: 800, minHeight: 120, maxHeight: 600 }),
-    { width: 100, height: 600 },
+    clampNodeSize({ width: 80, height: 90 }, { minWidth: 100, maxWidth: 800, minHeight: 120, maxHeight: 600 }),
+    { width: 100, height: 120 },
+  )
+})
+
+test('clampNodeSize lowers dimensions above their maximum bounds', () => {
+  assert.deepEqual(
+    clampNodeSize({ width: 900, height: 700 }, { minWidth: 100, maxWidth: 800, minHeight: 120, maxHeight: 600 }),
+    { width: 800, height: 600 },
   )
 })
 

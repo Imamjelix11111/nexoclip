@@ -4,6 +4,7 @@ import { memo, useState, useEffect, useCallback } from 'react'
 import { NodeProps } from '@xyflow/react'
 import { X } from '@phosphor-icons/react'
 import { useCanvasCollaboration } from '../canvas-collaboration'
+import { ResizableNodeFrame } from './resizable-node-frame'
 
 const LAST_STICKER_KEY = 'canvas_last_sticker'
 
@@ -47,7 +48,13 @@ function StickerNodeImpl({ id, data, selected }: NodeProps) {
   }, [id, patchNodeData])
 
   return (
-    <div className="relative group">
+    <ResizableNodeFrame
+      nodeId={id}
+      data={data}
+      defaultSize={{ width: 180, height: 96 }}
+      bounds={{ minWidth: 180, minHeight: 96, maxWidth: 900, maxHeight: 900 }}
+      className="group"
+    >
       <div
         onClick={(e) => {
           e.stopPropagation()
@@ -105,7 +112,7 @@ function StickerNodeImpl({ id, data, selected }: NodeProps) {
           ))}
         </div>
       )}
-    </div>
+    </ResizableNodeFrame>
   )
 }
 

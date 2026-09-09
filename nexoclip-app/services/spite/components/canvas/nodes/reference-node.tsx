@@ -11,26 +11,16 @@ import { AddToFolderModal } from '../add-to-folder-modal'
 import { resolveNodeMediaUrl } from '@/lib/node-media'
 import { Lightbox } from '../lightbox'
 import { useCanvasCollaboration } from '../canvas-collaboration'
+import { ResizableNodeFrame } from './resizable-node-frame'
 
 function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
   const params = useParams()
   const projectId = (params?.id as string) || ''
   const { createNextShot, patchNodeData, replaceShot } = useCanvasCollaboration()
-  const [imageWidth, setImageWidth] = useState<number>((data.width as number) || 320)
   const [thumbnail, setThumbnail] = useState<string | null>(resolveNodeMediaUrl({ thumbnail: data.thumbnail }) || null)
-  const widthRef = useRef(imageWidth)
   const [folderModalOpen, setFolderModalOpen] = useState(false)
   const [folderType, setFolderType] = useState<'character' | 'prop' | 'location'>('character')
   const [lightboxOpen, setLightboxOpen] = useState(false)
-
-  // Keep ref in sync
-  useEffect(() => {
-    widthRef.current = imageWidth
-  }, [imageWidth])
-
-  useEffect(() => {
-    setImageWidth((data.width as number) || 320)
-  }, [data.width])
 
   // Sync thumbnail from data prop
   useEffect(() => {
@@ -87,45 +77,14 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
     setFolderModalOpen(true)
   }
 
-  // Resize: drag horizontally to change width
-  const onResizeStart = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    e.preventDefault()
-    
-    const startX = e.clientX
-    const startWidth = widthRef.current
-    let lastUpdateTime = Date.now()
-    
-    const onMove = (ev: MouseEvent) => {
-      const diff = ev.clientX - startX
-      const newWidth = Math.max(150, Math.min(800, startWidth + diff))
-      
-      // Update ref immediately so onUp has correct final width
-      widthRef.current = newWidth
-      
-      // Throttle state updates to avoid ResizeObserver spam - update max every 50ms
-      const now = Date.now()
-      if (now - lastUpdateTime > 50) {
-        setImageWidth(newWidth)
-        lastUpdateTime = now
-      }
-    }
-    
-    const onUp = () => {
-      // Use the ref value which was updated on every mousemove
-      const finalWidth = widthRef.current
-      setImageWidth(finalWidth)
-      patchNodeData(id, { width: finalWidth })
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-    }
-    
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-  }
-
   return (
-    <div className="relative group">
+    <ResizableNodeFrame
+      nodeId={id}
+      data={data}
+      defaultSize={{ width: 320, height: 260 }}
+      bounds={{ minWidth: 180, minHeight: 96, maxWidth: 900, maxHeight: 900 }}
+      className="group"
+    >
       <NodeActionToolbar
         nodeId={id}
         selected={selected}
@@ -200,7 +159,8 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
       <div
         className="rounded-xl overflow-hidden"
         style={{
-          width: imageWidth,
+          width: '100%',
+          height: '100%',
           background: '#0D0F12',
           border: isTaggedToShot 
             ? '1.5px solid rgba(251,191,36,0.7)' 
@@ -259,24 +219,6 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
         </div>
       </div>
 
-      {/* Resize handle - quarter circle arc hugging the corner */}
-      <div
-        className="nodrag absolute opacity-0 group-hover:opacity-100 transition-opacity cursor-se-resize"
-        style={{ bottom: -10, right: -10 }}
-        onMouseDown={(e) => {
-          onResizeStart(e)
-        }}
-      >
-        <svg width="28" height="28" viewBox="0 0 28 28">
-          <path
-            d="M 0 28 A 28 28 0 0 0 28 0"
-            fill="none"
-            stroke="rgba(255,255,255,0.5)"
-            strokeWidth="2"
-          />
-        </svg>
-      </div>
-
       {/* Add to folder modal */}
       <AddToFolderModal
         open={folderModalOpen}
@@ -286,7 +228,7 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
         assetId={(data.assetId as string) || ''}
         assetUrl={thumbnail || ''}
       />
-    </div>
+    </ResizableNodeFrame>
   )
 }
 

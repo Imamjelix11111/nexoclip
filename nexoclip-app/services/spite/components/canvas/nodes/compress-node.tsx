@@ -8,6 +8,7 @@ import { memo, useState, useEffect, useRef, useCallback } from 'react'
 import { NodeActionToolbar } from './node-toolbar'
 import { encodeScaled, autoFitUnderBytes, formatBytes, KLING_MAX_BYTES } from '@/lib/image-compress'
 import { useCanvasCollaboration } from '../canvas-collaboration'
+import { ResizableNodeFrame } from './resizable-node-frame'
 
 function CompressNodeImpl({ id, data, selected }: NodeProps) {
   const params = useParams()
@@ -194,7 +195,13 @@ function CompressNodeImpl({ id, data, selected }: NodeProps) {
     status === 'error' ? '' : ''
 
   return (
-    <div className="relative group">
+    <ResizableNodeFrame
+      nodeId={id}
+      data={data}
+      defaultSize={{ width: 280, height: 360 }}
+      bounds={{ minWidth: 180, minHeight: 96, maxWidth: 900, maxHeight: 900 }}
+      className="group"
+    >
       <NodeActionToolbar
         nodeId={id}
         selected={selected}
@@ -237,7 +244,8 @@ function CompressNodeImpl({ id, data, selected }: NodeProps) {
       <div
         className="rounded-xl overflow-hidden"
         style={{
-          width: 280,
+          width: '100%',
+          height: '100%',
           background: '#0D0F12',
           border: selected ? '1.5px solid rgba(107,143,168,0.85)' : '1.5px solid rgba(107,143,168,0.25)',
         }}
@@ -330,7 +338,7 @@ function CompressNodeImpl({ id, data, selected }: NodeProps) {
           <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-muted-foreground">FIT</span>
         </div>
       </div>
-    </div>
+    </ResizableNodeFrame>
   )
 }
 

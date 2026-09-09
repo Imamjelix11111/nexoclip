@@ -4,12 +4,12 @@ import { memo, useState, useRef, useEffect } from 'react'
 import { NodeProps } from '@xyflow/react'
 import { X } from '@phosphor-icons/react'
 import { useCanvasCollaboration } from '../canvas-collaboration'
+import { ResizableNodeFrame } from './resizable-node-frame'
 
 function CommentNodeImpl({ id, data, selected }: NodeProps) {
   const [text, setText] = useState((data.text as string) || '')
   const [isEditing, setIsEditing] = useState(!data.text)
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const measureRef = useRef<HTMLSpanElement>(null)
   const { deleteNodes, patchNodeData } = useCanvasCollaboration()
 
   // Focus on mount if editing
@@ -40,15 +40,21 @@ function CommentNodeImpl({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div
-      className="relative group flex items-center gap-2 px-3 py-2 rounded-full transition-all nodrag"
-      style={{
+    <ResizableNodeFrame
+      nodeId={id}
+      data={data}
+      defaultSize={{ width: 160, height: 40 }}
+      bounds={{ minWidth: 180, minHeight: 96, maxWidth: 900, maxHeight: 900 }}
+    >
+      <div
+        className="relative group flex h-full w-full items-center gap-2 px-3 py-2 rounded-full transition-all nodrag"
+        style={{
         background: 'rgba(30,32,38,0.95)',
         border: selected ? '1px solid rgba(107,143,168,0.6)' : '1px solid rgba(255,255,255,0.1)',
         boxShadow: selected ? '0 0 12px rgba(107,143,168,0.2)' : '0 2px 8px rgba(0,0,0,0.3)',
       }}
-      onDoubleClick={() => setIsEditing(true)}
-    >
+        onDoubleClick={() => setIsEditing(true)}
+      >
       {/* Hover delete — `nodrag` blocks React Flow's click-to-select so the
           Delete key flow doesn't reach comments. A persistent on-hover X
           is the most discoverable way out. */}
@@ -106,7 +112,8 @@ function CommentNodeImpl({ id, data, selected }: NodeProps) {
           {text || 'Add a comment...'}
         </span>
       )}
-    </div>
+      </div>
+    </ResizableNodeFrame>
   )
 }
 
