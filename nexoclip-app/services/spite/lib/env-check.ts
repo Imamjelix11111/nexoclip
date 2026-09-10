@@ -6,7 +6,6 @@
 
 const REQUIRED_ENV_VARS = [
   'DATABASE_URL',
-  'APP_PASSWORD',
   'GEMINI_API_KEY',
   'OPENAI_API_KEY',
   'BYTEPLUS_API_KEY',
@@ -35,7 +34,6 @@ export function checkRequiredEnv(): EnvCheckResult {
 // value. Keep these short — full instructions live in the README.
 export const ENV_VAR_HINTS: Record<RequiredEnvVar, string> = {
   DATABASE_URL: 'Neon Postgres connection string — neon.tech → your project → Connection string',
-  APP_PASSWORD: 'The password you\'ll type at the SPITE login screen. Choose anything strong.',
   GEMINI_API_KEY: 'Google Gemini API key for Nano Banana models',
   OPENAI_API_KEY: 'OpenAI API key for GPT Image models',
   BYTEPLUS_API_KEY: 'BytePlus Ark API key for Seedream and Seedance models',

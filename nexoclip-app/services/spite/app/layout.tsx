@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from 'next'
 import { Montserrat, Inter, Geist_Mono } from 'next/font/google'
-import { AuthProvider } from '@/components/auth-provider'
 import { Toaster } from '@/components/ui/sonner'
 import './globals.css'
 
@@ -52,9 +51,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${montserrat.variable} ${inter.variable} ${geistMono.variable} bg-background`} suppressHydrationWarning>
       <body className="font-sans antialiased bg-background text-foreground min-h-screen" suppressHydrationWarning>
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+        {children}
         <Toaster theme="dark" position="bottom-right" />
       </body>
     </html>

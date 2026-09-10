@@ -1,10 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowLeft, MagnifyingGlassPlus, MagnifyingGlassMinus, CornersOut, Lock, CheckCircle, Circle, WarningCircle, Prohibit, ListChecks, Question } from '@phosphor-icons/react'
+import { ArrowLeft, MagnifyingGlassPlus, MagnifyingGlassMinus, CornersOut, CheckCircle, Circle, WarningCircle, Prohibit, ListChecks, Question } from '@phosphor-icons/react'
 import { useReactFlow } from '@xyflow/react'
 import { useState } from 'react'
-import { useAuth } from '@/components/auth-provider'
 import { getCanvasSaveIndicator } from '@/lib/canvas-runtime-ui'
 import { startTour } from '@/lib/onboarding'
 import type { ProjectRuntimeState } from '@/realtime/project-runtime'
@@ -31,12 +30,7 @@ interface CanvasToolbarProps {
 export function CanvasToolbar({ projectName, onProjectNameChange, persistenceStatus, projectId, readOnly = false, jobsPanelOpen, onToggleJobsPanel, activeJobCount = 0, guests = [], onFollowGuest }: CanvasToolbarProps) {
   const { zoomIn, zoomOut, fitView } = useReactFlow()
   const [editing, setEditing] = useState(false)
-  const { logout } = useAuth()
   const saveIndicator = getCanvasSaveIndicator(persistenceStatus)
-
-  const handleLogout = () => {
-    logout()
-  }
 
   return (
     <div className="glass flex items-center justify-between px-4 h-12 shrink-0 relative z-10">
@@ -171,13 +165,6 @@ export function CanvasToolbar({ projectName, onProjectNameChange, persistenceSta
           <Question size={13} weight="thin" />
         </button>
 
-        <button
-          onClick={handleLogout}
-          className="flex items-center justify-center w-7 h-7 rounded-lg glass-hover transition-colors ml-1 text-muted-foreground hover:text-destructive"
-          title="Logout and lock canvas"
-        >
-          <Lock size={13} weight="thin" />
-        </button>
       </div>
     </div>
   )

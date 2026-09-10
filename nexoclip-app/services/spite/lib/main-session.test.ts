@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { createAuthenticatedUserResolver } from './main-session'
+import { createAuthenticatedUserResolver, createRequestAuthenticationChecker } from './main-session'
 
 function makeRequest({
   headers = {},
@@ -61,6 +61,15 @@ test('fails closed when introspection is unavailable or invalid', async () => {
   for (const resolveUser of cases) {
     assert.equal(await resolveUser(makeRequest()), null)
   }
+})
+
+test('does not authenticate a legacy Spite session without a main-app user', async () => {
+  const isRequestAuthenticated = createRequestAuthenticationChecker({
+    getAuthenticatedUser: async () => null,
+    isSessionValid: async () => true,
+  })
+
+  assert.equal(await isRequestAuthenticated(makeRequest({ cookie: 'spite_session=legacy-session' })), false)
 })
 
 test('returns null when nexoclip_session is absent and returns the trusted user when present', async () => {

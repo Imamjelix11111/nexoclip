@@ -1,6 +1,5 @@
 import type { NextRequest } from 'next/server'
 
-import { SESSION_COOKIE_NAME, isSessionValid } from '@/lib/sessions'
 
 export interface AuthenticatedUser {
   id: string
@@ -13,7 +12,6 @@ export interface AuthenticatedUserResolverOptions {
 
 export interface RequestAuthenticationCheckerOptions {
   getAuthenticatedUser?: (request: Request | NextRequest) => Promise<AuthenticatedUser | null>
-  isSessionValid?: typeof isSessionValid
 }
 
 const MAIN_SESSION_COOKIE_NAME = 'nexoclip_session'
@@ -76,16 +74,9 @@ export const getAuthenticatedUser = createAuthenticatedUserResolver()
 
 export function createRequestAuthenticationChecker(options: RequestAuthenticationCheckerOptions = {}) {
   const resolveUser = options.getAuthenticatedUser ?? getAuthenticatedUser
-  const validateSession = options.isSessionValid ?? isSessionValid
 
   return async function isRequestAuthenticated(request: Request | NextRequest): Promise<boolean> {
-    const legacySessionToken = readCookieValue(request, SESSION_COOKIE_NAME)
-    const [trustedUser, legacySessionAuthenticated] = await Promise.all([
-      resolveUser(request),
-      validateSession(legacySessionToken),
-    ])
-
-    return Boolean(trustedUser) || legacySessionAuthenticated
+    return Boolean(await resolveUser(request))
   }
 }
 

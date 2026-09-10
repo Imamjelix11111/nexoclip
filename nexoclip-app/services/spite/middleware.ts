@@ -4,17 +4,12 @@ import { checkRequiredEnv } from '@/lib/env-check'
 import { withBasePath } from '@/lib/base-path'
 import { isRequestAuthenticated } from '@/lib/main-session'
 
-// Paths that must stay reachable without a login cookie.
-// - /login: the login page itself
-// - /setup: shown when required env vars are missing
-// - /api/auth/verify + /api/auth/logout: the login/logout endpoints
+// Paths that do not require a main-app session.
+// - /setup: shown when required generation environment variables are missing
 // - /api/assets/cleanup: scheduled cleanup job, auth via CRON_SECRET
-// - /api/r2-image: media proxy, does its own cookie-or-signed-token check
+// - /api/r2-image: media proxy, does its own signed-token check
 const PUBLIC_PATHS = [
-  '/login',
   '/setup',
-  '/api/auth/verify',
-  '/api/auth/logout',
   '/api/assets/cleanup',
   '/api/r2-image',
 ]
@@ -57,8 +52,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL(withBasePath('/setup', basePath), request.url))
   }
 
-  // Accept either the legacy SPITE login cookie or a valid same-origin
-  // nexoclip session from the main app.
+  // Spite is an authenticated NexoClip surface. Only the main-app session
+  // is accepted; it is validated server-to-server by the main app.
   const isAuthenticated = await isRequestAuthenticated(request)
 
   const isPublic = PUBLIC_PATHS.some(
@@ -66,8 +61,7 @@ export async function middleware(request: NextRequest) {
   )
 
   if (isAuthenticated) {
-    // Already logged in: bounce away from the login/setup pages.
-    if (appPath === '/login' || appPath === '/setup') {
+    if (appPath === '/setup') {
       return NextResponse.redirect(new URL(withBasePath('/', basePath), request.url))
     }
     return NextResponse.next({ request: { headers: forwardedHeaders } })
@@ -83,8 +77,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Block pages by sending them to the login screen.
-  return NextResponse.redirect(new URL(withBasePath('/login', basePath), request.url))
+  // Send unauthenticated users to the main app login, then return them to
+  // this exact Spite path after login succeeds.
+  const loginUrl = new URL('/login', request.url)
+  loginUrl.searchParams.set('next', `${basePath}${appPath}`)
+  return NextResponse.redirect(loginUrl)
 }
 
 export const config = {

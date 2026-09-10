@@ -21,6 +21,12 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function LoginForm() {
   const router = useRouter();
+  const requestedReturnTo = typeof window === 'undefined'
+    ? null
+    : new URLSearchParams(window.location.search).get('next');
+  const returnTo = requestedReturnTo?.startsWith('/') && !requestedReturnTo.startsWith('//')
+    ? requestedReturnTo
+    : '/studio';
   const [step, setStep] = useState('email'); // 'email' | 'password'
   const [values, setValues] = useState({ email: '', password: '' });
   const [error, setError] = useState(null);
@@ -63,7 +69,7 @@ export default function LoginForm() {
     try {
       const { path, options } = getAuthRequest('login', values);
       await saasFetch(path, options);
-      router.push('/studio');
+      router.push(returnTo);
     } catch (cause) {
       setError(cause?.message || 'We could not sign you in. Please try again.');
       setLoading(false);
