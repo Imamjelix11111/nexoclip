@@ -15,10 +15,6 @@
     reverse_proxy spite:3005
   }
 
-  handle /scheduler* {
-    reverse_proxy scheduler:3006
-  }
-
   handle {
     reverse_proxy nexoclip:3000
   }

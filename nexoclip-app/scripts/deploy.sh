@@ -34,7 +34,6 @@ esac
 "${compose[@]}" run --rm nexoclip-migrate
 "${compose[@]}" run --rm spite-realtime-migrate
 "${compose[@]}" run --rm spite-ownership-migrate
-"${compose[@]}" run --rm scheduler-migrate
 
 # Compose waits for every service with a healthcheck and fails the deployment
 # if any of them becomes unhealthy. Override only for slow first boot builds.

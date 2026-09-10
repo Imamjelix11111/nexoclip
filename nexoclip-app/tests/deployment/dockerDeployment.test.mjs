@@ -29,16 +29,12 @@ test('production compose is AMD64 and exposes only Caddy plus declared private s
     'caddy',
     'redis',
     'nexoclip-migrate',
-    'scheduler-migrate',
     'spite-realtime-migrate',
     'spite-ownership-migrate',
-    'vimax',
     'ai-clip',
     'nexoclip',
     'spite',
     'spite-realtime',
-    'scheduler',
-    'storyboard-worker',
   ];
   const blocks = serviceBlocks(compose, names);
 
@@ -60,7 +56,6 @@ test('deployment files, routes, and documented realtime env exist', () => {
     '.env.example',
     '.env.production.example',
     'services/spite/Dockerfile',
-    'services/free-ai-social-media-scheduler/Dockerfile',
     'services/ai-clip/Dockerfile',
   ]) {
     assert.equal(existsSync(path), true, `missing ${path}`);
@@ -74,7 +69,7 @@ test('deployment files, routes, and documented realtime env exist', () => {
   assert.match(caddy, /respond \/spite\/api\/internal\/\* 404/);
   assert.doesNotMatch(caddy, /reverse_proxy[^\n]*internal\/authorize/);
   assert.doesNotMatch(caddy, /reverse_proxy[^\n]*internal\/document/);
-  assert.match(caddy, /handle \/scheduler\*/);
+  assert.doesNotMatch(caddy, /handle \/scheduler\*/);
 
   const envExample = read('.env.example');
   assert.match(envExample, /^NEXT_PUBLIC_REALTIME_URL=\/spite\/ws$/m);
@@ -126,7 +121,7 @@ test('deploy script validates the host and runs config + migrations before start
   assert.ok(script.indexOf('run --rm nexoclip-migrate') < script.indexOf('run --rm spite-realtime-migrate'));
   assert.ok(script.indexOf('run --rm spite-realtime-migrate') < script.indexOf('run --rm spite-ownership-migrate'));
   assert.ok(script.indexOf('run --rm spite-ownership-migrate') < script.indexOf('up -d --remove-orphans'));
-  assert.ok(script.indexOf('run --rm scheduler-migrate') < script.indexOf('up -d --remove-orphans'));
+  assert.doesNotMatch(script, /scheduler-migrate/);
   assert.match(script, /--wait --wait-timeout/);
   assert.match(script, /DEPLOY_WAIT_TIMEOUT/);
   assert.match(script, /logs --tail=100/);
@@ -140,16 +135,12 @@ test('Compose isolates databases, routes websocket traffic privately, and shares
     'caddy',
     'redis',
     'nexoclip-migrate',
-    'scheduler-migrate',
     'spite-realtime-migrate',
     'spite-ownership-migrate',
-    'vimax',
     'ai-clip',
     'nexoclip',
     'spite',
     'spite-realtime',
-    'scheduler',
-    'storyboard-worker',
   ];
   const blocks = serviceBlocks(compose, names);
 
@@ -197,7 +188,7 @@ test('Compose isolates databases, routes websocket traffic privately, and shares
     assert.doesNotMatch(line, /(DATABASE_URL|postgres(?:ql)?:\/\/)/i, `public build/env line must not contain DB credentials: ${line}`);
   }
 
-  for (const volume of ['redis-data', 'vimax-tenants', 'ai-clip-output', 'caddy-data', 'caddy-config']) {
+  for (const volume of ['redis-data', 'ai-clip-output', 'caddy-data', 'caddy-config']) {
     assert.match(compose, new RegExp(`^  ${volume}:`, 'm'));
   }
 });
