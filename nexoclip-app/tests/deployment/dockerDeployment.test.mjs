@@ -27,6 +27,7 @@ test('production compose is AMD64 and exposes only Caddy plus declared private s
   const compose = read('docker-compose.prod.yml');
   const names = [
     'caddy',
+    'postgres',
     'redis',
     'nexoclip-migrate',
     'spite-realtime-migrate',
@@ -37,6 +38,10 @@ test('production compose is AMD64 and exposes only Caddy plus declared private s
     'spite-realtime',
   ];
   const blocks = serviceBlocks(compose, names);
+
+  assert.match(blocks.postgres, /POSTGRES_DB: nexoclip/);
+  assert.match(blocks.postgres, /POSTGRES_PASSWORD: \$\{POSTGRES_PASSWORD\}/);
+  assert.match(blocks.postgres, /postgres-data:\/var\/lib\/postgresql\/data/);
 
   for (const [name, block] of Object.entries(blocks)) {
     assert.match(block, /platform: linux\/amd64/);
@@ -110,10 +115,11 @@ test('deploy script validates the host and runs config + migrations before start
   assert.match(script, /^#!\/usr\/bin\/env bash\nset -Eeuo pipefail/);
   assert.match(script, /uname -m/);
   assert.match(script, /x86_64\/AMD64/);
-  assert.match(script, /\[\[ -f \.env\.production \]\]/);
+  assert.match(script, /\[\[ -f "\$DEPLOY_ENV_FILE" \]\]/);
   assert.match(script, /Copy \.env\.production\.example to \.env\.production first\./);
-  assert.match(script, /stat -c '%a' \.env\.production/);
-  assert.match(script, /set -a; \. \.\/\.env\.production; set \+a; NODE_ENV=production npm run config:check/);
+  assert.match(script, /stat -c '%a' "\$DEPLOY_ENV_FILE"/);
+  assert.match(script, /stat -f '%Lp' "\$DEPLOY_ENV_FILE"/);
+  assert.match(script, /set -a; \. "\.\/\$DEPLOY_ENV_FILE"; set \+a; NODE_ENV=production npm run config:check/);
   assert.match(script, /config --quiet/);
   assert.ok(script.indexOf('NODE_ENV=production npm run config:check') < script.indexOf('"${compose[@]}" config --quiet'));
   assert.ok(script.indexOf('"${compose[@]}" config --quiet') < script.indexOf('run --rm nexoclip-migrate'));
@@ -133,6 +139,7 @@ test('Compose isolates databases, routes websocket traffic privately, and shares
   const compose = read('docker-compose.prod.yml');
   const names = [
     'caddy',
+    'postgres',
     'redis',
     'nexoclip-migrate',
     'spite-realtime-migrate',
@@ -146,16 +153,22 @@ test('Compose isolates databases, routes websocket traffic privately, and shares
 
   assert.match(blocks.caddy, /\$\{HTTP_PORT:-80\}:80/);
   assert.match(blocks.caddy, /spite-realtime: \{ condition: service_healthy \}/);
+  assert.match(blocks.postgres, /POSTGRES_DB: nexoclip/);
+  assert.match(blocks.nexoclip, /postgresql:\/\/nexoclip:\$\{POSTGRES_PASSWORD\}@postgres:5432\/nexoclip/);
   assert.match(blocks.redis, /--requirepass/);
   assert.match(blocks.redis, /redis-cli -a/);
 
-  assert.match(blocks.nexoclip, /DATABASE_URL_NEXOCLIP: \$\{DATABASE_URL_NEXOCLIP\}/);
+  assert.match(blocks.nexoclip, /DATABASE_URL_NEXOCLIP: postgresql:\/\/nexoclip:\$\{POSTGRES_PASSWORD\}@postgres:5432\/nexoclip/);
   assert.doesNotMatch(blocks.nexoclip, /DATABASE_URL_SPITE:/);
   assert.match(blocks.nexoclip, /CANVAS_AUTH_URL: \$\{CANVAS_AUTH_URL:\?CANVAS_AUTH_URL is required\}/);
   assert.match(blocks.nexoclip, /CANVAS_AUTH_HMAC_SECRET: \$\{CANVAS_AUTH_HMAC_SECRET\}/);
   assert.match(blocks.nexoclip, /REALTIME_JWT_SECRET: \$\{REALTIME_JWT_SECRET:\?REALTIME_JWT_SECRET is required\}/);
 
   assert.match(blocks.spite, /DATABASE_URL_SPITE: \$\{DATABASE_URL_SPITE\}/);
+  assert.match(blocks.spite, /GEMINI_API_KEY: \$\{GEMINI_API_KEY\}/);
+  assert.match(blocks.spite, /OPENAI_API_KEY: \$\{OPENAI_API_KEY\}/);
+  assert.match(blocks.spite, /BYTEPLUS_API_KEY: \$\{BYTEPLUS_API_KEY\}/);
+  assert.match(blocks.spite, /BYTEPLUS_BASE_URL: \$\{BYTEPLUS_BASE_URL\}/);
   assert.doesNotMatch(blocks.spite, /DATABASE_URL_NEXOCLIP:/);
   assert.match(blocks.spite, /NEXOCLIP_INTERNAL_URL: \$\{NEXOCLIP_INTERNAL_URL:\?NEXOCLIP_INTERNAL_URL is required\}/);
   assert.match(blocks.spite, /CANVAS_AUTH_URL: \$\{CANVAS_AUTH_URL:\?CANVAS_AUTH_URL is required\}/);
@@ -174,7 +187,7 @@ test('Compose isolates databases, routes websocket traffic privately, and shares
   assert.match(blocks['spite-realtime'], /\/healthz/);
 
   assert.match(blocks['spite-realtime-migrate'], /DATABASE_URL_SPITE: \$\{DATABASE_URL_SPITE\}/);
-  assert.match(blocks['spite-ownership-migrate'], /DATABASE_URL_NEXOCLIP: \$\{DATABASE_URL_NEXOCLIP\}/);
+  assert.match(blocks['spite-ownership-migrate'], /DATABASE_URL_NEXOCLIP: postgresql:\/\/nexoclip:\$\{POSTGRES_PASSWORD\}@postgres:5432\/nexoclip/);
   assert.match(blocks['spite-ownership-migrate'], /DATABASE_URL_SPITE: \$\{DATABASE_URL_SPITE\}/);
   assert.match(blocks['spite-ownership-migrate'], /SPITE_OWNER_USER_ID: \$\{SPITE_OWNER_USER_ID\}/);
 
@@ -188,7 +201,7 @@ test('Compose isolates databases, routes websocket traffic privately, and shares
     assert.doesNotMatch(line, /(DATABASE_URL|postgres(?:ql)?:\/\/)/i, `public build/env line must not contain DB credentials: ${line}`);
   }
 
-  for (const volume of ['redis-data', 'ai-clip-output', 'caddy-data', 'caddy-config']) {
+  for (const volume of ['postgres-data', 'redis-data', 'ai-clip-output', 'caddy-data', 'caddy-config']) {
     assert.match(compose, new RegExp(`^  ${volume}:`, 'm'));
   }
 });

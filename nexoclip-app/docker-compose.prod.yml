@@ -17,6 +17,23 @@ services:
       spite-realtime: { condition: service_healthy }
       ai-clip: { condition: service_healthy }
 
+  postgres:
+    image: postgres:16-alpine
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: nexoclip
+      POSTGRES_USER: nexoclip
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-production-postgres.sh:/docker-entrypoint-initdb.d/01-ready.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexoclip -d nexoclip"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   redis:
     image: redis:7.4-bookworm
     platform: linux/amd64
@@ -39,7 +56,9 @@ services:
       target: migrate
     restart: "no"
     environment:
-      DATABASE_URL: ${DATABASE_URL_NEXOCLIP}
+      DATABASE_URL: postgresql://nexoclip:${POSTGRES_PASSWORD}@postgres:5432/nexoclip
+    depends_on:
+      postgres: { condition: service_healthy }
 
   spite-realtime-migrate:
     platform: linux/amd64
@@ -61,7 +80,7 @@ services:
     restart: "no"
     environment:
       NODE_ENV: production
-      DATABASE_URL_NEXOCLIP: ${DATABASE_URL_NEXOCLIP}
+      DATABASE_URL_NEXOCLIP: postgresql://nexoclip:${POSTGRES_PASSWORD}@postgres:5432/nexoclip
       DATABASE_URL_SPITE: ${DATABASE_URL_SPITE}
       SPITE_OWNER_USER_ID: ${SPITE_OWNER_USER_ID}
     depends_on:
@@ -110,8 +129,8 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      DATABASE_URL_NEXOCLIP: ${DATABASE_URL_NEXOCLIP}
-      DATABASE_URL: ${DATABASE_URL_NEXOCLIP}
+      DATABASE_URL_NEXOCLIP: postgresql://nexoclip:${POSTGRES_PASSWORD}@postgres:5432/nexoclip
+      DATABASE_URL: postgresql://nexoclip:${POSTGRES_PASSWORD}@postgres:5432/nexoclip
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       LOCAL_OBJECT_STORAGE_SECRET: ${LOCAL_OBJECT_STORAGE_SECRET}
       MUAPI_API_KEY: ${MUAPI_API_KEY}
@@ -158,6 +177,10 @@ services:
       DATABASE_URL: ${DATABASE_URL_SPITE}
       CRON_SECRET: ${SPITE_CRON_SECRET}
       FAL_KEY: ${FAL_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      BYTEPLUS_API_KEY: ${BYTEPLUS_API_KEY}
+      BYTEPLUS_BASE_URL: ${BYTEPLUS_BASE_URL}
       R2_ACCOUNT_ID: ${R2_ACCOUNT_ID}
       R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID}
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
@@ -219,7 +242,7 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      DATABASE_URL: ${DATABASE_URL_NEXOCLIP}
+      DATABASE_URL: postgresql://nexoclip:${POSTGRES_PASSWORD}@postgres:5432/nexoclip
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       LOCAL_OBJECT_STORAGE_DIR: /data/assets
       LOCAL_OBJECT_STORAGE_SECRET: ${LOCAL_OBJECT_STORAGE_SECRET}
@@ -245,7 +268,7 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      DATABASE_URL: ${DATABASE_URL_NEXOCLIP}
+      DATABASE_URL: postgresql://nexoclip:${POSTGRES_PASSWORD}@postgres:5432/nexoclip
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       LOCAL_OBJECT_STORAGE_DIR: /data/assets
       LOCAL_OBJECT_STORAGE_SECRET: ${LOCAL_OBJECT_STORAGE_SECRET}
@@ -264,6 +287,7 @@ services:
 
 volumes:
   nexoclip-assets:
+  postgres-data:
   redis-data:
   ai-clip-output:
   caddy-data:

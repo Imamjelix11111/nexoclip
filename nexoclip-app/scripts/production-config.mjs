@@ -1,5 +1,5 @@
 const requiredProduction = [
-  'DATABASE_URL_NEXOCLIP',
+  'POSTGRES_PASSWORD',
   'DATABASE_URL_SPITE',
   'MUAPI_API_KEY',
   'MUAPI_BASE_URL',
@@ -19,6 +19,9 @@ export function validateProductionEnvironment(env = process.env) {
   const errors = [];
   for (const name of requiredProduction) {
     if (!String(env[name] || '').trim()) errors.push(`${name} is required`);
+  }
+  if (String(env.POSTGRES_PASSWORD || '').trim().length < 24) {
+    errors.push('POSTGRES_PASSWORD must be at least 24 characters');
   }
   if (env.LOCAL_OBJECT_STORAGE_SECRET === 'development-only-change-me') {
     errors.push('LOCAL_OBJECT_STORAGE_SECRET must not use the development default');
