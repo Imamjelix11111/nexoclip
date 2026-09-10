@@ -18,6 +18,7 @@ import {
   useUpdateNodeInternals,
   useViewport,
   SelectionMode,
+  PanOnScrollMode,
   type NodeTypes,
   type EdgeTypes,
   type Connection,
@@ -1270,7 +1271,10 @@ function CanvasInner({ projectId }: { projectId: string }) {
               selectionOnDrag
               selectionMode={SelectionMode.Partial}
               panOnDrag={[1, 2]}
-              zoomOnScroll
+              panOnScroll
+              panOnScrollMode={PanOnScrollMode.Free}
+              zoomOnScroll={false}
+              zoomOnPinch
               minZoom={0.1}
               maxZoom={4}
               style={{ 
