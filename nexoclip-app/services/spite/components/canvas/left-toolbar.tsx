@@ -24,7 +24,6 @@ import {
   ChatCircle,
   ArrowCounterClockwise,
   ArrowClockwise,
-  Gear,
   User,
   Package,
   MapPin,
@@ -1996,12 +1995,6 @@ export function LeftToolbar({
           title="Redo"
         >
           <ArrowClockwise size={14} weight="thin" />
-        </button>
-        <button
-          className="flex items-center justify-center w-7 h-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
-          title="Settings"
-        >
-          <Gear size={14} weight="thin" />
         </button>
       </div>
 

@@ -65,7 +65,6 @@ import { CommentNode } from './nodes/comment-node'
 import { StickerNode, getLastSticker } from './nodes/sticker-node'
 import { CompressNode } from './nodes/compress-node'
 import { RealtimePresenceOverlay } from './realtime-presence'
-import { CanvasGuestList } from './canvas-guest-list'
 import { CanvasCollaborationProvider } from './canvas-collaboration'
 import { resolveFollowTarget } from '@/lib/canvas-node-interactions'
 
@@ -1194,6 +1193,8 @@ function CanvasInner({ projectId }: { projectId: string }) {
         jobsPanelOpen={jobsPanelOpen}
         onToggleJobsPanel={() => setJobsPanelOpen(v => !v)}
         activeJobCount={activeJobCount}
+        guests={remotePresence}
+        onFollowGuest={handleFollowGuest}
       />
 
       {/* Right-side jobs panel — fixed position, doesn't capture canvas
@@ -1319,8 +1320,6 @@ function CanvasInner({ projectId }: { projectId: string }) {
             </ReactFlow>
           )
         })()}
-
-        <CanvasGuestList peers={remotePresence} scenes={scenes} onFollow={handleFollowGuest} />
 
         <RealtimePresenceOverlay
           peers={remotePresence}

@@ -1,13 +1,15 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowLeft, MagnifyingGlassPlus, MagnifyingGlassMinus, CornersOut, Lock, CheckCircle, Circle, WarningCircle, Prohibit, GearSix, ListChecks, Question } from '@phosphor-icons/react'
+import { ArrowLeft, MagnifyingGlassPlus, MagnifyingGlassMinus, CornersOut, Lock, CheckCircle, Circle, WarningCircle, Prohibit, ListChecks, Question } from '@phosphor-icons/react'
 import { useReactFlow } from '@xyflow/react'
 import { useState } from 'react'
 import { useAuth } from '@/components/auth-provider'
 import { getCanvasSaveIndicator } from '@/lib/canvas-runtime-ui'
 import { startTour } from '@/lib/onboarding'
 import type { ProjectRuntimeState } from '@/realtime/project-runtime'
+import type { RemotePresencePeer } from '@/lib/realtime/presence'
+import { CanvasGuestList } from './canvas-guest-list'
 import { VersionBadge } from '@/components/version-badge'
 
 interface CanvasToolbarProps {
@@ -22,9 +24,11 @@ interface CanvasToolbarProps {
   jobsPanelOpen?: boolean
   onToggleJobsPanel?: () => void
   activeJobCount?: number
+  guests?: RemotePresencePeer[]
+  onFollowGuest?: (peer: RemotePresencePeer) => void
 }
 
-export function CanvasToolbar({ projectName, onProjectNameChange, persistenceStatus, projectId, readOnly = false, jobsPanelOpen, onToggleJobsPanel, activeJobCount = 0 }: CanvasToolbarProps) {
+export function CanvasToolbar({ projectName, onProjectNameChange, persistenceStatus, projectId, readOnly = false, jobsPanelOpen, onToggleJobsPanel, activeJobCount = 0, guests = [], onFollowGuest }: CanvasToolbarProps) {
   const { zoomIn, zoomOut, fitView } = useReactFlow()
   const [editing, setEditing] = useState(false)
   const { logout } = useAuth()
@@ -101,6 +105,8 @@ export function CanvasToolbar({ projectName, onProjectNameChange, persistenceSta
           <CornersOut size={14} weight="thin" />
         </button>
 
+        {onFollowGuest && <CanvasGuestList peers={guests} onFollow={onFollowGuest} />}
+
         <div className="w-px h-4 bg-border mx-1" />
 
         <div className="flex items-center gap-1.5 text-[10px] font-mono tracking-wider select-none">
@@ -164,14 +170,6 @@ export function CanvasToolbar({ projectName, onProjectNameChange, persistenceSta
         >
           <Question size={13} weight="thin" />
         </button>
-
-        <Link
-          href="/settings"
-          className="flex items-center justify-center w-7 h-7 rounded-lg glass-hover transition-colors text-muted-foreground hover:text-foreground"
-          title="Settings"
-        >
-          <GearSix size={13} weight="thin" />
-        </Link>
 
         <button
           onClick={handleLogout}
