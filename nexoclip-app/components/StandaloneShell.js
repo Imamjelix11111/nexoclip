@@ -31,7 +31,7 @@ const MarketingStudio = studioLazy('MarketingStudio');
 const WorkflowStudio = studioLazy('WorkflowStudio');
 const AiInfluencerStudio = studioLazy('AiInfluencerStudio');
 
-const SPITE_URL = process.env.NEXT_PUBLIC_SPITE_URL || 'http://localhost:3005';
+const SPITE_URL = process.env.NEXT_PUBLIC_SPITE_URL || '/spite';
 
 const TABS = [
   {

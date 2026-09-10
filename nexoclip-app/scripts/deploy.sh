@@ -26,7 +26,6 @@ fi
 if mode=$(stat -c '%a' "$DEPLOY_ENV_FILE" 2>/dev/null); then :; else mode=$(stat -f '%Lp' "$DEPLOY_ENV_FILE"); fi
 (( 10#$mode <= 600 )) || { echo "$DEPLOY_ENV_FILE must be chmod 600." >&2; exit 1; }
 
-set -a; . "./$DEPLOY_ENV_FILE"; set +a; NODE_ENV=production npm run config:check
 "${compose[@]}" config --quiet
 
 case "${1:-}" in
@@ -36,6 +35,23 @@ case "${1:-}" in
 esac
 
 "${compose[@]}" build
+set -a
+. "./$DEPLOY_ENV_FILE"
+set +a
+"${compose[@]}" run --rm --no-deps \
+  -e NODE_ENV=production \
+  -e POSTGRES_PASSWORD \
+  -e DATABASE_URL_SPITE \
+  -e MUAPI_API_KEY \
+  -e MUAPI_BASE_URL \
+  -e LOCAL_OBJECT_STORAGE_SECRET \
+  -e CANVAS_AUTH_URL \
+  -e CANVAS_AUTH_HMAC_SECRET \
+  -e REALTIME_JWT_SECRET \
+  -e NEXOCLIP_INTERNAL_URL \
+  -e NEXT_PUBLIC_REALTIME_URL \
+  nexoclip-migrate node scripts/production-config.mjs
+
 "${compose[@]}" up -d redis
 "${compose[@]}" run --rm nexoclip-migrate
 "${compose[@]}" run --rm spite-realtime-migrate

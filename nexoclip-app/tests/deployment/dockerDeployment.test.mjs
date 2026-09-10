@@ -119,9 +119,9 @@ test('deploy script validates the host and runs config + migrations before start
   assert.match(script, /Copy \.env\.production\.example to \.env\.production first\./);
   assert.match(script, /stat -c '%a' "\$DEPLOY_ENV_FILE"/);
   assert.match(script, /stat -f '%Lp' "\$DEPLOY_ENV_FILE"/);
-  assert.match(script, /set -a; \. "\.\/\$DEPLOY_ENV_FILE"; set \+a; NODE_ENV=production npm run config:check/);
+  assert.match(script, /run --rm --no-deps[\s\S]*-e NODE_ENV=production[\s\S]*-e POSTGRES_PASSWORD[\s\S]*nexoclip-migrate node scripts\/production-config\.mjs/);
   assert.match(script, /config --quiet/);
-  assert.ok(script.indexOf('NODE_ENV=production npm run config:check') < script.indexOf('"${compose[@]}" config --quiet'));
+  assert.ok(script.indexOf('"${compose[@]}" config --quiet') < script.indexOf('run --rm --no-deps'));
   assert.ok(script.indexOf('"${compose[@]}" config --quiet') < script.indexOf('run --rm nexoclip-migrate'));
   assert.ok(script.indexOf('"${compose[@]}" build') < script.indexOf('run --rm nexoclip-migrate'));
   assert.ok(script.indexOf('run --rm nexoclip-migrate') < script.indexOf('run --rm spite-realtime-migrate'));
@@ -158,6 +158,7 @@ test('Compose isolates databases, routes websocket traffic privately, and shares
   assert.match(blocks.redis, /--requirepass/);
   assert.match(blocks.redis, /redis-cli -a/);
 
+  assert.match(blocks.nexoclip, /NODE_ENV: production\n      NEXT_PUBLIC_SPITE_URL: \/spite/);
   assert.match(blocks.nexoclip, /DATABASE_URL_NEXOCLIP: postgresql:\/\/nexoclip:\$\{POSTGRES_PASSWORD\}@postgres:5432\/nexoclip/);
   assert.doesNotMatch(blocks.nexoclip, /DATABASE_URL_SPITE:/);
   assert.match(blocks.nexoclip, /CANVAS_AUTH_URL: \$\{CANVAS_AUTH_URL:\?CANVAS_AUTH_URL is required\}/);

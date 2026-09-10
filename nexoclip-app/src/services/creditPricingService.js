@@ -12,10 +12,10 @@ export function costUsdToCredits(costUsd) {
 
 const onboardingEntry = (workspaceId) => ({
   workspaceId,
-  amount: 100,
+  amount: 10000,
   reason: 'onboarding_grant',
   idempotencyKey: `onboarding:${workspaceId}`,
-  metadata: { credits: 100 },
+  metadata: { credits: 10000 },
 });
 
 export function grantOnboardingCredits(pool, { workspaceId }) {
