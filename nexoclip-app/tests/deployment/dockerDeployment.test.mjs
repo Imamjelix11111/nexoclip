@@ -127,6 +127,10 @@ test('deploy script validates the host and runs config + migrations before start
   assert.ok(script.indexOf('run --rm spite-realtime-migrate') < script.indexOf('run --rm spite-ownership-migrate'));
   assert.ok(script.indexOf('run --rm spite-ownership-migrate') < script.indexOf('up -d --remove-orphans'));
   assert.ok(script.indexOf('run --rm scheduler-migrate') < script.indexOf('up -d --remove-orphans'));
+  assert.match(script, /--wait --wait-timeout/);
+  assert.match(script, /DEPLOY_WAIT_TIMEOUT/);
+  assert.match(script, /logs --tail=100/);
+  assert.match(script, /Deployment failed at line/);
   assert.match(script, /"\$\{compose\[@\]\}" ps/);
 });
 
