@@ -175,6 +175,7 @@ test('Compose isolates databases, routes websocket traffic privately, and shares
   assert.match(blocks.spite, /NEXOCLIP_INTERNAL_URL: \$\{NEXOCLIP_INTERNAL_URL:\?NEXOCLIP_INTERNAL_URL is required\}/);
   assert.match(blocks.spite, /CANVAS_AUTH_URL: \$\{CANVAS_AUTH_URL:\?CANVAS_AUTH_URL is required\}/);
   assert.match(blocks.spite, /CANVAS_AUTH_HMAC_SECRET: \$\{CANVAS_AUTH_HMAC_SECRET\}/);
+  assert.match(blocks.spite, /REALTIME_TOKEN_SECRET: \$\{REALTIME_JWT_SECRET:\?REALTIME_JWT_SECRET is required\}/);
   assert.match(blocks.spite, /NEXT_PUBLIC_REALTIME_URL: \$\{NEXT_PUBLIC_REALTIME_URL:\?NEXT_PUBLIC_REALTIME_URL is required\}/);
 
   assert.match(blocks['spite-realtime'], /DATABASE_URL_SPITE: \$\{DATABASE_URL_SPITE\}/);
