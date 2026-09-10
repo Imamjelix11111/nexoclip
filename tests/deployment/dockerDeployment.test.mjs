@@ -57,11 +57,11 @@ test('production compose is AMD64 and exposes only Caddy plus declared private s
 test('deployment files, routes, and documented realtime env exist', () => {
   for (const path of [
     'Caddyfile',
-    '.dockerignore',
-    '.env.example',
+    'nexoclip-app/.dockerignore',
+    'nexoclip-app/.env.example',
     '.env.production.example',
-    'services/spite/Dockerfile',
-    'services/ai-clip/Dockerfile',
+    'nexoclip-app/services/spite/Dockerfile',
+    'nexoclip-app/services/ai-clip/Dockerfile',
   ]) {
     assert.equal(existsSync(path), true, `missing ${path}`);
   }
@@ -76,7 +76,7 @@ test('deployment files, routes, and documented realtime env exist', () => {
   assert.doesNotMatch(caddy, /reverse_proxy[^\n]*internal\/document/);
   assert.doesNotMatch(caddy, /handle \/scheduler\*/);
 
-  const envExample = read('.env.example');
+  const envExample = read('nexoclip-app/.env.example');
   assert.match(envExample, /^NEXT_PUBLIC_REALTIME_URL=\/spite\/ws$/m);
 
   const productionEnv = read('.env.production.example');
@@ -98,12 +98,12 @@ test('deployment files, routes, and documented realtime env exist', () => {
 });
 
 test('Docker context excludes secrets and Spite Dockerfile exposes Node 22 web/realtime targets', () => {
-  const ignore = read('.dockerignore');
+  const ignore = read('nexoclip-app/.dockerignore');
   assert.match(ignore, /^\.env\*$/m);
   assert.match(ignore, /^!\.env\.example$/m);
   assert.match(ignore, /^!\.env\.production\.example$/m);
 
-  const dockerfile = read('services/spite/Dockerfile');
+  const dockerfile = read('nexoclip-app/services/spite/Dockerfile');
   assert.match(dockerfile, /^FROM node:22-bookworm-slim AS base$/m);
   assert.match(dockerfile, /^FROM base AS realtime$/m);
   assert.match(dockerfile, /^FROM base AS migrate-realtime$/m);
@@ -113,6 +113,7 @@ test('Docker context excludes secrets and Spite Dockerfile exposes Node 22 web/r
 test('deploy script validates the host and runs config + migrations before startup', () => {
   const script = read('scripts/deploy.sh');
   assert.match(script, /^#!\/usr\/bin\/env bash\nset -Eeuo pipefail/);
+  assert.match(script, /DEPLOY_PROJECT_NAME="\$\{DEPLOY_PROJECT_NAME:-nexoclip-production\}"/);
   assert.match(script, /uname -m/);
   assert.match(script, /x86_64\/AMD64/);
   assert.match(script, /\[\[ -f "\$DEPLOY_ENV_FILE" \]\]/);
@@ -197,7 +198,7 @@ test('Compose isolates databases, routes websocket traffic privately, and shares
   assert.match(blocks['spite-realtime'], /spite-realtime-migrate: \{ condition: service_completed_successfully \}/);
   assert.match(blocks['spite-realtime'], /spite-ownership-migrate: \{ condition: service_completed_successfully \}/);
 
-  const publicLines = publicEnvLines(`${compose}\n${read('services/spite/Dockerfile')}\n${read('Dockerfile')}`);
+  const publicLines = publicEnvLines(`${compose}\n${read('nexoclip-app/services/spite/Dockerfile')}\n${read('nexoclip-app/Dockerfile')}`);
   for (const line of publicLines) {
     assert.doesNotMatch(line, /(DATABASE_URL|postgres(?:ql)?:\/\/)/i, `public build/env line must not contain DB credentials: ${line}`);
   }
@@ -208,8 +209,8 @@ test('Compose isolates databases, routes websocket traffic privately, and shares
 });
 
 test('Realtime dependency contract is pinned in app and spite manifests', () => {
-  const spitePackage = readJson('services/spite/package.json');
-  const appPackage = readJson('package.json');
+  const spitePackage = readJson('nexoclip-app/services/spite/package.json');
+  const appPackage = readJson('nexoclip-app/package.json');
 
   const providerVersion = spitePackage.dependencies['@hocuspocus/provider'];
   const serverVersion = spitePackage.dependencies['@hocuspocus/server'];

@@ -52,7 +52,7 @@ services:
   nexoclip-migrate:
     platform: linux/amd64
     build:
-      context: .
+      context: ./nexoclip-app
       target: migrate
     restart: "no"
     environment:
@@ -63,7 +63,7 @@ services:
   spite-realtime-migrate:
     platform: linux/amd64
     build:
-      context: services/spite
+      context: ./nexoclip-app/services/spite
       target: migrate-realtime
     restart: "no"
     environment:
@@ -74,7 +74,7 @@ services:
   spite-ownership-migrate:
     platform: linux/amd64
     build:
-      context: .
+      context: ./nexoclip-app
       target: node-runtime
     command: ["node", "scripts/migrate-spite-ownership.mjs"]
     restart: "no"
@@ -90,7 +90,7 @@ services:
   ai-clip:
     platform: linux/amd64
     build:
-      context: services/ai-clip
+      context: ./nexoclip-app/services/ai-clip
     restart: unless-stopped
     environment:
       AI_CLIP_RUNTIME_TOKEN: ${AI_CLIP_RUNTIME_TOKEN}
@@ -122,7 +122,7 @@ services:
   nexoclip:
     platform: linux/amd64
     build:
-      context: .
+      context: ./nexoclip-app
       target: web
       args:
         NEXT_PUBLIC_SPITE_URL: /spite
@@ -166,7 +166,7 @@ services:
   spite:
     platform: linux/amd64
     build:
-      context: services/spite
+      context: ./nexoclip-app/services/spite
       target: web
       args:
         NEXT_PUBLIC_BASE_PATH: /spite
@@ -206,7 +206,7 @@ services:
   spite-realtime:
     platform: linux/amd64
     build:
-      context: services/spite
+      context: ./nexoclip-app/services/spite
       target: realtime
     restart: unless-stopped
     expose:
@@ -237,7 +237,7 @@ services:
   image-worker:
     platform: linux/amd64
     build:
-      context: .
+      context: ./nexoclip-app
       target: worker
     command: ["node", "src/queue/imageWorker.mjs"]
     restart: unless-stopped
@@ -263,7 +263,7 @@ services:
   video-worker:
     platform: linux/amd64
     build:
-      context: .
+      context: ./nexoclip-app
       target: worker
     command: ["node", "src/queue/videoWorker.mjs"]
     restart: unless-stopped

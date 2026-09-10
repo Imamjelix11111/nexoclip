@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 
 DEPLOY_ENV_FILE="${DEPLOY_ENV_FILE:-.env.production}"
 DEPLOY_COMPOSE_FILE="${DEPLOY_COMPOSE_FILE:-docker-compose.prod.yml}"
-DEPLOY_PROJECT_NAME="${DEPLOY_PROJECT_NAME:-nexoclip}"
+DEPLOY_PROJECT_NAME="${DEPLOY_PROJECT_NAME:-nexoclip-production}"
 compose=(docker compose --project-name "$DEPLOY_PROJECT_NAME" --env-file "$DEPLOY_ENV_FILE" -f "$DEPLOY_COMPOSE_FILE")
 
 show_failure_logs() {

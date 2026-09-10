@@ -267,7 +267,8 @@ services:
       context: ./nexoclip-app
       target: web
       args:
-        NEXT_PUBLIC_SPITE_URL: http://localhost:3005/spite
+        # Caddy owns the public canvas route; do not expose the Spite app port in the UI.
+        NEXT_PUBLIC_SPITE_URL: http://localhost/spite
     container_name: nexoclip-app
     networks:
       - default
