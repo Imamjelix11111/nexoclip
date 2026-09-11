@@ -1,7 +1,24 @@
 # Monorepo orchestrator. Run from the repo root: `docker compose up --build`.
 # Redis, ownership/migration jobs, and the realtime canvas runtime stay private.
-# Next, Spite HTTP, and PostgreSQL are exposed for local development.
+# Caddy is the only public application ingress; database and Canvas ports remain internal.
 services:
+  caddy:
+    image: caddy:2.10-alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      nexoclip-app:
+        condition: service_started
+      spite:
+        condition: service_started
+      spite-realtime:
+        condition: service_healthy
+    restart: unless-stopped
+
   nexoclip-postgres:
     image: postgres:16-alpine
     container_name: nexoclip-postgres
@@ -9,8 +26,6 @@ services:
       POSTGRES_DB: nexoclip
       POSTGRES_USER: nexoclip
       POSTGRES_PASSWORD: nexoclip_dev
-    ports:
-      - "5434:5432"
     volumes:
       - nexoclip-postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -35,20 +50,6 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     restart: unless-stopped
 
-  ai-storyboard:
-    build: ./nexoclip-app/services/vimax
-    container_name: ai-storyboard
-    environment:
-      VIMAX_RUNTIME_TOKEN: ${VIMAX_RUNTIME_TOKEN:?Set VIMAX_RUNTIME_TOKEN in your environment}
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
-    volumes:
-      - ai-storyboard-tenants:/app/.tenants
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:4173/healthz')\""]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
 
   nexoclip-migrate:
     build:
@@ -93,6 +94,29 @@ services:
         condition: service_completed_successfully
     restart: "no"
 
+  ai-clip:
+    build:
+      context: ./nexoclip-app/services/ai-clip
+    environment:
+      AI_CLIP_RUNTIME_TOKEN: ${AI_CLIP_RUNTIME_TOKEN:?AI_CLIP_RUNTIME_TOKEN is required}
+      LOCAL_WHISPER_DEVICE: cpu
+      LOCAL_OUTPUT_DIR: /data/output
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-${GOOGLE_API_KEY:-}}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET: ${R2_BUCKET_NAME:-}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL:-}
+    volumes:
+      - ai-clip-output:/data/output
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4175/healthz', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
   nexoclip-asset-storage-init:
     image: busybox:1.37
     command: ["sh", "-c", "mkdir -p /data/assets && chown -R 1000:1000 /data"]
@@ -102,6 +126,7 @@ services:
 
   nexoclip-image-worker:
     networks:
+      - default
       - ai-ugc
     build:
       context: ./nexoclip-app
@@ -134,6 +159,7 @@ services:
 
   nexoclip-video-worker:
     networks:
+      - default
       - ai-ugc
     build:
       context: ./nexoclip-app
@@ -164,29 +190,6 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  nexoclip-storyboard-worker:
-    build:
-      context: ./nexoclip-app
-      target: worker
-    environment:
-      NODE_ENV: production
-      DATABASE_URL: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
-      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@nexoclip-redis:6379
-      VIMAX_RUNTIME_URL: http://ai-storyboard:4173
-      VIMAX_RUNTIME_TOKEN: ${VIMAX_RUNTIME_TOKEN:?Set VIMAX_RUNTIME_TOKEN in your environment}
-      VIMAX_PROGRESS_CALLBACK_URL: http://nexoclip-storyboard-worker:4180/internal/progress
-    expose:
-      - "4180"
-    depends_on:
-      nexoclip-postgres:
-        condition: service_healthy
-      nexoclip-migrate:
-        condition: service_completed_successfully
-      nexoclip-redis:
-        condition: service_healthy
-      ai-storyboard:
-        condition: service_healthy
-    restart: unless-stopped
 
   spite:
     build:
@@ -194,11 +197,9 @@ services:
       target: web
       args:
         NEXT_PUBLIC_BASE_PATH: /spite
-        NEXT_PUBLIC_STUDIO_URL: http://localhost:3000/studio
-        NEXT_PUBLIC_REALTIME_URL: ws://localhost:3007
+        NEXT_PUBLIC_STUDIO_URL: ${NEXT_PUBLIC_STUDIO_URL:-http://localhost:3000/studio}
+        NEXT_PUBLIC_REALTIME_URL: /spite/ws
     container_name: nexoclip-spite
-    ports:
-      - "3005:3005"
     environment:
       NODE_ENV: production
       DATABASE_URL_SPITE: ${DATABASE_URL_SPITE:?DATABASE_URL_SPITE is required}
@@ -234,8 +235,6 @@ services:
       context: ./nexoclip-app/services/spite
       target: realtime
     container_name: nexoclip-spite-realtime
-    ports:
-      - "3007:3007"
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0
@@ -268,22 +267,19 @@ services:
       target: web
       args:
         # Caddy owns the public canvas route; do not expose the Spite app port in the UI.
-        NEXT_PUBLIC_SPITE_URL: http://localhost/spite
+        NEXT_PUBLIC_SPITE_URL: ${NEXT_PUBLIC_SPITE_URL:-http://localhost/spite}
     container_name: nexoclip-app
     networks:
       - default
       - ai-ugc
-    ports:
-      - "3000:3000"
     environment:
       NODE_ENV: production
       DATABASE_URL_NEXOCLIP: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
       DATABASE_URL: postgres://nexoclip:nexoclip_dev@nexoclip-postgres:5432/nexoclip
-      VIMAX_SERVICE_URL: http://ai-storyboard:4173
-      VIMAX_RUNTIME_URL: http://ai-storyboard:4173
-      VIMAX_RUNTIME_TOKEN: ${VIMAX_RUNTIME_TOKEN:?Set VIMAX_RUNTIME_TOKEN in your environment}
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@nexoclip-redis:6379
       MUAPI_API_KEY: ${MUAPI_API_KEY:-}
+      AI_CLIP_RUNTIME_URL: http://ai-clip:4175
+      AI_CLIP_RUNTIME_TOKEN: ${AI_CLIP_RUNTIME_TOKEN:?AI_CLIP_RUNTIME_TOKEN is required}
       LOCAL_OBJECT_STORAGE_DIR: /data/assets
       LOCAL_OBJECT_STORAGE_SECRET: ${LOCAL_OBJECT_STORAGE_SECRET:?LOCAL_OBJECT_STORAGE_SECRET is required}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
@@ -314,9 +310,9 @@ services:
         condition: service_healthy
       nexoclip-migrate:
         condition: service_completed_successfully
-      ai-storyboard:
-        condition: service_healthy
       nexoclip-redis:
+        condition: service_healthy
+      ai-clip:
         condition: service_healthy
     restart: unless-stopped
 
@@ -329,6 +325,8 @@ volumes:
   nexoclip-postgres-data:
     external: true
     name: open-generative-ai_nexoclip-postgres-data
-  ai-storyboard-tenants:
+  caddy-data:
+  caddy-config:
   nexoclip-redis-data:
   nexoclip-assets:
+  ai-clip-output:
