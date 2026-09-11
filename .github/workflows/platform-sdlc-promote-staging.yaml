@@ -1,0 +1,15 @@
+name: Platform SDLC - Staging Promotion
+run-name: Deploy Staging | ${{ github.ref_name }} | by ${{ github.actor }}
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  sdlc:
+    uses: cekataiofficial/platform-modules/.github/workflows/sdlc-promote-staging.yaml@main
+    with:
+      branch_model: manual-promotion-v2

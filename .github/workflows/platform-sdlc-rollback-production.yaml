@@ -1,0 +1,31 @@
+name: Platform SDLC - Production Rollback
+run-name: Rollback Production | ${{ inputs.release_tag }} | by ${{ github.actor }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Target release tag, or auto-detect previous"
+        required: true
+        default: auto-detect previous
+        type: string
+      reason:
+        description: Why Production must be rolled back
+        required: true
+        type: string
+      incident_url:
+        description: Optional https:// incident or investigation URL
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  sdlc:
+    uses: cekataiofficial/platform-modules/.github/workflows/sdlc-rollback-production.yaml@main
+    with:
+      release_tag: ${{ inputs.release_tag }}
+      reason: ${{ inputs.reason }}
+      incident_url: ${{ inputs.incident_url }}
