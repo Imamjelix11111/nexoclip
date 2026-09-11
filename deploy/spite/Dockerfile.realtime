@@ -11,6 +11,6 @@ COPY --chown=node:node nexoclip-app/services/spite/realtime ./realtime
 COPY --chown=node:node nexoclip-app/services/spite/scripts ./scripts
 COPY --chown=node:node nexoclip-app/services/spite/database-setup.sql ./database-setup.sql
 
-USER node
+USER 1001:1001
 EXPOSE 3007
 CMD ["pnpm", "realtime"]
