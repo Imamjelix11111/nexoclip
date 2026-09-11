@@ -12,6 +12,9 @@ probes:
   readinessPath: /spite
 
 externalSecret:
+  secretStoreRef:
+    name: ai-ugc-spite-gsm
+    kind: SecretStore
   target: ai-ugc-spite-gsm
   dataFrom:
     - extract:
