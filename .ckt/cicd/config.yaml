@@ -4,7 +4,7 @@ components:
   - name: ai-ugc-http
     language: node
     build:
-      docker_args:
-        CMD_PATH: src
+      docker_filepath: nexoclip-app/Dockerfile
+      docker_inject_runtime_env_during_build: true
     deploy:
       charts_values_filepath: .ckt/cicd/charts/values-ai-ugc-http.yaml

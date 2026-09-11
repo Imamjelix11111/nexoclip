@@ -6,9 +6,9 @@ image:
 # Container ports exposed by this Component.
 ports:
   - name: http
-    containerPort: 8080
+    containerPort: 3000
 
 # Health checks used by Kubernetes during startup and normal operation.
 probes:
-  livenessPath: /healthz
-  readinessPath: /readyz
+  livenessPath: /
+  readinessPath: /
