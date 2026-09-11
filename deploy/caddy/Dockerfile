@@ -1,6 +1,6 @@
 FROM caddy:2.10-alpine
 
-COPY deploy/caddy/Caddyfile /etc/caddy/Caddyfile
+COPY --chown=1001:1001 deploy/caddy/Caddyfile /etc/caddy/Caddyfile
 
-USER caddy
+USER 1001:1001
 EXPOSE 8080
