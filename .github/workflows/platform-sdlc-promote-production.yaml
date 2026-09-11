@@ -1,0 +1,24 @@
+name: Platform SDLC - Production Promotion
+run-name: >-
+  ${{ format('Deploy Production{0} | {1} | by {2}',
+      inputs.emergency_bypass_staging_validation && ' EMERGENCY' || '', github.ref_name, github.actor) }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      emergency_bypass_staging_validation:
+        description: "EMERGENCY: Bypass Staging Deployment Validation"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  sdlc:
+    uses: cekataiofficial/platform-modules/.github/workflows/sdlc-promote-production.yaml@main
+    with:
+      branch_model: manual-promotion-v2
+      emergency_bypass_staging_validation: ${{ inputs.emergency_bypass_staging_validation }}

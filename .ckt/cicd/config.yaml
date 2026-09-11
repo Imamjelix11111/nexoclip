@@ -1,0 +1,10 @@
+flow: helm-golden-chart
+
+components:
+  - name: ai-ugc-http
+    language: node
+    build:
+      docker_args:
+        CMD_PATH: src
+    deploy:
+      charts_values_filepath: .ckt/cicd/charts/values-ai-ugc-http.yaml

@@ -1,0 +1,24 @@
+name: Platform SDLC - Continuous Integration
+run-name: >-
+  ${{ github.event_name == 'pull_request' &&
+      format('CI | PR #{0} | {1} -> {2} | {3}', github.event.pull_request.number, github.head_ref, github.base_ref, github.event.pull_request.title) ||
+      github.event_name == 'workflow_dispatch' &&
+      format('CI | Manual | {0} | by {1}', github.ref_name, github.actor) ||
+      format('CI | Push | {0} | by {1}', github.ref_name, github.actor) }}
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [development, main, "release/**"]
+  push:
+    branches: [development, main, "release/**"]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  sdlc:
+    uses: cekataiofficial/platform-modules/.github/workflows/sdlc-ci.yaml@main
+    with:
+      branch_model: manual-promotion-v2

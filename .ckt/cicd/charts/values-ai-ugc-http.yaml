@@ -1,0 +1,14 @@
+# Container image coordinates; CI replaces the tag with the immutable published image.
+image:
+  repository: asia-southeast1-docker.pkg.dev/ckt-shared-platform-registry/ai-ugc/ai-ugc-http
+  tag: ""
+
+# Container ports exposed by this Component.
+ports:
+  - name: http
+    containerPort: 8080
+
+# Health checks used by Kubernetes during startup and normal operation.
+probes:
+  livenessPath: /healthz
+  readinessPath: /readyz
