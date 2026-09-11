@@ -1,4 +1,13 @@
 {
+  "name": "ai-ugc",
+  "private": true,
+  "version": "0.0.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "lint": "node --check nexoclip-app/src/db/pool.js && node --check nexoclip-app/app/api/auth/register/route.js && node --check nexoclip-app/app/api/auth/login/route.js"
+  },
   "dependencies": {
     "playwright": "^1.60.0"
   },
