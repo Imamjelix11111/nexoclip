@@ -12,6 +12,9 @@ probes:
   readinessPath: /
 
 externalSecret:
+  secretStoreRef:
+    name: ai-ugc-app-gsm
+    kind: SecretStore
   target: ai-ugc-app-gsm
   dataFrom:
     - extract:

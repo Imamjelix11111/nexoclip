@@ -12,6 +12,9 @@ probes:
   readinessPath: /healthz
 
 externalSecret:
+  secretStoreRef:
+    name: ai-ugc-ai-clip-gsm
+    kind: SecretStore
   target: ai-ugc-ai-clip-gsm
   dataFrom:
     - extract:
