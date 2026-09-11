@@ -7,7 +7,8 @@
   },
   "scripts": {
     "lint": "node --check nexoclip-app/src/db/pool.js && node --check nexoclip-app/app/api/auth/register/route.js && node --check nexoclip-app/app/api/auth/login/route.js",
-    "test": "node --test tests/deployment/*.test.mjs"
+    "test": "npm run test:deployment",
+    "test:deployment": "node --test tests/deployment/*.test.mjs"
   },
   "dependencies": {
     "playwright": "^1.60.0"
