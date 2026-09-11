@@ -20,6 +20,15 @@ resources:
     cpu: 25m
     memory: 64Mi
 
+externalSecret:
+  secretStoreRef:
+    name: ai-ugc-http-gsm
+    kind: SecretStore
+  target: ai-ugc-http-secrets
+
+networkPolicy:
+  allowedIngressFrom: []
+
 ingress:
   enabled: true
   audience: customer_cekat_ai
