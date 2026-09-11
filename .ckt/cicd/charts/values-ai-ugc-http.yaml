@@ -12,3 +12,12 @@ ports:
 probes:
   livenessPath: /
   readinessPath: /
+
+ingress:
+  enabled: true
+  audience: customer_cekat_ai
+  subdomains:
+    - studio
+  additionalOptionByEnv:
+    prd:
+      enablePublicIP: true
