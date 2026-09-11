@@ -1,5 +1,5 @@
 flow: helm-golden-chart
-
+#redeploy
 components:
   - name: ai-ugc-http
     language: node
