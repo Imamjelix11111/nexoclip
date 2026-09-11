@@ -1,0 +1,32 @@
+# Internal BullMQ image-generation consumer. No public ingress.
+image:
+  repository: asia-southeast1-docker.pkg.dev/ckt-shared-platform-registry/ai-ugc/ai-ugc-image-worker
+  tag: ""
+
+ports:
+  - name: http
+    containerPort: 8080
+
+probes:
+  livenessPath: /healthz
+  readinessPath: /healthz
+
+config:
+  GENERATION_WORKER_KIND: image
+
+externalSecret:
+  secretStoreRef:
+    name: ai-ugc-image-worker-gsm
+    kind: SecretStore
+  target: ai-ugc-image-worker-gsm
+  dataFrom:
+    - extract:
+        key: ai-ugc-secret-default
+
+networkPolicy:
+  allowedIngressFrom: []
+
+rollout:
+  canary:
+    maxSurge: 0
+    maxUnavailable: 1

@@ -1,0 +1,17 @@
+FROM node:20-bookworm-slim
+
+WORKDIR /app
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=8080
+
+COPY nexoclip-app/package.json nexoclip-app/package-lock.json ./
+COPY nexoclip-app/packages/Vibe-Workflow/packages/workflow-builder/package*.json ./packages/Vibe-Workflow/packages/workflow-builder/
+COPY nexoclip-app/packages/Open-Poe-AI/packages/agents/package*.json ./packages/Open-Poe-AI/packages/agents/
+COPY nexoclip-app/packages/Open-AI-Design-Agent/packages/design-agent/package*.json ./packages/Open-AI-Design-Agent/packages/design-agent/
+COPY nexoclip-app/packages/studio/package*.json ./packages/studio/
+RUN ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci
+
+COPY --chown=node:node nexoclip-app/src ./src
+COPY --chown=node:node nexoclip-app/package.json ./package.json
+
+USER node
+CMD ["node", "src/queue/workerService.mjs"]

@@ -4,7 +4,7 @@ ENV NEXT_TELEMETRY_DISABLED=1 NODE_ENV=production HOST=0.0.0.0 PORT=3007
 RUN corepack enable
 
 COPY nexoclip-app/services/spite/package.json nexoclip-app/services/spite/pnpm-lock.yaml nexoclip-app/services/spite/pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile --prod=false
+RUN pnpm install --frozen-lockfile
 COPY --chown=node:node nexoclip-app/services/spite/tsconfig.json nexoclip-app/services/spite/next.config.mjs ./
 COPY --chown=node:node nexoclip-app/services/spite/lib ./lib
 COPY --chown=node:node nexoclip-app/services/spite/realtime ./realtime

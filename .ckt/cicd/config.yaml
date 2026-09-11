@@ -19,6 +19,20 @@ components:
     deploy:
       charts_values_filepath: .ckt/cicd/charts/values-ai-ugc-app.yaml
 
+  - name: ai-ugc-image-worker
+    language: node
+    build:
+      docker_filepath: deploy/nexoclip/Dockerfile.worker
+    deploy:
+      charts_values_filepath: .ckt/cicd/charts/values-ai-ugc-image-worker.yaml
+
+  - name: ai-ugc-video-worker
+    language: node
+    build:
+      docker_filepath: deploy/nexoclip/Dockerfile.worker
+    deploy:
+      charts_values_filepath: .ckt/cicd/charts/values-ai-ugc-video-worker.yaml
+
   - name: ai-ugc-spite
     language: node
     build:
