@@ -1,10 +1,46 @@
 flow: helm-golden-chart
 
+# Kubernetes/Argo deploys Components individually; it does not run root Docker
+# Compose. Only ai-ugc-http is public. Its Caddy gateway routes Canvas traffic
+# to the internal services below.
 components:
   - name: ai-ugc-http
+    language: node
+    build:
+      docker_filepath: deploy/caddy/Dockerfile
+    deploy:
+      charts_values_filepath: .ckt/cicd/charts/values-ai-ugc-http.yaml
+
+  - name: ai-ugc-app
     language: node
     build:
       docker_filepath: nexoclip-app/Dockerfile
       docker_inject_runtime_env_during_build: true
     deploy:
-      charts_values_filepath: .ckt/cicd/charts/values-ai-ugc-http.yaml
+      charts_values_filepath: .ckt/cicd/charts/values-ai-ugc-app.yaml
+
+  - name: ai-ugc-spite
+    language: node
+    build:
+      docker_filepath: deploy/spite/Dockerfile.web
+      docker_inject_runtime_env_during_build: true
+      docker_args:
+        NEXT_PUBLIC_BASE_PATH: /spite
+        NEXT_PUBLIC_STUDIO_URL: https://studio.dev.cekat.ai/studio
+        NEXT_PUBLIC_REALTIME_URL: /spite/ws
+    deploy:
+      charts_values_filepath: .ckt/cicd/charts/values-ai-ugc-spite.yaml
+
+  - name: ai-ugc-spite-realtime
+    language: node
+    build:
+      docker_filepath: deploy/spite/Dockerfile.realtime
+    deploy:
+      charts_values_filepath: .ckt/cicd/charts/values-ai-ugc-spite-realtime.yaml
+
+  - name: ai-ugc-ai-clip
+    language: node
+    build:
+      docker_filepath: deploy/ai-clip/Dockerfile
+    deploy:
+      charts_values_filepath: .ckt/cicd/charts/values-ai-ugc-ai-clip.yaml

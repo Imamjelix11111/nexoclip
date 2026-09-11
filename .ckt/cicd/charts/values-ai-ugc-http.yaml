@@ -1,17 +1,24 @@
-# Container image coordinates; CI replaces the tag with the immutable published image.
+# Public Studio gateway. Caddy routes / to NexoClip, /spite to Canvas and
+# /spite/ws to the Canvas realtime service on the private cluster network.
 image:
   repository: asia-southeast1-docker.pkg.dev/ckt-shared-platform-registry/ai-ugc/ai-ugc-http
   tag: ""
 
-# Container ports exposed by this Component.
 ports:
   - name: http
-    containerPort: 3000
+    containerPort: 8080
 
-# Health checks used by Kubernetes during startup and normal operation.
 probes:
-  livenessPath: /
-  readinessPath: /
+  livenessPath: /healthz
+  readinessPath: /healthz
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 32Mi
+  limits:
+    cpu: 25m
+    memory: 64Mi
 
 ingress:
   enabled: true
@@ -19,5 +26,12 @@ ingress:
   subdomains:
     - studio
   additionalOptionByEnv:
+    dev:
+      enablePublicIP: true
+    stg:
+      enablePublicIP: true
     prd:
       enablePublicIP: true
+
+networkPolicy:
+  allowedIngressFrom: []

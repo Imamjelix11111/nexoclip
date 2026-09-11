@@ -1,0 +1,23 @@
+# Internal AI Clip runtime.
+image:
+  repository: asia-southeast1-docker.pkg.dev/ckt-shared-platform-registry/ai-ugc/ai-ugc-ai-clip
+  tag: ""
+
+ports:
+  - name: http
+    containerPort: 4175
+
+probes:
+  livenessPath: /healthz
+  readinessPath: /healthz
+
+externalSecret:
+  target: ai-ugc-ai-clip-gsm
+  dataFrom:
+    - extract:
+        key: ai-ugc-secret-default
+
+networkPolicy:
+  allowedIngressFrom:
+    - system: ai-ugc
+      component: ai-ugc-app

@@ -1,0 +1,23 @@
+# Internal Canvas web service. Caddy gateway is the only public route owner.
+image:
+  repository: asia-southeast1-docker.pkg.dev/ckt-shared-platform-registry/ai-ugc/ai-ugc-spite
+  tag: ""
+
+ports:
+  - name: http
+    containerPort: 3005
+
+probes:
+  livenessPath: /spite
+  readinessPath: /spite
+
+externalSecret:
+  target: ai-ugc-spite-gsm
+  dataFrom:
+    - extract:
+        key: ai-ugc-secret-default
+
+networkPolicy:
+  allowedIngressFrom:
+    - system: ai-ugc
+      component: ai-ugc-http

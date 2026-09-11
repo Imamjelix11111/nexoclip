@@ -1,0 +1,27 @@
+# Internal Canvas realtime/WebSocket service.
+image:
+  repository: asia-southeast1-docker.pkg.dev/ckt-shared-platform-registry/ai-ugc/ai-ugc-spite-realtime
+  tag: ""
+
+ports:
+  - name: http
+    containerPort: 3007
+
+probes:
+  livenessPath: /healthz
+  readinessPath: /healthz
+
+externalSecret:
+  target: ai-ugc-spite-realtime-gsm
+  dataFrom:
+    - extract:
+        key: ai-ugc-secret-default
+
+networkPolicy:
+  allowedIngressFrom:
+    - system: ai-ugc
+      component: ai-ugc-http
+    - system: ai-ugc
+      component: ai-ugc-app
+    - system: ai-ugc
+      component: ai-ugc-spite

@@ -1,0 +1,25 @@
+# Internal NexoClip application. Public traffic enters only through ai-ugc-http.
+image:
+  repository: asia-southeast1-docker.pkg.dev/ckt-shared-platform-registry/ai-ugc/ai-ugc-app
+  tag: ""
+
+ports:
+  - name: http
+    containerPort: 3000
+
+probes:
+  livenessPath: /
+  readinessPath: /
+
+externalSecret:
+  target: ai-ugc-app-gsm
+  dataFrom:
+    - extract:
+        key: ai-ugc-secret-default
+
+networkPolicy:
+  allowedIngressFrom:
+    - system: ai-ugc
+      component: ai-ugc-http
+    - system: ai-ugc
+      component: ai-ugc-spite

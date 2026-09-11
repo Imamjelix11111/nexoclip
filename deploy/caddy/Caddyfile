@@ -1,0 +1,35 @@
+{
+	admin off
+	persist_config off
+}
+
+:8080 {
+	encode zstd gzip
+
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	# Internal endpoints must never be exposed by the public Studio gateway.
+	handle /spite/api/internal/* {
+		respond 404
+	}
+
+	handle /api/internal/* {
+		respond 404
+	}
+
+	# Keep Canvas and its WebSocket endpoint on the Studio origin so the
+	# NexoClip session cookie is available to Canvas requests.
+	handle /spite/ws* {
+		reverse_proxy ai-ugc-spite-realtime:3007
+	}
+
+	handle /spite* {
+		reverse_proxy ai-ugc-spite:3005
+	}
+
+	handle {
+		reverse_proxy ai-ugc-app:3000
+	}
+}
