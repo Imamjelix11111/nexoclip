@@ -9,6 +9,7 @@ import { isRequestAuthenticated } from '@/lib/main-session'
 // - /api/assets/cleanup: scheduled cleanup job, auth via CRON_SECRET
 // - /api/r2-image: media proxy, does its own signed-token check
 const PUBLIC_PATHS = [
+  '/healthz',
   '/setup',
   '/api/assets/cleanup',
   '/api/r2-image',
@@ -31,6 +32,12 @@ export async function middleware(request: NextRequest) {
 
   if (appPath.startsWith('/api/internal/')) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
+  // Kubernetes health checks must not depend on runtime provider configuration
+  // or a user session.
+  if (appPath === '/healthz' || pathname.endsWith('/healthz')) {
+    return NextResponse.next({ request: { headers: forwardedHeaders } })
   }
 
   // First gate: refuse to boot if required env vars are missing. Sends
@@ -56,7 +63,7 @@ export async function middleware(request: NextRequest) {
   // is accepted; it is validated server-to-server by the main app.
   const isAuthenticated = await isRequestAuthenticated(request)
 
-  const isPublic = PUBLIC_PATHS.some(
+  const isPublic = appPath === '/healthz' || pathname.endsWith('/healthz') || PUBLIC_PATHS.some(
     (p) => appPath === p || appPath.startsWith(p + '/'),
   )
 
