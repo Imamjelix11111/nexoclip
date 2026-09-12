@@ -197,7 +197,7 @@ services:
       target: web
       args:
         NEXT_PUBLIC_BASE_PATH: /spite
-        NEXT_PUBLIC_STUDIO_URL: ${NEXT_PUBLIC_STUDIO_URL:-http://localhost:3000/studio}
+        NEXT_PUBLIC_STUDIO_URL: ${NEXT_PUBLIC_STUDIO_URL:-http://localhost/studio}
         NEXT_PUBLIC_REALTIME_URL: /spite/ws
     container_name: nexoclip-spite
     environment:
