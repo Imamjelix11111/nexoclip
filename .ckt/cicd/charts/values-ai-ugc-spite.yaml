@@ -8,8 +8,12 @@ ports:
     containerPort: 3005
 
 probes:
-  livenessPath: /spite
-  readinessPath: /spite
+  livenessPath: /spite/healthz
+  readinessPath: /spite/healthz
+
+config:
+  NEXOCLIP_INTERNAL_URL: http://ai-ugc-app.ai-ugc.svc.cluster.local:3000
+  CANVAS_AUTH_URL: http://ai-ugc-spite-realtime.ai-ugc.svc.cluster.local:3007/internal/authorize
 
 externalSecret:
   secretStoreRef:

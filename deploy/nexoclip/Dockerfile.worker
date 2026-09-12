@@ -10,8 +10,8 @@ COPY nexoclip-app/packages/Open-AI-Design-Agent/packages/design-agent/package*.j
 COPY nexoclip-app/packages/studio/package*.json ./packages/studio/
 RUN ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci
 
-COPY --chown=node:node nexoclip-app/src ./src
-COPY --chown=node:node nexoclip-app/package.json ./package.json
+COPY --chown=1001:1001 nexoclip-app/src ./src
+COPY --chown=1001:1001 nexoclip-app/package.json ./package.json
 
 USER 1001:1001
 CMD ["node", "src/queue/workerService.mjs"]

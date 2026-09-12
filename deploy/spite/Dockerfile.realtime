@@ -13,4 +13,4 @@ COPY --chown=1001:1001 nexoclip-app/services/spite/database-setup.sql ./database
 
 USER 1001:1001
 EXPOSE 3007
-CMD ["pnpm", "realtime"]
+CMD ["./node_modules/.bin/tsx", "realtime/server.ts"]

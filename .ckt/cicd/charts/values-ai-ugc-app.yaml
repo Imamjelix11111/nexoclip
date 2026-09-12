@@ -11,6 +11,10 @@ probes:
   livenessPath: /
   readinessPath: /
 
+config:
+  CANVAS_AUTH_URL: http://ai-ugc-spite-realtime.ai-ugc.svc.cluster.local:3007/internal/authorize
+  AI_CLIP_RUNTIME_URL: http://ai-ugc-ai-clip.ai-ugc.svc.cluster.local:4175
+
 externalSecret:
   secretStoreRef:
     name: ai-ugc-app-gsm
