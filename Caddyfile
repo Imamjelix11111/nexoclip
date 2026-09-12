@@ -23,7 +23,7 @@
 		}
 
 		handle {
-			reverse_proxy nexoclip:3000
+			reverse_proxy nexoclip-app:3000
 		}
 	}
 }
