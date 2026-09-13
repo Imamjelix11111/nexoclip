@@ -851,23 +851,6 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     })
   }
 
-  const handleCancel = async () => {
-    if (!generationId || !currentModel) return
-
-    // Stop polling immediately and locally, regardless of whether fal can
-    // still cancel the job — so the UI reliably unsticks on click.
-    stopRef.current = true
-    if (pollingRef.current) clearTimeout(pollingRef.current)
-    setStatus('cancelled')
-    toast.warning('Generation cancelled', { description: currentModel.name })
-    const reqId = generationId
-    const cancelModel = providerModel || currentModel.providerModel
-    setGenerationId(null)
-    clearPending()
-
-
-  }
-
   const isGenerating = status === 'submitting' || status === 'in_queue' || status === 'in_progress'
   const isTaggedToShot = !!selectedShotId
 
@@ -1083,36 +1066,17 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
             )}
           </div>
           
-          {/* Generate / Cancel / Re-check button. After a 10-min soft
-              timeout the node sits in status='failed' but still holds the
-              fal generationId — Re-check polls fal one more time in case
-              the job finished after the timeout window (fal keeps results
-              ~24h, so slow generations aren't lost). */}
-          {isGenerating ? (
+          {/* A submitted durable job cannot be cancelled safely: the provider may
+              finish after a local cancel and leave the node/server disagreeing.
+              Keep polling, and offer re-check only after a soft timeout. */}
+          {isGenerating ? null : status === 'failed' && generationId ? (
             <button
-              onClick={handleCancel}
-              className="w-6 h-6 rounded-full bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white flex items-center justify-center transition-colors"
-              title="Cancel generation"
+              onClick={handleRecheck}
+              className="px-2 h-6 rounded-full bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-white flex items-center justify-center transition-colors text-[9px] font-mono"
+              title="Check the durable generation result again."
             >
-              <X size={10} weight="bold" />
+              Re-check
             </button>
-          ) : status === 'failed' && generationId ? (
-            <div className="flex items-center gap-1">
-              <button
-                onClick={handleRecheck}
-                className="px-2 h-6 rounded-full bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-white flex items-center justify-center transition-colors text-[9px] font-mono"
-                title="Try fetching the result from fal again — generations that took longer than the timeout window may still be available."
-              >
-                Re-check
-              </button>
-              <button
-                onClick={handleCancel}
-                className="w-6 h-6 rounded-full bg-white/5 hover:bg-red-500 text-muted-foreground hover:text-white flex items-center justify-center transition-colors"
-                title="Give up and clear this request from the node"
-              >
-                <X size={10} weight="bold" />
-              </button>
-            </div>
           ) : (
             <button
               onClick={requestGenerate}
