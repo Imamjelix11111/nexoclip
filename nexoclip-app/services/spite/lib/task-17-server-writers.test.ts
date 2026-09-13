@@ -111,7 +111,7 @@ test('normalizes Canvas-only image controls for the durable generation API', asy
   }))
 
   assert.equal(response.status, 202)
-  assert.equal((submissions[0] as any).input.model, 'gemini-3.1-flash-image')
+  assert.equal((submissions[0] as any).input.model, 'google/gemini-3.1-flash-image')
   assert.deepEqual((submissions[0] as any).input.parameters, { resolution: '1K' })
 })
 

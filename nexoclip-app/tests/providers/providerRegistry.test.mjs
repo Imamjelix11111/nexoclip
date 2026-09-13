@@ -11,6 +11,7 @@ test('maps supported generator model IDs to direct providers', () => {
   assert.deepEqual(getDirectProvider('google-imagen4-fast'), { provider: 'google', model: 'imagen-4.0-fast-generate-001' });
   assert.deepEqual(getDirectProvider('gpt-image-1.5'), { provider: 'openai', model: 'gpt-image-1.5' });
   assert.deepEqual(getDirectProvider('seedance-v2.0-t2v'), { provider: 'byteplus', model: 'dreamina-seedance-2-0-260128' });
+  assert.deepEqual(getDirectProvider('gemini-2.5-flash-image'), { provider: 'google', model: 'gemini-2.5-flash-image' });
   assert.equal(getDirectProvider('flux-2-pro'), null);
 });
 

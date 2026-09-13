@@ -37,6 +37,8 @@ const DIRECT_MODEL_MAP = new Map([
 
 const DIRECT_PREFIXES = [
   ['google/', 'google'],
+  ['gemini-', 'google'],
+  ['imagen-', 'google'], 
   ['gpt-image-', 'openai'],
   ['openai/gpt-image-', 'openai'],
 ];
