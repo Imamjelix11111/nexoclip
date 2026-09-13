@@ -14,7 +14,7 @@ test('rejects unsupported or oversized assets', () => {
   assert.throws(() => validateAssetInput({ filename: 'cover.png', contentType: 'image/png', sizeBytes: 50 * 1024 * 1024 + 1 }), /size/);
 });
 
-test('uses R2 for asset downloads when R2 is configured', () => {
+test('uses R2 for asset downloads when R2 is configured', async () => {
   const keys = ['R2_BUCKET', 'R2_PUBLIC_URL', 'R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY'];
   const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
   Object.assign(process.env, {
@@ -26,7 +26,9 @@ test('uses R2 for asset downloads when R2 is configured', () => {
   });
 
   try {
-    assert.ok(createStorage() instanceof R2ObjectStorage);
+    const storage = createStorage();
+    assert.ok(storage instanceof R2ObjectStorage);
+    assert.deepEqual(await storage.createDownloadUrl({ key: 'workspace/asset.png' }), { url: 'workspace/asset.png' });
   } finally {
     for (const key of keys) {
       if (previous[key] === undefined) delete process.env[key];

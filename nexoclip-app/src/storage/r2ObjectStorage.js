@@ -29,6 +29,10 @@ export class R2ObjectStorage {
     return `${this.publicUrl}/${key.split('/').map(encodeURIComponent).join('/')}`;
   }
 
+  async createDownloadUrl({ key }) {
+    return { url: key };
+  }
+
   async get(key) {
     return this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
   }
