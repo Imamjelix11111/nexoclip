@@ -52,7 +52,7 @@ export function createGenerateSubmitHandler(deps: GenerateSubmitDeps = {}) {
         return NextResponse.json({ error: 'projectId, nodeId, kind, prompt, and model are required' }, { status: 400 })
       }
       const configuredModel = getModelById(modelId)
-      const model = configuredModel?.category === kind ? configuredModel.providerModel : modelId
+      const model = configuredModel && configuredModel.category === kind ? configuredModel.providerModel : modelId
 
       const realtime = createRealtimeClient()
       if (!mobile) {
