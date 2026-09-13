@@ -252,12 +252,28 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     setEnableLoop((data.enableLoop as boolean) || false)
     setVoiceIds((data.voiceIds as string) || '')
     setNumVideos((data.numVideos as number) || 1)
-    setStatus((data.status as GenerationStatus) || ((data.outputUrl as string | undefined) ? 'completed' : 'idle'))
-    setError((data.error as string) || null)
+    const durableStatus = data.generationStatus === 'failed'
+      ? 'failed'
+      : data.generationStatus === 'completed'
+        ? 'completed'
+        : undefined
+    setStatus(durableStatus || (data.status as GenerationStatus) || ((data.outputUrl as string | undefined) ? 'completed' : 'idle'))
+    setError((data.generationError as string) || (data.error as string) || null)
     setSubmittedAt((data.submittedAt as number) || undefined)
     setOutputUrl(resolveNodeMediaUrl({ outputUrl: data.outputUrl }) || null)
     queueMicrotask(finishSync)
   }, [data.aspectRatio, data.colormap, data.duration, data.enableAudio, data.enableLoop, data.error, data.modelId, data.numVideos, data.outputUrl, data.resolution, data.status, data.submittedAt, data.upscaleMode, data.voiceIds])
+
+  // Repair durable asset URLs written by pre-fix bundles before rendering.
+  useEffect(() => {
+    if (typeof data.outputUrl !== 'string' || !data.outputUrl.startsWith('/spite/api/assets/')) return
+    const repaired = data.outputUrl.slice('/spite'.length)
+    setOutputUrl(repaired)
+    updatePersistedNodeData((currentData) => ({
+      ...completeGenerationNode(currentData, repaired),
+      generationId: undefined,
+    }))
+  }, [data.outputUrl, updatePersistedNodeData])
 
   // Kling v3 references ride the image-to-video endpoint, which requires a
   // first frame. Block generation (with a clear message) when refs are

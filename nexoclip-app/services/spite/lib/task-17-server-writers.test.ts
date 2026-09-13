@@ -235,10 +235,11 @@ test('writes a successful durable generation result to the owned canvas node onc
   assert.deepEqual(patches[0], {
     userId: OWNER_ID, projectId: PROJECT_ID, nodeId: 'node-1',
     set: { generationStatus: 'completed', outputUrl: '/api/assets/a/download', status: 'completed', error: null, generationError: null },
+    unset: ['generationId'],
   })
 })
 
-test('does not overwrite a completed node during a repeated terminal poll', async () => {
+test('rejects a repeated terminal poll after its generation marker is cleared', async () => {
   const patches: unknown[] = []
   const handler = createGenerateStatusHandler({
     getAuthenticatedUser: async () => ({ id: OWNER_ID }),
@@ -253,7 +254,7 @@ test('does not overwrite a completed node during a repeated terminal poll', asyn
     }),
     createInternalRealtimeClient: () => ({
       exportDocument: async () => ({ projection: canvasWithNode('node-1', 'imageGen', {
-        generationId: 'g1', generationStatus: 'completed', outputUrl: '/api/assets/a/download', status: 'completed', error: null, generationError: null,
+        generationStatus: 'completed', outputUrl: '/api/assets/a/download', status: 'completed', error: null, generationError: null,
       }), durableSeq: 1, projectedSeq: 1 }),
       patchNodeData: async (patch: unknown) => { patches.push(patch) },
     }) as any,
@@ -261,7 +262,7 @@ test('does not overwrite a completed node during a repeated terminal poll', asyn
 
   const response = await handler(makeRequest(`http://spite.local/api/generate/status?projectId=${PROJECT_ID}&nodeId=node-1&generationId=g1`))
 
-  assert.equal(response.status, 200)
+  assert.equal(response.status, 404)
   assert.equal(patches.length, 0)
 })
 

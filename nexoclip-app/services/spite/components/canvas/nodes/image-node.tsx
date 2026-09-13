@@ -227,7 +227,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
       .then(result => {
         const url = result?.output?.url
         if (cancelled || !url) return
-        const completedUrl = withBasePath(url)
+        const completedUrl = withGenerationOutputBasePath(url)
         setOutputUrl(completedUrl)
         setStatus('completed')
         setGenerationId(null)
