@@ -77,7 +77,17 @@ export function createInternalGenerationHandler({
     }
     const generation = await getGeneration(workspace.id, body.generationId, loadStorage());
     if (!generation) return Response.json({ error: 'Generation not found' }, { status: 404 });
-    return Response.json({ generation });
+    return Response.json({ generation: canvasGeneration(generation, workspace.id) });
+  };
+}
+
+function canvasGeneration(generation, workspaceId) {
+  return {
+    ...generation,
+    outputs: (generation.outputs || []).map((output) => ({
+      ...output,
+      download: { url: `/api/assets/${output.assetId}/download?workspace_id=${encodeURIComponent(workspaceId)}` },
+    })),
   };
 }
 

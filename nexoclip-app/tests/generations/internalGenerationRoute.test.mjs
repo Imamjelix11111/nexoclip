@@ -5,6 +5,21 @@ import { createInternalGenerationHandler } from '../../app/api/internal/generati
 const userId = '11111111-1111-4111-8111-111111111111';
 const projectId = '22222222-2222-4222-8222-222222222222';
 
+test('returns Canvas outputs as authenticated main-app asset URLs', async () => {
+  const handler = createInternalGenerationHandler({
+    verify: () => true,
+    getDefaultWorkspace: async () => ({ id: 'workspace-1' }),
+    getGeneration: async () => ({ id: 'generation-1', status: 'succeeded', outputs: [{ assetId: 'asset-1', download: { url: 'private/key.png' } }] }),
+  });
+  const response = await handler(new Request('http://app/api/internal/generations', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'status', userId, projectId, nodeId: 'node-1', generationId: 'generation-1', timestamp: 1, nonce: 'nonce', signature: 'signature' }),
+  }));
+
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).generation.outputs[0].download.url, '/api/assets/asset-1/download?workspace_id=workspace-1');
+});
+
 test('publishes a successfully reserved internal image generation', async () => {
   const published = [];
   const handler = createInternalGenerationHandler({
