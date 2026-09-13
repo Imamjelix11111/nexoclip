@@ -1,0 +1,133 @@
+version: "1"
+
+databases:
+  - name: ai-ugc-postgres
+    databaseName: nexoclip
+    user: nexoclip
+    region: singapore
+    plan: basic-256mb
+
+services:
+  - type: keyvalue
+    name: ai-ugc-redis
+    region: singapore
+    plan: free
+    ipAllowList: []
+
+  - type: web
+    name: ai-ugc-http
+    region: singapore
+    runtime: docker
+    rootDir: .
+    dockerfilePath: deploy/caddy/Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    envVars:
+      - key: NEXOCLIP_UPSTREAM
+        fromService:
+          type: pserv
+          name: ai-ugc-app
+          property: hostport
+      - key: SPITE_UPSTREAM
+        fromService:
+          type: pserv
+          name: ai-ugc-spite
+          property: hostport
+      - key: SPITE_REALTIME_UPSTREAM
+        fromService:
+          type: pserv
+          name: ai-ugc-spite-realtime
+          property: hostport
+
+  - type: pserv
+    name: ai-ugc-app
+    region: singapore
+    runtime: docker
+    rootDir: .
+    dockerfilePath: nexoclip-app/Dockerfile
+    dockerContext: .
+    dockerBuildTarget: web
+    healthCheckPath: /
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ai-ugc-postgres
+          property: connectionString
+      - key: DATABASE_URL_NEXOCLIP
+        fromDatabase:
+          name: ai-ugc-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: ai-ugc-redis
+          property: connectionString
+
+  - type: pserv
+    name: ai-ugc-spite
+    region: singapore
+    runtime: docker
+    rootDir: .
+    dockerfilePath: deploy/spite/Dockerfile.web
+    dockerContext: .
+    healthCheckPath: /spite/healthz
+
+  - type: pserv
+    name: ai-ugc-spite-realtime
+    region: singapore
+    runtime: docker
+    rootDir: .
+    dockerfilePath: deploy/spite/Dockerfile.realtime
+    dockerContext: .
+    healthCheckPath: /healthz
+
+  - type: pserv
+    name: ai-ugc-ai-clip
+    region: singapore
+    runtime: docker
+    rootDir: .
+    dockerfilePath: deploy/ai-clip/Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+
+  - type: worker
+    name: ai-ugc-image-worker
+    region: singapore
+    runtime: docker
+    rootDir: .
+    dockerfilePath: deploy/nexoclip/Dockerfile.worker
+    dockerContext: .
+    dockerCommand: node src/queue/workerService.mjs
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ai-ugc-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: ai-ugc-redis
+          property: connectionString
+      - key: GENERATION_WORKER_KIND
+        value: image
+
+  - type: worker
+    name: ai-ugc-video-worker
+    region: singapore
+    runtime: docker
+    rootDir: .
+    dockerfilePath: deploy/nexoclip/Dockerfile.worker
+    dockerContext: .
+    dockerCommand: node src/queue/workerService.mjs
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ai-ugc-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: ai-ugc-redis
+          property: connectionString
+      - key: GENERATION_WORKER_KIND
+        value: video
