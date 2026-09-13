@@ -207,6 +207,14 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     queueMicrotask(finishSync)
   }, [data.aspectRatio, data.error, data.modelId, data.numImages, data.outputUrl, data.resolution, data.status, data.submittedAt])
 
+  // Repair outputs written before durable asset URLs were kept outside /spite.
+  useEffect(() => {
+    if (typeof data.outputUrl !== 'string' || !data.outputUrl.startsWith('/spite/api/assets/')) return
+    const repaired = data.outputUrl.slice('/spite'.length)
+    setOutputUrl(repaired)
+    updatePersistedNodeData((currentData) => completeGenerationNode(currentData, repaired))
+  }, [data.outputUrl, updatePersistedNodeData])
+
   // Recover a result when the provider/R2 request succeeded but the browser
   // lost the submit response before it could attach the URL to this node.
   useEffect(() => {
@@ -404,7 +412,10 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
           setOutputUrl(completedUrl)
           setStatus('completed')
           setGenerationId(null)
-          updatePersistedNodeData((currentData) => completeGenerationNode(currentData, completedUrl))
+          updatePersistedNodeData((currentData) => ({
+            ...completeGenerationNode(currentData, completedUrl),
+            generationId: undefined,
+          }))
           clearPending()
           // For batch generations, drop the extra results as duplicate nodes
           // laid out in a neat grid next to this one.
@@ -536,12 +547,15 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
           toast.error('Provider completed without an image URL', { id: toastId })
           return
         }
-        const completedUrl = withBasePath(imageUrl)
+        const completedUrl = withGenerationOutputBasePath(imageUrl)
         setOutputUrl(completedUrl)
         setStatus('completed')
         setGenerationId(null)
         setProgress(undefined)
-        updatePersistedNodeData((currentData) => completeGenerationNode(currentData, completedUrl))
+        updatePersistedNodeData((currentData) => ({
+          ...completeGenerationNode(currentData, completedUrl),
+          generationId: undefined,
+        }))
         clearPending()
         toast.success('Result is ready — saved to your library.', { id: toastId })
         return
@@ -835,7 +849,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     return `${label}\nEstimated cost: ~${formatUSD(costEstimate.total)} (${formatUSD(costEstimate.perUnit)} each).\nReal cost depends on resolution and model load.`
   }, [currentModel, numImages, costEstimate, resolvedPrompt.connected, resolvedPrompt.prompt])
   const requestGenerate = () => {
-    if (submitInFlightRef.current || generationId) return
+    if (submitInFlightRef.current || (generationId && ['submitting', 'in_queue', 'in_progress'].includes(status))) return
     if (costEstimate.isKnown && costEstimate.total >= COST_CONFIRM_THRESHOLD_USD) {
       const msg =
         `You're about to submit ${numImages} ${currentModel?.name || 'image'} generation${numImages === 1 ? '' : 's'} ` +

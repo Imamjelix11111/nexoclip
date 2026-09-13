@@ -439,7 +439,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           setOutputUrl(completedUrl)
           setStatus('completed')
           setGenerationId(null)
-          updatePersistedNodeData((currentData) => completeGenerationNode(currentData, completedUrl))
+          updatePersistedNodeData((currentData) => ({
+            ...completeGenerationNode(currentData, completedUrl),
+            generationId: undefined,
+          }))
           clearPending()
         } else {
           setStatus('failed')
@@ -891,7 +894,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     return `${label}\nEstimated cost: ~${formatUSD(costEstimate.total)} (${formatUSD(costEstimate.perUnit)} each).\nReal cost depends on resolution, duration and model load.`
   }, [blockedNoFirstFrame, costEstimate, currentModel, modelId, numVideos, resolvedPrompt.connected, resolvedPrompt.prompt, upscaleMode])
   const requestGenerate = () => {
-    if (submitInFlightRef.current || generationId) return
+    if (submitInFlightRef.current || (generationId && ['submitting', 'in_queue', 'in_progress'].includes(status))) return
     if (costEstimate.isKnown && costEstimate.total >= COST_CONFIRM_THRESHOLD_USD) {
       const msg =
         `You're about to submit ${numVideos} ${currentModel?.name || 'video'} generation${numVideos === 1 ? '' : 's'} ` +
