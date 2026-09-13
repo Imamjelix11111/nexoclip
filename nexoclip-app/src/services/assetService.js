@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { getPool } from '../db/pool.js';
 import { LocalObjectStorage } from '../storage/localObjectStorage.js';
+import { R2ObjectStorage } from '../storage/r2ObjectStorage.js';
 import { listAssets } from '../repositories/assetMetadataRepository.js';
 
 const allowedContentTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'audio/mpeg', 'audio/wav']);
@@ -16,10 +17,13 @@ export function validateAssetInput(input) {
   return { filename, contentType, sizeBytes };
 }
 
-export function createStorage() {
+export function createStorage(env = process.env) {
+  if (env.R2_BUCKET && env.R2_PUBLIC_URL && env.R2_ACCOUNT_ID && env.R2_ACCESS_KEY_ID && env.R2_SECRET_ACCESS_KEY) {
+    return new R2ObjectStorage();
+  }
   return new LocalObjectStorage({
-    root: process.env.LOCAL_OBJECT_STORAGE_DIR || '.local-object-storage',
-    secret: process.env.LOCAL_OBJECT_STORAGE_SECRET || 'development-only-change-me',
+    root: env.LOCAL_OBJECT_STORAGE_DIR || '.local-object-storage',
+    secret: env.LOCAL_OBJECT_STORAGE_SECRET || 'development-only-change-me',
   });
 }
 
