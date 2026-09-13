@@ -193,8 +193,13 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     setAspectRatio((data.aspectRatio as string) || '')
     setResolution((data.resolution as string) || '')
     setNumImages((data.numImages as number) || 1)
-    setStatus((data.status as GenerationStatus) || ((data.outputUrl as string | undefined) ? 'completed' : 'idle'))
-    setError((data.error as string) || null)
+    const durableStatus = data.generationStatus === 'failed'
+      ? 'failed'
+      : data.generationStatus === 'completed'
+        ? 'completed'
+        : undefined
+    setStatus(durableStatus || (data.status as GenerationStatus) || ((data.outputUrl as string | undefined) ? 'completed' : 'idle'))
+    setError((data.generationError as string) || (data.error as string) || null)
     setSubmittedAt((data.submittedAt as number) || undefined)
     setOutputUrl(resolveNodeMediaUrl({ outputUrl: data.outputUrl }) || null)
     queueMicrotask(finishSync)

@@ -115,6 +115,25 @@ test('normalizes Canvas-only image controls for the durable generation API', asy
   assert.deepEqual((submissions[0] as any).input.parameters, { resolution: '1K' })
 })
 
+test('returns a terminal durable failure even when realtime reconciliation is unavailable', async () => {
+  const handler = createGenerateStatusHandler({
+    getAuthenticatedUser: async () => ({ id: OWNER_ID }),
+    getDb: ownedProjectSql,
+    createNexoClipGenerationClient: () => ({
+      submit: async () => { throw new Error('submit should not be called') },
+      status: async () => ({ id: 'g1', kind: 'image', status: 'failed', error: { message: 'provider rejected request' } }),
+    }),
+    createInternalRealtimeClient: () => ({
+      exportDocument: async () => ({ projection: canvasWithNode('node-1', 'imageGen', { generationId: 'g1' }), durableSeq: 1, projectedSeq: 1 }),
+      patchNodeData: async () => { throw new Error('realtime temporarily unavailable') },
+    }) as any,
+  })
+
+  const response = await handler(makeRequest(`http://spite.local/api/generate/status?projectId=${PROJECT_ID}&nodeId=node-1&generationId=g1`))
+  assert.equal(response.status, 200)
+  assert.deepEqual(await response.json(), { generationId: 'g1', generationStatus: 'failed', error: 'provider rejected request' })
+})
+
 test('omits blank optional image settings so durable defaults apply', async () => {
   const submissions: unknown[] = []
   const handler = createGenerateSubmitHandler({
