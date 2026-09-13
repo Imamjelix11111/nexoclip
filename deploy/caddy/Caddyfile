@@ -22,14 +22,14 @@
 	# Keep Canvas and its WebSocket endpoint on the Studio origin so the
 	# NexoClip session cookie is available to Canvas requests.
 	handle /spite/ws* {
-		reverse_proxy ai-ugc-spite-realtime.ai-ugc.svc.cluster.local:3007
+		reverse_proxy {$SPITE_REALTIME_UPSTREAM:ai-ugc-spite-realtime.ai-ugc.svc.cluster.local:3007}
 	}
 
 	handle /spite* {
-		reverse_proxy ai-ugc-spite.ai-ugc.svc.cluster.local:3005
+		reverse_proxy {$SPITE_UPSTREAM:ai-ugc-spite.ai-ugc.svc.cluster.local:3005}
 	}
 
 	handle {
-		reverse_proxy ai-ugc-app.ai-ugc.svc.cluster.local:3000
+		reverse_proxy {$NEXOCLIP_UPSTREAM:ai-ugc-app.ai-ugc.svc.cluster.local:3000}
 	}
 }

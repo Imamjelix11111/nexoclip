@@ -8,6 +8,11 @@ ports:
   - name: http
     containerPort: 8080
 
+config:
+  NEXOCLIP_UPSTREAM: ai-ugc-app.ai-ugc.svc.cluster.local:3000
+  SPITE_UPSTREAM: ai-ugc-spite.ai-ugc.svc.cluster.local:3005
+  SPITE_REALTIME_UPSTREAM: ai-ugc-spite-realtime.ai-ugc.svc.cluster.local:3007
+
 probes:
   livenessPath: /healthz
   readinessPath: /healthz

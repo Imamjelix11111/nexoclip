@@ -7,6 +7,16 @@ const read = (path) => readFileSync(path, 'utf8');
 test('Kubernetes gateway uses service FQDNs and writable temporary Caddy state', () => {
   const caddyfile = read('deploy/caddy/Caddyfile');
   const dockerfile = read('deploy/caddy/Dockerfile');
+  const httpValues = read('.ckt/cicd/charts/values-ai-ugc-http.yaml');
+
+  for (const [name, upstream] of Object.entries({
+    NEXOCLIP_UPSTREAM: 'ai-ugc-app.ai-ugc.svc.cluster.local:3000',
+    SPITE_UPSTREAM: 'ai-ugc-spite.ai-ugc.svc.cluster.local:3005',
+    SPITE_REALTIME_UPSTREAM: 'ai-ugc-spite-realtime.ai-ugc.svc.cluster.local:3007',
+  })) {
+    assert.match(caddyfile, new RegExp(`\\{\\$${name}:`));
+    assert.match(httpValues, new RegExp(`${name}: ${upstream.replaceAll('.', '\\.')}`));
+  }
 
   for (const service of ['ai-ugc-app', 'ai-ugc-spite', 'ai-ugc-spite-realtime']) {
     assert.match(caddyfile, new RegExp(`${service}\\.ai-ugc\\.svc\\.cluster\\.local`));
