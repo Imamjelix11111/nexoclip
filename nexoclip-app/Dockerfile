@@ -14,9 +14,7 @@ FROM deps AS builder
 COPY nexoclip-app/ .
 # Next imports database-backed route modules while collecting build metadata.
 # This non-routable URL satisfies configuration checks without exposing a secret.
-RUN --mount=type=secret,id=build_env \
-    node -e 'const fs=require("fs"); const v=JSON.parse(fs.readFileSync("/run/secrets/build_env")); fs.writeFileSync(".env.production.local", Object.entries(v).map(([k,val]) => `${k}=${JSON.stringify(val)}`).join("\n"))' \
- && npm run build:packages \
+RUN npm run build:packages \
  && DATABASE_URL=postgresql://build:build@127.0.0.1:1/build npm run build
 
 FROM node:20-bookworm-slim AS node-runtime
