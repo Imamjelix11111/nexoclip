@@ -6,6 +6,7 @@ import {
   type NexoClipGenerationClient,
 } from '@/lib/nexoclip-generation-client'
 import { createQueuedGenerationPatch } from '@/lib/durable-generation'
+import { getModelById } from '@/lib/fal-models'
 import { getAuthenticatedUser } from '@/lib/main-session'
 import {
   projectNotFoundResponse,
@@ -46,10 +47,12 @@ export function createGenerateSubmitHandler(deps: GenerateSubmitDeps = {}) {
       const mobile = body.mobile === true
       const kind = body.kind === 'image' || body.kind === 'video' ? body.kind : undefined
       const prompt = typeof body.prompt === 'string' ? body.prompt : undefined
-      const model = typeof body.model === 'string' ? body.model : typeof body.modelId === 'string' ? body.modelId : undefined
-      if (!nodeId || !kind || !prompt || !model) {
+      const modelId = typeof body.model === 'string' ? body.model : typeof body.modelId === 'string' ? body.modelId : undefined
+      if (!nodeId || !kind || !prompt || !modelId) {
         return NextResponse.json({ error: 'projectId, nodeId, kind, prompt, and model are required' }, { status: 400 })
       }
+      const configuredModel = getModelById(modelId)
+      const model = configuredModel?.category === kind ? configuredModel.providerModel : modelId
 
       const realtime = createRealtimeClient()
       if (!mobile) {
@@ -59,6 +62,7 @@ export function createGenerateSubmitHandler(deps: GenerateSubmitDeps = {}) {
       }
 
       const parameters = mapLegacyParameters(body, kind)
+      if (!['1:1', '16:9', '9:16', '4:3', '3:4'].includes(String(parameters.aspectRatio))) delete parameters.aspectRatio
       const generation = await createGenerationClient().submit({
         userId: user.id,
         projectId,

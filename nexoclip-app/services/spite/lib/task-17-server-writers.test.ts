@@ -87,6 +87,34 @@ test('submits an owned image node as a durable NexoClip generation and patches i
   })
 })
 
+test('normalizes Canvas-only image controls for the durable generation API', async () => {
+  const submissions: unknown[] = []
+  const handler = createGenerateSubmitHandler({
+    getAuthenticatedUser: async () => ({ id: OWNER_ID }),
+    getDb: ownedProjectSql,
+    createNexoClipGenerationClient: () => ({
+      submit: async (input) => { submissions.push(input); return { id: 'generation-1', kind: 'image', status: 'queued' } },
+      status: async () => { throw new Error('status should not be called') },
+    }),
+    createInternalRealtimeClient: () => ({
+      exportDocument: async () => ({ projection: canvasWithNode('node-1'), durableSeq: 1, projectedSeq: 1 }),
+      patchNodeData: async () => {},
+    }) as any,
+  })
+
+  const response = await handler(makeRequest('http://spite.local/api/generate/submit', {
+    method: 'POST',
+    body: {
+      projectId: PROJECT_ID, nodeId: 'node-1', kind: 'image', prompt: 'red kite', model: 'nano-banana-2',
+      settings: { aspectRatio: 'auto', resolution: '1K' },
+    },
+  }))
+
+  assert.equal(response.status, 202)
+  assert.equal((submissions[0] as any).input.model, 'gemini-3.1-flash-image')
+  assert.deepEqual((submissions[0] as any).input.parameters, { resolution: '1K' })
+})
+
 test('omits blank optional image settings so durable defaults apply', async () => {
   const submissions: unknown[] = []
   const handler = createGenerateSubmitHandler({
