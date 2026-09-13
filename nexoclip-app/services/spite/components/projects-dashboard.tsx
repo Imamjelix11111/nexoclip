@@ -84,7 +84,7 @@ export function ProjectsDashboard() {
           <div className="glass border-b border-white/5 px-6 md:px-10 py-4">
             <div className="max-w-6xl mx-auto flex items-center justify-between gap-6">
               <a
-                href={process.env.NEXT_PUBLIC_STUDIO_URL || 'http://localhost:3000/studio'}
+                href={process.env.NEXT_PUBLIC_STUDIO_URL || '/studio'}
                 className="shrink-0 flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 <ArrowLeft size={15} />

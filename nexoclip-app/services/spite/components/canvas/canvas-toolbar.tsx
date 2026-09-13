@@ -37,7 +37,7 @@ export function CanvasToolbar({ projectName, onProjectNameChange, persistenceSta
       {/* Left */}
       <div className="flex items-center gap-3">
         <a
-          href={process.env.NEXT_PUBLIC_STUDIO_URL || 'http://localhost:3000/studio'}
+          href={process.env.NEXT_PUBLIC_STUDIO_URL || '/studio'}
           className="flex items-center gap-2 px-2 h-7 rounded-lg glass-hover text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft size={14} weight="thin" />
