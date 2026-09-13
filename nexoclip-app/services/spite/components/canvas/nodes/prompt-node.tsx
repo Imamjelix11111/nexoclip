@@ -114,7 +114,7 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
       {/* Card content */}
       <div
         ref={cardRef}
-        className="relative flex h-full w-full flex-col rounded-xl overflow-hidden transition-all duration-200"
+        className="relative flex h-full w-full flex-col rounded-xl overflow-visible transition-all duration-200"
         style={{
           background: '#0D0F12',
           border: selected ? '1.5px solid rgba(107,143,168,0.85)' : '1.5px solid rgba(107,143,168,0.25)',
