@@ -1,4 +1,4 @@
-import { withBasePath } from './base-path'
+import { withGenerationOutputBasePath } from './base-path'
 
 export function completeGenerationNode(
   data: Record<string, unknown>,
@@ -16,7 +16,7 @@ export function completeGenerationNode(
   return {
     ...currentData,
     status: 'completed',
-    outputUrl: withBasePath(outputUrl),
+    outputUrl: withGenerationOutputBasePath(outputUrl),
     error: null,
   }
 }
