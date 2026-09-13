@@ -81,7 +81,7 @@ test('each Render service has its required build, routing, and health contract',
     rootDir: '.', dockerfilePath: 'deploy/caddy/Dockerfile', dockerContext: '.', healthCheckPath: '/healthz',
   });
   const app = assertDockerService('ai-ugc-app', {
-    rootDir: '.', dockerfilePath: 'nexoclip-app/Dockerfile', dockerContext: '.', dockerBuildTarget: 'web', healthCheckPath: '/',
+    rootDir: '.', dockerfilePath: 'nexoclip-app/Dockerfile', dockerContext: '.', dockerBuildTarget: 'web', preDeployCommand: 'node src/db/migrate.js', healthCheckPath: '/',
   });
   assertDockerService('ai-ugc-spite', {
     rootDir: '.', dockerfilePath: 'deploy/spite/Dockerfile.web', dockerContext: '.', healthCheckPath: '/spite/healthz',
@@ -105,6 +105,12 @@ test('each Render service has its required build, routing, and health contract',
     assert.match(env(gateway, key), new RegExp(`^fromService:\\n          type: pserv\\n          name: ${name}\\n          property: hostport$`, 'm'));
   }
   for (const key of ['DATABASE_URL', 'DATABASE_URL_NEXOCLIP']) assertConnection(app, key, 'fromDatabase', 'ai-ugc-postgres');
+  assert.equal(env(app, 'AI_CLIP_RUNTIME_URL'), 'value: http://ai-ugc-ai-clip:4175');
+  for (const key of ['DATABASE_URL_SPITE', 'CANVAS_AUTH_HMAC_SECRET', 'REALTIME_JWT_SECRET']) {
+    assert.match(blueprint, new RegExp(`key: ${key}[\\s\\S]*sync: false`));
+  }
+  assert.match(env(named(services, 'ai-ugc-spite'), 'NEXOCLIP_INTERNAL_URL'), /http:\/\/ai-ugc-app:3000/);
+  assert.match(env(named(services, 'ai-ugc-spite'), 'CANVAS_AUTH_URL'), /http:\/\/ai-ugc-spite-realtime:3007\/internal\/authorize/);
 });
 
 test('only NexoClip app and workers consume Task 2 database and Redis', () => {
@@ -115,8 +121,13 @@ test('only NexoClip app and workers consume Task 2 database and Redis', () => {
   }
   for (const name of ['ai-ugc-spite', 'ai-ugc-spite-realtime', 'ai-ugc-ai-clip']) {
     const entry = named(services, name);
-    assert.doesNotMatch(entry, /^(?:      - key: )?(?:DATABASE_URL|REDIS_URL)/m);
+    assert.doesNotMatch(entry, /fromDatabase:\n\s+name: ai-ugc-postgres|fromService:\n\s+type: keyvalue\n\s+name: ai-ugc-redis/);
   }
+});
+
+test('Render runtime wiring uses placeholders rather than Compose credentials', () => {
+  assert.doesNotMatch(blueprint, /(POSTGRES_PASSWORD|REDIS_PASSWORD|postgresql:\/\/[^$\s])/);
+  assert.doesNotMatch(blueprint, /(?:value:\s*redis:\/\/|value:\s*postgres(?:ql)?:\/\/)/);
 });
 
 test('the Render app target builds without BuildKit secrets or embedded credentials', () => {

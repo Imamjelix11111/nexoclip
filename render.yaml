@@ -47,6 +47,7 @@ services:
     dockerfilePath: nexoclip-app/Dockerfile
     dockerContext: .
     dockerBuildTarget: web
+    preDeployCommand: node src/db/migrate.js
     healthCheckPath: /
     envVars:
       - key: DATABASE_URL
@@ -62,6 +63,46 @@ services:
           type: keyvalue
           name: ai-ugc-redis
           property: connectionString
+      - key: NEXT_PUBLIC_SPITE_URL
+        value: /spite
+      - key: AI_CLIP_RUNTIME_URL
+        value: http://ai-ugc-ai-clip:4175
+      - key: CANVAS_AUTH_URL
+        value: http://ai-ugc-spite-realtime:3007/internal/authorize
+      - key: CANVAS_AUTH_HMAC_SECRET
+        sync: false
+      - key: REALTIME_JWT_SECRET
+        sync: false
+      - key: REALTIME_TOKEN_SECRET
+        sync: false
+      - key: LOCAL_OBJECT_STORAGE_SECRET
+        sync: false
+      - key: MUAPI_API_KEY
+        sync: false
+      - key: MUAPI_BASE_URL
+        value: https://api.muapi.ai
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: BYTEPLUS_API_KEY
+        sync: false
+      - key: BYTEPLUS_BASE_URL
+        sync: false
+      - key: AI_CLIP_RUNTIME_TOKEN
+        sync: false
+      - key: R2_PUBLIC_URL
+        sync: false
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        sync: false
 
   - type: pserv
     name: ai-ugc-spite
@@ -71,6 +112,50 @@ services:
     dockerfilePath: deploy/spite/Dockerfile.web
     dockerContext: .
     healthCheckPath: /spite/healthz
+    dockerBuildArgs:
+      NEXT_PUBLIC_BASE_PATH: /spite
+      NEXT_PUBLIC_REALTIME_URL: /spite/ws
+    envVars:
+      - key: DATABASE_URL_SPITE
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: NEXOCLIP_INTERNAL_URL
+        value: http://ai-ugc-app:3000
+      - key: CANVAS_AUTH_URL
+        value: http://ai-ugc-spite-realtime:3007/internal/authorize
+      - key: CANVAS_AUTH_HMAC_SECRET
+        sync: false
+      - key: CANVAS_AUTH_SECRET
+        sync: false
+      - key: REALTIME_TOKEN_SECRET
+        sync: false
+      - key: NEXT_PUBLIC_REALTIME_URL
+        value: /spite/ws
+      - key: SPITE_CRON_SECRET
+        sync: false
+      - key: FAL_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: BYTEPLUS_API_KEY
+        sync: false
+      - key: BYTEPLUS_BASE_URL
+        sync: false
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        sync: false
+      - key: R2_PUBLIC_URL
+        sync: false
+      - key: R2_PROXY_SIGNING_SECRET
+        sync: false
 
   - type: pserv
     name: ai-ugc-spite-realtime
@@ -80,6 +165,31 @@ services:
     dockerfilePath: deploy/spite/Dockerfile.realtime
     dockerContext: .
     healthCheckPath: /healthz
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: "3007"
+      - key: DATABASE_URL_SPITE
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: CANVAS_AUTH_HMAC_SECRET
+        sync: false
+      - key: CANVAS_AUTH_SECRET
+        sync: false
+      - key: REALTIME_JWT_SECRET
+        sync: false
+      - key: REALTIME_TOKEN_SECRET
+        sync: false
+      - key: SPITE_REALTIME_MAX_QUEUED_UPDATES
+        value: "256"
+      - key: SPITE_REALTIME_MAX_QUEUED_BYTES
+        value: "524288"
+      - key: SPITE_REALTIME_SNAPSHOT_INTERVAL_MS
+        value: "30000"
+      - key: SPITE_REALTIME_COMPACT_AFTER_UPDATES
+        value: "128"
 
   - type: pserv
     name: ai-ugc-ai-clip
@@ -89,6 +199,27 @@ services:
     dockerfilePath: deploy/ai-clip/Dockerfile
     dockerContext: .
     healthCheckPath: /healthz
+    envVars:
+      - key: AI_CLIP_RUNTIME_TOKEN
+        sync: false
+      - key: LOCAL_WHISPER_DEVICE
+        value: cpu
+      - key: LOCAL_OUTPUT_DIR
+        value: /tmp/output
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: R2_PUBLIC_URL
+        sync: false
 
   - type: worker
     name: ai-ugc-image-worker
@@ -110,6 +241,20 @@ services:
           property: connectionString
       - key: GENERATION_WORKER_KIND
         value: image
+      - key: LOCAL_OBJECT_STORAGE_SECRET
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: BYTEPLUS_API_KEY
+        sync: false
+      - key: BYTEPLUS_BASE_URL
+        sync: false
+      - key: IMAGE_WORKER_CONCURRENCY
+        value: "3"
 
   - type: worker
     name: ai-ugc-video-worker
@@ -131,3 +276,17 @@ services:
           property: connectionString
       - key: GENERATION_WORKER_KIND
         value: video
+      - key: LOCAL_OBJECT_STORAGE_SECRET
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: BYTEPLUS_API_KEY
+        sync: false
+      - key: BYTEPLUS_BASE_URL
+        sync: false
+      - key: VIDEO_WORKER_CONCURRENCY
+        value: "3"
