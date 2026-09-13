@@ -34,6 +34,7 @@ export class R2ObjectStorage {
   }
 
   async get(key) {
-    return this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+    const response = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+    return { body: response.Body, contentType: response.ContentType };
   }
 }
