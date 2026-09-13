@@ -134,9 +134,11 @@ test('Render runtime wiring uses placeholders rather than Compose credentials', 
   assert.doesNotMatch(blueprint, /(?:value:\s*redis:\/\/|value:\s*postgres(?:ql)?:\/\/)/);
 });
 
-test('the Render app target builds without BuildKit secrets or embedded credentials', () => {
+test('the Render app image carries its migration command without BuildKit secrets', () => {
   const dockerfile = read('nexoclip-app/Dockerfile');
   assert.doesNotMatch(dockerfile, /--mount=type=secret|\/run\/secrets|build_env/);
+  assert.match(dockerfile, /COPY --from=builder --chown=1001:1001 \/app\/src\/db \.\/src\/db/);
+
   assert.match(dockerfile, /DATABASE_URL=postgresql:\/\/build:build@127\.0\.0\.1:1\/build npm run build/);
   assert.doesNotMatch(dockerfile, /(?:PASSWORD|API_KEY|SECRET)=\S+/);
 });
