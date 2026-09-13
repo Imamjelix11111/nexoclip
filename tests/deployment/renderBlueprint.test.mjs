@@ -81,7 +81,7 @@ test('each Render service has its required build, routing, and health contract',
     rootDir: '.', dockerfilePath: 'deploy/caddy/Dockerfile', dockerContext: '.', healthCheckPath: '/healthz',
   });
   const app = assertDockerService('ai-ugc-app', {
-    rootDir: '.', dockerfilePath: 'nexoclip-app/Dockerfile', dockerContext: '.', dockerBuildTarget: 'web', preDeployCommand: 'node src/db/migrate.js', healthCheckPath: '/',
+    rootDir: '.', dockerfilePath: 'nexoclip-app/Dockerfile', dockerContext: '.', preDeployCommand: 'node src/db/migrate.js', healthCheckPath: '/',
   });
   assertDockerService('ai-ugc-spite', {
     rootDir: '.', dockerfilePath: 'deploy/spite/Dockerfile.web', dockerContext: '.', healthCheckPath: '/spite/healthz',
@@ -123,6 +123,10 @@ test('only NexoClip app and workers consume Task 2 database and Redis', () => {
     const entry = named(services, name);
     assert.doesNotMatch(entry, /fromDatabase:\n\s+name: ai-ugc-postgres|fromService:\n\s+type: keyvalue\n\s+name: ai-ugc-redis/);
   }
+});
+
+test('Render Blueprint uses only supported Docker service fields', () => {
+  assert.doesNotMatch(blueprint, /^\s+(?:dockerBuildTarget|dockerBuildArgs):/m);
 });
 
 test('Render runtime wiring uses placeholders rather than Compose credentials', () => {

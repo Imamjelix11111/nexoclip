@@ -46,7 +46,6 @@ services:
     rootDir: .
     dockerfilePath: nexoclip-app/Dockerfile
     dockerContext: .
-    dockerBuildTarget: web
     preDeployCommand: node src/db/migrate.js
     healthCheckPath: /
     envVars:
@@ -118,9 +117,6 @@ services:
     dockerfilePath: deploy/spite/Dockerfile.web
     dockerContext: .
     healthCheckPath: /spite/healthz
-    dockerBuildArgs:
-      NEXT_PUBLIC_BASE_PATH: /spite
-      NEXT_PUBLIC_REALTIME_URL: /spite/ws
     envVars:
       - key: DATABASE_URL_SPITE
         sync: false
