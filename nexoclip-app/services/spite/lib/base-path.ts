@@ -8,3 +8,10 @@ export function withBasePath(
   }
   return path === '/' ? base : `${base}${path}`
 }
+
+// Durable outputs live in the main NexoClip app, not the Spite app. Do not
+// prefix its authenticated asset endpoint with /spite, or Caddy routes it to
+// Spite and returns a 404.
+export function withGenerationOutputBasePath(path: string) {
+  return path.startsWith('/api/assets/') ? path : withBasePath(path)
+}

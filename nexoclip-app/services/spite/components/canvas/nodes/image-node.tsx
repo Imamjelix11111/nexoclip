@@ -1,6 +1,6 @@
 'use client'
 
-import { withBasePath } from '@/lib/base-path'
+import { withBasePath, withGenerationOutputBasePath } from '@/lib/base-path'
 import { memo, useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useParams } from 'next/navigation'
 import { Handle, Position, NodeProps, useReactFlow, useUpdateNodeInternals } from '@xyflow/react'
@@ -400,7 +400,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
         // API returns { output: { images: [...], url: '...' } }
         const images: string[] = result.outputUrl ? [result.outputUrl] : []
         if (images.length) {
-          const completedUrl = withBasePath(images[0])
+          const completedUrl = withGenerationOutputBasePath(images[0])
           setOutputUrl(completedUrl)
           setStatus('completed')
           setGenerationId(null)
@@ -426,7 +426,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
                 id: `${id}-v${stamp}-${idx}`,
                 type: 'imageGen',
                 position: { x: baseX + col * colGap, y: baseY + row * rowGap },
-                data: { ...restData, outputUrl: withBasePath(url) },
+                data: { ...restData, outputUrl: withGenerationOutputBasePath(url) },
               }
             })
             addNodes(newNodes as any)

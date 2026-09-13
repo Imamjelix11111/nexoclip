@@ -1,6 +1,6 @@
 'use client'
 
-import { withBasePath } from '@/lib/base-path'
+import { withBasePath, withGenerationOutputBasePath } from '@/lib/base-path'
 import { Position, NodeProps, Handle, useReactFlow, useUpdateNodeInternals } from '@xyflow/react'
 import { useParams } from 'next/navigation'
 import { Play, CaretDown, SpeakerHigh, SpeakerSlash, TextT, Image as ImageIcon, FilmStrip, CircleNotch, X, Check, ArrowsClockwise, Minus, Plus } from '@phosphor-icons/react'
@@ -435,7 +435,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
         // API returns { output: { videos: [...], url: '...' } }
         const videoUrl = result.outputUrl
         if (videoUrl) {
-          const completedUrl = withBasePath(videoUrl)
+          const completedUrl = withGenerationOutputBasePath(videoUrl)
           setOutputUrl(completedUrl)
           setStatus('completed')
           setGenerationId(null)
@@ -540,7 +540,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
           toast.error('Provider completed without a video URL', { id: toastId })
           return
         }
-        const completedUrl = withBasePath(videoUrl)
+        const completedUrl = withGenerationOutputBasePath(videoUrl)
         setOutputUrl(completedUrl)
         setStatus('completed')
         setGenerationId(null)
