@@ -5,10 +5,12 @@ import useSWR from 'swr'
 import type { MentionFolder } from '@/components/canvas/mention-textarea'
 import { withBasePath } from '@/lib/base-path'
 
-const fetcher = (url: string) =>
-  fetch(withBasePath(url))
-    .then((r) => r.json())
-    .then((d) => (Array.isArray(d) ? (d as MentionFolder[]) : []))
+const fetcher = async (url: string) => {
+  const response = await fetch(withBasePath(url))
+  if (!response.ok) throw new Error(`Unable to load mention folders (${response.status})`)
+  const data = await response.json()
+  return Array.isArray(data) ? (data as MentionFolder[]) : []
+}
 
 // SWR-cached folder list for one project. Every node that participates in
 // @-mentions (image-gen, video-gen, prompt) calls this; SWR dedupes the

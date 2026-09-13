@@ -37,7 +37,7 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
   const projectId = params.id as string | undefined
   const [text, setText] = useState((data.text as string) || '')
   const [mentions, setMentions] = useState<Mention[]>((data.mentions as Mention[]) || [])
-  const { folders } = useProjectFolders(projectId)
+  const { folders, refresh: refreshFolders } = useProjectFolders(projectId)
   const { patchNodeData } = useCanvasCollaboration()
   // Drag-by-default UX: when `editing` is false, an invisible overlay
   // sits on top of the text and absorbs single-clicks so React Flow
@@ -84,6 +84,7 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
   }, [editing])
 
   const enterEdit = () => {
+    void refreshFolders()
     setEditing(true)
     // Defer focus until after the overlay unmounts so the editor div
     // can actually receive focus.
