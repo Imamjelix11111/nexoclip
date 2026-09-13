@@ -2,7 +2,11 @@ import { getPool } from '../../../../src/db/pool.js';
 import { getDefaultWorkspace } from '../../../../src/services/workspaceService.js';
 import { createImageGenerationJobWithReservation, getGenerationJob } from '../../../../src/services/generationService.js';
 import { createStorage } from '../../../../src/services/assetService.js';
+import { recoverQueuedGenerations, generationQueueName } from '../../../../src/queue/generationQueue.js';
+import { createBullMqGenerationQueue } from '../../../../src/queue/bullmqGenerationQueue.js';
 import { createCanvasAuthorizationActionDigest, verifyCanvasAuthorization } from '../../../../src/lib/realtime/internalAuth.js';
+import { Queue, Worker } from 'bullmq';
+import IORedis from 'ioredis';
 
 const ACTIONS = new Set(['submit', 'status']);
 const KINDS = new Set(['image', 'video']);
@@ -21,6 +25,14 @@ async function readBody(request) {
   catch { return null; }
 }
 
+async function publishReservedGeneration({ pool, kind }) {
+  if (!process.env.REDIS_URL) throw new Error('Generation queue is unavailable');
+  const connection = new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: null });
+  const queue = createBullMqGenerationQueue({ Queue, Worker, connection, queueName: generationQueueName(kind) });
+  try { await recoverQueuedGenerations({ pool, queue, kind }); }
+  finally { await queue.close(); await connection.quit(); }
+}
+
 export function createInternalGenerationHandler({
   verify = (payload, signature) => verifyCanvasAuthorization(payload, signature, process.env.CANVAS_AUTH_SECRET),
   getDefaultWorkspace: findDefaultWorkspace = getDefaultWorkspace,
@@ -28,6 +40,8 @@ export function createInternalGenerationHandler({
   getGeneration = getGenerationJob,
   getPool: loadPool = getPool,
   createStorage: loadStorage = createStorage,
+  publish = publishReservedGeneration,
+  logError = console.error,
 } = {}) {
   return async function POST(request) {
     const body = await readBody(request);
@@ -48,7 +62,13 @@ export function createInternalGenerationHandler({
 
     if (body.action === 'submit') {
       if (!validInput(body.input)) return Response.json({ error: 'Invalid internal generation request' }, { status: 400 });
-      const generation = await reserve(loadPool(), workspace.id, { ...body.input, projectId: null }, { userId: body.userId });
+      const pool = loadPool();
+      const generation = await reserve(pool, workspace.id, { ...body.input, projectId: null }, { userId: body.userId });
+      try {
+        await publish({ pool, kind: generation.kind });
+      } catch (error) {
+        logError({ event: 'generation_publication_deferred', generationId: generation.id, errorName: error?.name || 'Error', errorCode: error?.code || null });
+      }
       return Response.json({ generation }, { status: 201 });
     }
 
