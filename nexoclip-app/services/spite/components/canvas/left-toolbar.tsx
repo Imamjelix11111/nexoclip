@@ -218,9 +218,15 @@ export function LeftToolbar({
     const d = await r.json()
     return Array.isArray(d) ? d : []
   }
+  const workspaceId = typeof window === 'undefined' ? null : window.sessionStorage.getItem('nexoclip_workspace_id')
   const { data: generatedAssets = [], isLoading: loadingHistory, mutate: mutateAssets } = useSWR<GeneratedAsset[]>(
-    historyOpen ? withBasePath(`/api/assets?projectId=${projectId}`) : null,
-    fetcher,
+    historyOpen && workspaceId ? withBasePath(`/api/workspace-assets?workspace_id=${encodeURIComponent(workspaceId)}`) : null,
+    async (url: string) => {
+      const response = await fetch(url)
+      if (!response.ok) throw new Error(`Unable to load workspace assets (${response.status})`)
+      const payload = await response.json()
+      return Array.isArray(payload.assets) ? payload.assets : []
+    },
     { refreshInterval: 3000, revalidateOnFocus: true }
   )
 

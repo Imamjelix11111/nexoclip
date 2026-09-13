@@ -8,12 +8,15 @@
 // model, so you paid for a generation that ignored your reference. Every
 // consumer must resolve through here so that can't drift again.
 
-import { withBasePath } from './base-path'
+import { withBasePath, withGenerationOutputBasePath } from './base-path'
 
 type NodeData = Record<string, unknown> | undefined | null
 
 function str(v: unknown): string | undefined {
   if (typeof v !== 'string' || v.trim() === '') return undefined
+  if (v.startsWith('/api/assets/')) return withGenerationOutputBasePath(v)
+  // Repair generated URLs persisted before the Canvas/app route split.
+  if (v.startsWith('/spite/api/assets/')) return v.slice('/spite'.length)
   return v.startsWith('/api/') ? withBasePath(v) : v
 }
 

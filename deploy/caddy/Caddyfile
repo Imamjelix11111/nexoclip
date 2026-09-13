@@ -19,6 +19,14 @@
 		respond 404
 	}
 
+	# Canvas must read durable workspace assets from the NexoClip app while
+	# retaining the same-origin session cookie. Strip the Canvas-only alias
+	# before proxying so it reaches the app's canonical /api/assets route.
+	handle /spite/api/workspace-assets* {
+		uri replace /spite/api/workspace-assets /api/assets
+		reverse_proxy {$NEXOCLIP_UPSTREAM:ai-ugc-app.ai-ugc.svc.cluster.local:8080}
+	}
+
 	# Keep Canvas and its WebSocket endpoint on the Studio origin so the
 	# NexoClip session cookie is available to Canvas requests.
 	handle /spite/ws* {
