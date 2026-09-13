@@ -47,7 +47,6 @@ services:
     dockerfilePath: nexoclip-app/Dockerfile
     dockerContext: .
     preDeployCommand: node src/db/migrate.js
-    healthCheckPath: /
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -116,7 +115,6 @@ services:
     rootDir: .
     dockerfilePath: deploy/spite/Dockerfile.web
     dockerContext: .
-    healthCheckPath: /spite/healthz
     envVars:
       - key: DATABASE_URL_SPITE
         sync: false
@@ -172,7 +170,6 @@ services:
     rootDir: .
     dockerfilePath: deploy/spite/Dockerfile.realtime
     dockerContext: .
-    healthCheckPath: /healthz
     envVars:
       - key: HOST
         value: 0.0.0.0
@@ -206,7 +203,6 @@ services:
     rootDir: .
     dockerfilePath: deploy/ai-clip/Dockerfile
     dockerContext: .
-    healthCheckPath: /healthz
     envVars:
       - key: AI_CLIP_RUNTIME_TOKEN
         sync: false

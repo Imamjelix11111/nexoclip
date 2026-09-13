@@ -81,17 +81,17 @@ test('each Render service has its required build, routing, and health contract',
     rootDir: '.', dockerfilePath: 'deploy/caddy/Dockerfile', dockerContext: '.', healthCheckPath: '/healthz',
   });
   const app = assertDockerService('ai-ugc-app', {
-    rootDir: '.', dockerfilePath: 'nexoclip-app/Dockerfile', dockerContext: '.', preDeployCommand: 'node src/db/migrate.js', healthCheckPath: '/',
+    rootDir: '.', dockerfilePath: 'nexoclip-app/Dockerfile', dockerContext: '.', preDeployCommand: 'node src/db/migrate.js',
   });
-  assertDockerService('ai-ugc-spite', {
-    rootDir: '.', dockerfilePath: 'deploy/spite/Dockerfile.web', dockerContext: '.', healthCheckPath: '/spite/healthz',
-  });
-  assertDockerService('ai-ugc-spite-realtime', {
-    rootDir: '.', dockerfilePath: 'deploy/spite/Dockerfile.realtime', dockerContext: '.', healthCheckPath: '/healthz',
-  });
-  assertDockerService('ai-ugc-ai-clip', {
-    rootDir: '.', dockerfilePath: 'deploy/ai-clip/Dockerfile', dockerContext: '.', healthCheckPath: '/healthz',
-  });
+  assert.doesNotMatch(app, /^    healthCheckPath:/m);
+  for (const [name, dockerfilePath] of [
+    ['ai-ugc-spite', 'deploy/spite/Dockerfile.web'],
+    ['ai-ugc-spite-realtime', 'deploy/spite/Dockerfile.realtime'],
+    ['ai-ugc-ai-clip', 'deploy/ai-clip/Dockerfile'],
+  ]) {
+    const service = assertDockerService(name, { rootDir: '.', dockerfilePath, dockerContext: '.' });
+    assert.doesNotMatch(service, /^    healthCheckPath:/m);
+  }
   for (const [name, kind] of [['ai-ugc-image-worker', 'image'], ['ai-ugc-video-worker', 'video']]) {
     const worker = assertDockerService(name, {
       rootDir: '.', dockerfilePath: 'deploy/nexoclip/Dockerfile.worker', dockerContext: '.', dockerCommand: 'node src/queue/workerService.mjs',
