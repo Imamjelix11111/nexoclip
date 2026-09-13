@@ -577,7 +577,7 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
 
       {/* Folder suggestion dropdown */}
       {open && (
-        <div className="absolute left-0 bottom-full mb-1 z-50 w-64 max-h-60 overflow-y-auto rounded-lg border border-white/10 bg-[#0E1014] py-1 shadow-xl">
+        <div className="absolute right-full top-0 mr-2 z-50 w-64 max-h-60 overflow-y-auto rounded-lg border border-white/10 bg-[#0E1014] py-1 shadow-xl">
           {filteredFolders.length === 0 && (
             <div className="px-3 py-2 text-[11px] text-muted-foreground/60">
               {folders.length === 0 ? 'No Characters, Props, or Locations yet.' : 'No matching folder.'}
