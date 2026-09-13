@@ -11,11 +11,24 @@ import { createFoldersRouteHandlers } from '@/app/api/folders/route'
 import { createGenerateSubmitHandler } from '@/app/api/generate/submit/route'
 import { createGenerateStatusHandler } from '@/app/api/generate/status/route'
 import { createGenerateLatestHandler } from '@/app/api/generate/latest/route'
+import { countOwnedGenerationAssetsForProject } from '@/lib/project-ownership'
 
 const OWNER_ID = '550e8400-e29b-41d4-a716-446655440001'
 const OTHER_USER_ID = '550e8400-e29b-41d4-a716-446655440002'
 const OWNER_PROJECT_ID = '550e8400-e29b-41d4-a716-446655440000'
 const OTHER_PROJECT_ID = '550e8400-e29b-41d4-a716-446655440099'
+
+test('casts legacy generation asset ownership IDs to UUIDs', async () => {
+  let query = ''
+  const sql = (async (strings: TemplateStringsArray) => {
+    query = strings.join(' ? ')
+    return [{ owned_count: 1 }]
+  }) as any
+
+  assert.equal(await countOwnedGenerationAssetsForProject(sql, OWNER_ID, OWNER_PROJECT_ID, ['550e8400-e29b-41d4-a716-446655440010']), 1)
+  assert.match(query, /g\.project_id =\s+\?\s+::uuid/)
+  assert.match(query, /g\.id = ANY\(\s*\?\s+::uuid\[\]\)/)
+})
 
 function makeRequest(url: string, {
   method = 'GET',

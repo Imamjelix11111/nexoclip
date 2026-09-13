@@ -70,8 +70,8 @@ export async function countOwnedGenerationAssetsForProject(
     FROM generation_history g
     JOIN projects p ON p.id = g.project_id
     WHERE p.userid = ${userId}
-      AND g.project_id = ${projectId}
-      AND g.id = ANY(${assetIds}::text[])
+      AND g.project_id = ${projectId}::uuid
+      AND g.id = ANY(${assetIds}::uuid[])
   ` as Array<{ owned_count: number }>
 
   return Number(rows[0]?.owned_count ?? 0)
