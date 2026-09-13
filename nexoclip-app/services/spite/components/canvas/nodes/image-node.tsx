@@ -166,6 +166,8 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
   const [labelDraft, setLabelDraft] = useState('')
   
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
+  // React state updates after this event; lock synchronous repeat clicks meanwhile.
+  const submitInFlightRef = useRef(false)
   // Set true to immediately stop polling (cancel / unmount), so an in-flight
   // status check can't reschedule itself or apply a late result.
   const stopRef = useRef(false)
@@ -833,6 +835,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     return `${label}\nEstimated cost: ~${formatUSD(costEstimate.total)} (${formatUSD(costEstimate.perUnit)} each).\nReal cost depends on resolution and model load.`
   }, [currentModel, numImages, costEstimate, resolvedPrompt.connected, resolvedPrompt.prompt])
   const requestGenerate = () => {
+    if (submitInFlightRef.current || generationId) return
     if (costEstimate.isKnown && costEstimate.total >= COST_CONFIRM_THRESHOLD_USD) {
       const msg =
         `You're about to submit ${numImages} ${currentModel?.name || 'image'} generation${numImages === 1 ? '' : 's'} ` +
@@ -842,7 +845,10 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
         `Press OK to confirm and spend this, or Cancel to back out.`
       if (!window.confirm(msg)) return
     }
-    handleGenerate()
+    submitInFlightRef.current = true
+    void handleGenerate().finally(() => {
+      submitInFlightRef.current = false
+    })
   }
 
   const handleCancel = async () => {

@@ -61,6 +61,9 @@ export function createGenerateSubmitHandler(deps: GenerateSubmitDeps = {}) {
         const document = await realtime.exportDocument({ userId: user.id, projectId })
         const node = document.projection.nodes.find((candidate) => candidate.id === nodeId)
         if (!node || node.type !== (kind === 'image' ? 'imageGen' : 'videoGen')) return projectNotFoundResponse()
+        if (typeof node.data.generationId === 'string' && ['queued', 'processing', 'running'].includes(String(node.data.generationStatus))) {
+          return NextResponse.json({ error: 'This node already has an active generation' }, { status: 409 })
+        }
       }
 
       const parameters = mapLegacyParameters(body, kind)

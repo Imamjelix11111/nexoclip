@@ -87,6 +87,30 @@ test('submits an owned image node as a durable NexoClip generation and patches i
   })
 })
 
+test('rejects a second submit while its canvas node has an active durable generation', async () => {
+  let submitted = false
+  const handler = createGenerateSubmitHandler({
+    getAuthenticatedUser: async () => ({ id: OWNER_ID }),
+    getDb: ownedProjectSql,
+    createNexoClipGenerationClient: () => ({
+      submit: async () => { submitted = true; throw new Error('submit should not be called') },
+      status: async () => { throw new Error('status should not be called') },
+    }),
+    createInternalRealtimeClient: () => ({
+      exportDocument: async () => ({ projection: canvasWithNode('node-1', 'imageGen', { generationId: 'existing-job', generationStatus: 'queued' }), durableSeq: 1, projectedSeq: 1 }),
+      patchNodeData: async () => {},
+    }) as any,
+  })
+
+  const response = await handler(makeRequest('http://spite.local/api/generate/submit', {
+    method: 'POST',
+    body: { projectId: PROJECT_ID, nodeId: 'node-1', kind: 'image', prompt: 'red kite', model: 'nano-banana' },
+  }))
+
+  assert.equal(response.status, 409)
+  assert.equal(submitted, false)
+})
+
 test('normalizes Canvas-only image controls for the durable generation API', async () => {
   const submissions: unknown[] = []
   const handler = createGenerateSubmitHandler({
