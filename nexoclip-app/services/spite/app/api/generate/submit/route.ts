@@ -99,7 +99,7 @@ function mapLegacyParameters(body: Record<string, unknown>, kind: 'image' | 'vid
       throw Object.assign(new Error('endImageUrl is only supported for video generations'), { status: 400 })
     }
     const parameters: Record<string, unknown> = {}
-    for (const key of allowed) if (settings[key] !== undefined) parameters[key] = settings[key]
+    for (const key of allowed) if (settings[key] !== undefined && settings[key] !== '') parameters[key] = settings[key]
     if (referenceImages.length) parameters.referenceImages = referenceImages
     return parameters
   }
@@ -114,7 +114,7 @@ function mapLegacyParameters(body: Record<string, unknown>, kind: 'image' | 'vid
     throw Object.assign(new Error('Video references must be tenant asset URLs (/api/assets/:id/download)'), { status: 400 })
   }
   const parameters: Record<string, unknown> = {}
-  for (const key of ['aspectRatio', 'resolution', 'seed']) if (settings[key] !== undefined) parameters[key] = settings[key]
+  for (const key of ['aspectRatio', 'resolution', 'seed']) if (settings[key] !== undefined && settings[key] !== '') parameters[key] = settings[key]
   if (settings.duration !== undefined) parameters.duration = Number.parseInt(String(settings.duration), 10)
   if (referenceImages.length) parameters.referenceImages = referenceImages
   if (videoUrl) parameters.referenceVideos = [videoUrl]
