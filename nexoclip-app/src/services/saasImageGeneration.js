@@ -67,8 +67,12 @@ export function createSaasImageHandler({ providerRouter, provider, storage, pool
     for (const [index, output] of (result.outputs || []).entries()) {
       const { body, contentType } = await downloadOutput(output);
       const key = `${job.workspace_id}/${randomUUID()}`;
-      const upload = await storage.createUploadUrl({ key, contentType });
-      await storage.put(upload.url || upload, body, contentType);
+      if (typeof storage.createUploadUrl === 'function') {
+        const upload = await storage.createUploadUrl({ key, contentType });
+        await storage.put(upload.url || upload, body, contentType);
+      } else {
+        await storage.put(key, body, contentType);
+      }
       const client = await pool.connect();
       try {
         const asset = await createGeneratedAsset(client, {

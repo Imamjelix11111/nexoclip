@@ -17,6 +17,18 @@ test('worker routes image jobs through the server provider router and persists t
   assert.deepEqual(result.usage, { total_tokens: 12 });
 });
 
+test('worker writes generated output directly to R2 object storage', async () => {
+  const puts = [];
+  const handler = createSaasImageHandler({
+    providerRouter: { async generateImage() { return { provider: 'openrouter', outputs: [{ url: 'data:image/png;base64,cG5n', mimeType: 'image/png' }] }; } },
+    storage: { async put(...args) { puts.push(args); } },
+    pool: { async connect() { return { async query() { return { rows: [{ id: 'asset-1' }] }; }, release() {} }; } },
+  });
+
+  await handler({ id: 'g1', workspace_id: 'w1', model: 'model-1', prompt: 'fox', parameters: {} });
+  assert.equal(puts[0][0].startsWith('w1/'), true);
+});
+
 test('worker leaves provider failures for the generation processor to settle safely', async () => {
   const handler = createSaasImageHandler({
     providerRouter: { async generateImage() { throw Object.assign(new Error('fallback unavailable'), { code: 'DIRECT_PROVIDER_UNAVAILABLE' }); } },
