@@ -18,7 +18,7 @@ const OTHER_USER_ID = '550e8400-e29b-41d4-a716-446655440002'
 const OWNER_PROJECT_ID = '550e8400-e29b-41d4-a716-446655440000'
 const OTHER_PROJECT_ID = '550e8400-e29b-41d4-a716-446655440099'
 
-test('casts legacy generation asset ownership IDs to UUIDs', async () => {
+test('compares text generation asset IDs to UUID project IDs safely', async () => {
   let query = ''
   const sql = (async (strings: TemplateStringsArray) => {
     query = strings.join(' ? ')
@@ -26,8 +26,9 @@ test('casts legacy generation asset ownership IDs to UUIDs', async () => {
   }) as any
 
   assert.equal(await countOwnedGenerationAssetsForProject(sql, OWNER_ID, OWNER_PROJECT_ID, ['550e8400-e29b-41d4-a716-446655440010']), 1)
-  assert.match(query, /g\.project_id =\s+\?\s+::uuid/)
-  assert.match(query, /g\.id = ANY\(\s*\?\s+::uuid\[\]\)/)
+  assert.match(query, /p\.id::text = g\.project_id/)
+  assert.match(query, /g\.project_id =\s+\?/)
+  assert.match(query, /g\.id = ANY\(\s*\?\s+::text\[\]\)/)
 })
 
 function makeRequest(url: string, {
@@ -158,7 +159,7 @@ function createFakeSqlFixture() {
         }))
     }
 
-    if (normalized.startsWith('select g.id, g.type, g.model, g.prompt, g.r2_url, g.used_in_canvas') && normalized.includes('from generation_history g join projects p on p.id = g.project_id')) {
+    if (normalized.startsWith('select g.id, g.type, g.model, g.prompt, g.r2_url, g.used_in_canvas') && normalized.includes('from generation_history g join projects p on p.id::text = g.project_id')) {
       return assets
         .filter((asset) => projects.get(asset.project_id)?.userid === String(values[0]))
         .map((asset) => ({ ...asset }))
