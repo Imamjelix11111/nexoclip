@@ -14,6 +14,11 @@
 			respond 404
 		}
 
+		handle /spite/api/workspace-assets* {
+			uri replace /spite/api/workspace-assets /api/assets
+			reverse_proxy nexoclip-app:3000
+		}
+
 		handle /spite/ws* {
 			reverse_proxy spite-realtime:3007
 		}

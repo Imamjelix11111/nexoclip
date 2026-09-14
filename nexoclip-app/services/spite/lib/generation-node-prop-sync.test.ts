@@ -16,4 +16,16 @@ for (const node of ['image', 'video']) {
     assert.match(syncEffect[1], /data\.generationStatus/)
     assert.match(syncEffect[1], /data\.generationError/)
   })
+
+  test(`${node} node keeps regeneration source wiring durable`, () => {
+    const source = readFileSync(
+      new URL(`../components/canvas/nodes/${node}-node.tsx`, import.meta.url),
+      'utf8',
+    )
+
+    assert.doesNotMatch(source, /setOutputUrl\(null\)/)
+    assert.match(source, /if \(pending && active && !generationId\)/)
+    assert.match(source, /<GenerationFeedbackOverlay/)
+    assert.match(source, /getTerminalGenerationToast/)
+  })
 }

@@ -16,6 +16,6 @@ export async function GET(request, { params }) {
     const result = await createAssetDownload(tenant.workspace.id, assetId);
     if (!result) return Response.json({ error: 'Asset not found' }, { status: 404 });
     const object = await createStorage().get(result.download.url);
-    return new Response(object.body, { headers: { 'Content-Type': object.contentType, 'Cache-Control': 'private, max-age=900' } });
+    return new Response(object.body, { headers: { 'Content-Type': object.contentType, 'Cache-Control': 'private, max-age=31536000, immutable', 'Vary': 'Cookie' } });
   } catch (error) { return errorResponse(error); }
 }

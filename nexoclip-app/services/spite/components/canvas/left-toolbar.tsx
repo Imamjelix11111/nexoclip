@@ -218,16 +218,15 @@ export function LeftToolbar({
     const d = await r.json()
     return Array.isArray(d) ? d : []
   }
-  const workspaceId = typeof window === 'undefined' ? null : window.sessionStorage.getItem('nexoclip_workspace_id')
   const { data: generatedAssets = [], isLoading: loadingHistory, mutate: mutateAssets } = useSWR<GeneratedAsset[]>(
-    historyOpen && workspaceId ? withBasePath(`/api/workspace-assets?workspace_id=${encodeURIComponent(workspaceId)}`) : null,
+    historyOpen ? withBasePath('/api/workspace-assets') : null,
     async (url: string) => {
       const response = await fetch(url)
       if (!response.ok) throw new Error(`Unable to load workspace assets (${response.status})`)
       const payload = await response.json()
       return Array.isArray(payload.assets) ? payload.assets : []
     },
-    { refreshInterval: 3000, revalidateOnFocus: true }
+    { refreshInterval: 15000, revalidateOnFocus: true }
   )
 
   // Fetch folders for THIS project. Always-on (no historyOpen gate) so a
