@@ -21,6 +21,24 @@ type FakePool = {
   end(): Promise<void>
 }
 
+test('getRealtimePool defaults to the dedicated Spite URL', async () => {
+  await closeRealtimePool()
+  const originalSpite = process.env.DATABASE_URL_SPITE
+  const originalDatabase = process.env.DATABASE_URL
+  process.env.DATABASE_URL_SPITE = 'postgres://spite'
+  process.env.DATABASE_URL = 'postgres://main'
+
+  try {
+    assert.ok(getRealtimePool({}))
+  } finally {
+    await closeRealtimePool()
+    if (originalSpite === undefined) delete process.env.DATABASE_URL_SPITE
+    else process.env.DATABASE_URL_SPITE = originalSpite
+    if (originalDatabase === undefined) delete process.env.DATABASE_URL
+    else process.env.DATABASE_URL = originalDatabase
+  }
+})
+
 test('getRealtimePool fails closed when asked to reuse a different connection string', async () => {
   await closeRealtimePool()
 
