@@ -81,10 +81,15 @@ test('submits an owned image node as a durable NexoClip generation and patches i
     aspectRatio: '1:1', resolution: '2K', seed: 7,
     referenceImages: ['/reference-a.png', '/reference-b.png'],
   })
-  assert.deepEqual(patches[0], {
-    userId: OWNER_ID, projectId: PROJECT_ID, nodeId: 'node-1',
-    set: { generationId: 'generation-1', generationStatus: 'queued', generationError: null },
+  assert.equal((patches[0] as any).userId, OWNER_ID)
+  assert.equal((patches[0] as any).projectId, PROJECT_ID)
+  assert.equal((patches[0] as any).nodeId, 'node-1')
+  assert.deepEqual((patches[0] as any).set, {
+    generationId: 'generation-1', generationStatus: 'queued', generationError: null,
+    status: 'in_queue', error: null,
+    submittedAt: (patches[0] as any).set.submittedAt,
   })
+  assert.equal(typeof (patches[0] as any).set.submittedAt, 'number')
 })
 
 test('rejects a second submit while its canvas node has an active durable generation', async () => {

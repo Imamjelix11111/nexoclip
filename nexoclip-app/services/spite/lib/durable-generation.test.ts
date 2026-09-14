@@ -7,17 +7,20 @@ import {
 } from './durable-generation'
 
 test('creates a queued patch retaining the durable job id', () => {
-  assert.deepEqual(createQueuedGenerationPatch({ id: 'g1', kind: 'image', status: 'queued' }), {
+  assert.deepEqual(createQueuedGenerationPatch({ id: 'g1', kind: 'image', status: 'queued' }, 123), {
     generationId: 'g1', generationStatus: 'queued', generationError: null,
+    status: 'in_queue', error: null, submittedAt: 123,
   })
 })
 
 test('normalizes active durable states', () => {
-  assert.deepEqual(createQueuedGenerationPatch({ id: 'g1', kind: 'image', status: 'running' }), {
+  assert.deepEqual(createQueuedGenerationPatch({ id: 'g1', kind: 'image', status: 'running' }, 123), {
     generationId: 'g1', generationStatus: 'processing', generationError: null,
+    status: 'in_progress', error: null, submittedAt: 123,
   })
-  assert.deepEqual(createQueuedGenerationPatch({ id: 'g1', kind: 'image', status: 'processing' }), {
+  assert.deepEqual(createQueuedGenerationPatch({ id: 'g1', kind: 'image', status: 'processing' }, 123), {
     generationId: 'g1', generationStatus: 'processing', generationError: null,
+    status: 'in_progress', error: null, submittedAt: 123,
   })
 })
 

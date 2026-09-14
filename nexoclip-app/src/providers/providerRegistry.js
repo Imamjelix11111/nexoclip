@@ -39,6 +39,7 @@ const DIRECT_PREFIXES = [
   ['google/', 'google'],
   ['gemini-', 'google'],
   ['imagen-', 'google'], 
+  ['byteplus/', 'byteplus'],
   ['gpt-image-', 'openai'],
   ['openai/gpt-image-', 'openai'],
 ];

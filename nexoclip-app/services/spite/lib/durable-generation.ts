@@ -3,11 +3,18 @@ import type { DurableGeneration } from './nexoclip-generation-client'
 const ACTIVE = new Set(['queued', 'running', 'processing'])
 const TERMINAL = new Set(['succeeded', 'failed'])
 
-export function createQueuedGenerationPatch(generation: DurableGeneration): Record<string, unknown> {
+export function createQueuedGenerationPatch(
+  generation: DurableGeneration,
+  submittedAt = Date.now(),
+): Record<string, unknown> {
+  const generationStatus = generation.status === 'queued' ? 'queued' : 'processing'
   return {
     generationId: generation.id,
-    generationStatus: generation.status === 'queued' ? 'queued' : 'processing',
+    generationStatus,
     generationError: null,
+    status: generationStatus === 'queued' ? 'in_queue' : 'in_progress',
+    error: null,
+    submittedAt,
   }
 }
 

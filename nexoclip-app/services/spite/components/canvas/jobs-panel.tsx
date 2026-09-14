@@ -54,12 +54,20 @@ export function JobsPanel({ open, onClose }: { open: boolean; onClose: () => voi
       .filter(n => n.type === 'imageGen' || n.type === 'videoGen')
       .map(n => {
         const data = n.data as Record<string, any>
-        const rawStatus = (data.status as string) || (data.outputUrl ? 'completed' : 'idle')
+        const rawStatus = data.generationStatus === 'queued'
+          ? 'in_queue'
+          : data.generationStatus === 'processing' || data.generationStatus === 'running'
+            ? 'in_progress'
+            : data.generationStatus === 'completed'
+              ? 'completed'
+              : data.generationStatus === 'failed'
+                ? 'failed'
+                : (data.status as string) || (data.outputUrl ? 'completed' : 'idle')
         return {
           id: n.id,
           label: data.label || (n.type === 'imageGen' ? 'Image' : 'Video'),
           status: rawStatus as Job['status'],
-          error: data.error as string | undefined,
+          error: (data.generationError || data.error) as string | undefined,
           outputUrl: data.outputUrl as string | undefined,
           submittedAt: data.submittedAt as number | undefined,
           modelId: data.modelId as string | undefined,
