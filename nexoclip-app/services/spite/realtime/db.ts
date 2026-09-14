@@ -1,6 +1,6 @@
 import { Pool } from '@neondatabase/serverless'
 
-import { CANVAS_SAVE_LOCK_NS } from '../lib/db'
+import { CANVAS_SAVE_LOCK_NS, resolveSpiteDatabaseUrl } from '../lib/db'
 
 export const DEFAULT_REALTIME_ADVISORY_LOCK_NAMESPACE = CANVAS_SAVE_LOCK_NS
 
@@ -49,7 +49,7 @@ type DatabaseAdapterOptions = OwnedPoolOptions | SharedPoolOptions
 let sharedPool: { pool: Pool; connectionString: string } | null = null
 
 export function getRealtimePool({
-  connectionString = process.env.DATABASE_URL,
+  connectionString = resolveSpiteDatabaseUrl(),
 }: {
   connectionString?: string
 } = {}): Pool {

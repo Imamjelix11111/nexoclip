@@ -1,12 +1,19 @@
 import { neon } from '@neondatabase/serverless'
 
-// Lazy initialization - only create connection when needed
-// This ensures DATABASE_URL is available at runtime
-export function getDb() {
-  if (!process.env.DATABASE_URL) {
-    throw new Error('DATABASE_URL environment variable is not set')
+type DatabaseEnvironment = Partial<Pick<NodeJS.ProcessEnv, 'DATABASE_URL' | 'DATABASE_URL_SPITE'>>
+
+export function resolveSpiteDatabaseUrl(env: DatabaseEnvironment = process.env): string {
+  const databaseUrl = env.DATABASE_URL_SPITE || env.DATABASE_URL
+  if (!databaseUrl) {
+    throw new Error('DATABASE_URL_SPITE or DATABASE_URL environment variable is not set')
   }
-  return neon(process.env.DATABASE_URL)
+  return databaseUrl
+}
+
+// Spite is isolated on Neon. DATABASE_URL remains a backwards-compatible
+// fallback for local/legacy environments that do not expose the dedicated URL.
+export function getDb() {
+  return neon(resolveSpiteDatabaseUrl())
 }
 
 // Shape of the sql tagged-template returned by `neon()`. Exported for
