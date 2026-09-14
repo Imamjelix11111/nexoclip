@@ -19,7 +19,11 @@ export function resolveIncomingPrompt(nodeId: string, nodes: Node[], edges: Edge
     .sort((left, right) => left.id.localeCompare(right.id))[0]
   const source = edge && nodes.find((node) => node.id === edge.source && node.type === 'prompt')
 
-  return { connected: Boolean(source), prompt: String(source?.data.text ?? '').trim() }
+  return {
+    connected: Boolean(source),
+    prompt: String(source?.data.text ?? '').trim(),
+    mentions: Array.isArray(source?.data.mentions) ? source.data.mentions : [],
+  }
 }
 
 export function getGenerationPromptState(nodeId: string, nodes: Node[], edges: Edge[]) {

@@ -14,6 +14,8 @@ import { labelFromPrompt, DEFAULT_VIDEO_LABEL } from '@/lib/auto-name'
 import { getVideoModels, getModelById, buildModelInput, type ModelConfig } from '@/lib/fal-models'
 import { estimateGenerationCost, formatUSD, COST_CONFIRM_THRESHOLD_USD } from '@/lib/fal-cost'
 import { resolveNodeMediaUrl } from '@/lib/node-media'
+import { compileMentionsForModel } from '@/lib/mention-prompt'
+import { useProjectFolders } from '@/hooks/use-project-folders'
 import { completeGenerationNode } from '@/lib/generation-node'
 import { ConnectedInputs } from '../connected-inputs'
 import { captureVideoThumbnail } from '@/lib/video-thumbnail'
@@ -204,6 +206,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
   // immediately before submission; this node never owns a prompt.
   const resolvedPrompt = resolveIncomingPrompt(id, getNodes(), getEdges())
   const promptState = getGenerationPromptState(id, getNodes(), getEdges())
+  const { folders } = useProjectFolders(projectId)
 
   // Check connection states fresh on each render
   let hasConnectedFirstFrame = false
@@ -332,11 +335,6 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     syncGuardRef.current.beginUserEdit()
     createNextShot(id)
   }
-
-  // Persist state changes to node data
-  useEffect(() => {
-    patchPersistedNodeData({ modelId, duration, aspectRatio, resolution, enableAudio, enableLoop, numVideos, outputUrl, upscaleMode, colormap, voiceIds, status, error, submittedAt })
-  }, [aspectRatio, colormap, duration, enableAudio, enableLoop, error, modelId, numVideos, outputUrl, patchPersistedNodeData, resolution, status, submittedAt, upscaleMode, voiceIds])
 
   // Auto-name: once a generation completes, replace the default
   // "Video Generator #N" label with the first few words of the prompt.
@@ -727,6 +725,14 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     setProgress(undefined)
 
     const referenceGroups = connectedReferenceUrls.map((url) => ({ urls: [url] }))
+    const compiled = compileMentionsForModel(
+      compiledPrompt,
+      resolvedPrompt.mentions,
+      folders,
+      currentModel,
+      referenceGroups.length,
+    )
+    referenceGroups.push(...compiled.refGroups)
 
     // Models whose references go to a SEPARATE endpoint (Seedance 2.0's
     // reference-to-video) cannot also take a first/end frame — fal's
@@ -745,8 +751,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     }
 
     try {
-      // Every video generation uses the deterministic connected Text-node prompt.
-      const submitPrompt = compiledPrompt
+      const submitPrompt = compiled.prompt
 
       // Send RAW settings; the server builds the model-specific payload.
       const body = JSON.stringify({
@@ -1146,7 +1151,11 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
               <button
                 onClick={() => {
                   syncGuardRef.current.beginUserEdit()
-                  setNumVideos(n => Math.max(1, n - 1))
+                  setNumVideos(n => {
+                    const next = Math.max(1, n - 1)
+                    patchPersistedNodeData({ numVideos: next })
+                    return next
+                  })
                 }}
                 disabled={isGenerating || numVideos <= 1}
                 className="w-4 h-4 flex items-center justify-center hover:text-foreground disabled:opacity-30"
@@ -1157,7 +1166,11 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
               <button
                 onClick={() => {
                   syncGuardRef.current.beginUserEdit()
-                  setNumVideos(n => Math.min(12, n + 1))
+                  setNumVideos(n => {
+                    const next = Math.min(12, n + 1)
+                    patchPersistedNodeData({ numVideos: next })
+                    return next
+                  })
                 }}
                 disabled={isGenerating || numVideos >= 12}
                 className="w-4 h-4 flex items-center justify-center hover:text-foreground disabled:opacity-30"
@@ -1172,7 +1185,22 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
               options={modelOptions}
               onChange={(value) => {
                 syncGuardRef.current.beginUserEdit()
+                const nextModel = getModelById(value)
+                const nextAspectRatio = nextModel?.defaultAspectRatio || ''
+                const nextDuration = nextModel?.defaultDuration || ''
+                const nextResolution = nextModel?.defaultResolution || ''
                 setModelId(value)
+                setAspectRatio(nextAspectRatio)
+                setDuration(nextDuration)
+                setResolution(nextResolution)
+                setEnableAudio(false)
+                patchPersistedNodeData({
+                  modelId: value,
+                  aspectRatio: nextAspectRatio,
+                  duration: nextDuration,
+                  resolution: nextResolution,
+                  enableAudio: false,
+                })
               }}
               disabled={isGenerating}
             />
@@ -1188,6 +1216,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
                 onChange={(v) => {
                   syncGuardRef.current.beginUserEdit()
                   setUpscaleMode(v as 'standard' | 'creative')
+                  patchPersistedNodeData({ upscaleMode: v })
                 }}
                 disabled={isGenerating}
               />
@@ -1209,6 +1238,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
                 onChange={(value) => {
                   syncGuardRef.current.beginUserEdit()
                   setColormap(value)
+                  patchPersistedNodeData({ colormap: value })
                 }}
                 disabled={isGenerating}
               />
@@ -1222,6 +1252,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
                 onChange={(value) => {
                   syncGuardRef.current.beginUserEdit()
                   setDuration(value)
+                  patchPersistedNodeData({ duration: value })
                 }}
                 disabled={isGenerating}
               />
@@ -1249,6 +1280,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
                 onChange={(value) => {
                   syncGuardRef.current.beginUserEdit()
                   setResolution(value)
+                  patchPersistedNodeData({ resolution: value })
                 }}
                 disabled={isGenerating}
               />
@@ -1259,7 +1291,11 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
               <button
                 onClick={() => {
                   syncGuardRef.current.beginUserEdit()
-                  setEnableAudio(a => !a)
+                  setEnableAudio(a => {
+                    const next = !a
+                    patchPersistedNodeData({ enableAudio: next })
+                    return next
+                  })
                 }}
                 disabled={isGenerating}
                 className={`flex items-center justify-center w-6 h-6 rounded-md transition-colors disabled:opacity-50 ${
@@ -1279,7 +1315,11 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
               <button
                 onClick={() => {
                   syncGuardRef.current.beginUserEdit()
-                  setEnableLoop(l => !l)
+                  setEnableLoop(l => {
+                    const next = !l
+                    patchPersistedNodeData({ enableLoop: next })
+                    return next
+                  })
                 }}
                 disabled={isGenerating}
                 className={`flex items-center justify-center w-6 h-6 rounded-md transition-colors disabled:opacity-50 ${

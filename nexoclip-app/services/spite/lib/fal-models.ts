@@ -39,7 +39,7 @@ const video = (
   id: string, name: string, providerModel: string, resolutions: string[], durations: string[],
 ): ModelConfig => ({
   id, name, provider: 'byteplus', providerModel, falModel: providerModel,
-  category: 'video', inputTypes: ['text', 'image'],
+  category: 'video', inputTypes: ['text', 'image'], imageParam: 'image_urls',
   aspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'],
   resolutions, durations, supportsAudio: true, defaultAspectRatio: '16:9',
   defaultDuration: '5s', defaultResolution: resolutions.includes('1080p') ? '1080p' : '720p',
