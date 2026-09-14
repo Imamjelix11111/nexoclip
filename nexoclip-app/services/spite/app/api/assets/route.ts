@@ -9,7 +9,7 @@ import {
   unauthorizedResponse,
   userOwnsProject,
 } from '@/lib/project-ownership'
-import { v4 as uuidv4 } from 'uuid'
+import { v5 as uuidv5 } from 'uuid'
 import { DeleteObjectCommand } from '@aws-sdk/client-s3'
 
 async function deleteFromR2(key: string, getClient = getR2Client) {
@@ -46,13 +46,19 @@ interface AssetsRouteDeps {
   getDb?: typeof getDb
   getAuthenticatedUser?: typeof getAuthenticatedUser
   getR2Client?: typeof getR2Client
-  createAssetId?: () => string
+  createAssetId?: (projectId: string, url: string) => string
+}
+
+const ASSET_URL_NAMESPACE = '6ba7b811-9dad-11d1-80b4-00c04fd430c8'
+
+export function createStableAssetId(projectId: string, url: string) {
+  return uuidv5(`${projectId}:${url}`, ASSET_URL_NAMESPACE)
 }
 
 export function createAssetsRouteHandlers(deps: AssetsRouteDeps = {}) {
   const db = deps.getDb ?? getDb
   const resolveUser = deps.getAuthenticatedUser ?? getAuthenticatedUser
-  const createAssetId = deps.createAssetId ?? uuidv4
+  const createAssetId = deps.createAssetId ?? createStableAssetId
   const getClient = deps.getR2Client ?? getR2Client
 
   return {
@@ -136,10 +142,15 @@ export function createAssetsRouteHandlers(deps: AssetsRouteDeps = {}) {
           return NextResponse.json({ success: true, id: existing[0].id, reactivated: true })
         }
 
-        const id = createAssetId()
+        // A stable project+URL ID makes concurrent lookup-then-register calls
+        // idempotent across tabs and service instances without requiring a new
+        // unique constraint on legacy rows.
+        const id = createAssetId(projectId, url)
         const result = await sql`
           INSERT INTO generation_history (id, type, model, prompt, r2_url, is_upload, used_in_canvas, expires_at, project_id)
           VALUES (${id}, ${type || 'image'}, 'upload', ${filename || 'User upload'}, ${url}, true, true, NULL, ${projectId})
+          ON CONFLICT (id) DO UPDATE
+          SET used_in_canvas = true, expires_at = NULL
           RETURNING id
         `
 

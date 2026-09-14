@@ -10,6 +10,7 @@ import { NodeActionToolbar } from './node-toolbar'
 import { ShotSelector, type ShotOption } from './shot-selector'
 import { useSceneShots } from './use-scene-shots'
 import { Lightbox } from '../lightbox'
+import { AddToFolderModal } from '../add-to-folder-modal'
 import { labelFromPrompt, DEFAULT_IMAGE_LABEL } from '@/lib/auto-name'
 import { getImageModels, getModelById, buildModelInput, type ModelConfig } from '@/lib/fal-models'
 import { estimateGenerationCost, formatUSD, COST_CONFIRM_THRESHOLD_USD } from '@/lib/fal-cost'
@@ -164,6 +165,8 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
   // The exact fal queue path to poll, as told to us by the submit response.
   const [providerModel, setProviderModel] = useState<string | null>(null)
   const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [folderModalOpen, setFolderModalOpen] = useState(false)
+  const [folderType, setFolderType] = useState<'character' | 'prop' | 'location'>('character')
   const [isRenaming, setIsRenaming] = useState(false)
   const [labelDraft, setLabelDraft] = useState('')
   
@@ -351,6 +354,10 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
   const handleRename = () => {
     setLabelDraft((data.label as string) || '')
     setIsRenaming(true)
+  }
+  const handleAddToFolder = (type: 'character' | 'prop' | 'location') => {
+    setFolderType(type)
+    setFolderModalOpen(true)
   }
   const commitRename = () => {
     const next = labelDraft.trim()
@@ -892,6 +899,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
         assetUrl={outputUrl || undefined}
         assetType="image"
         onRename={handleRename}
+        onAddToFolder={outputUrl ? handleAddToFolder : undefined}
         onViewFullscreen={outputUrl ? () => setLightboxOpen(true) : undefined}
       />
 
@@ -901,6 +909,16 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
         type="image"
         onClose={() => setLightboxOpen(false)}
       />
+
+      {outputUrl && (
+        <AddToFolderModal
+          open={folderModalOpen}
+          onClose={() => setFolderModalOpen(false)}
+          folderType={folderType}
+          projectId={projectId}
+          assetUrl={outputUrl}
+        />
+      )}
 
       {/* Shot selector badge */}
       <div className="absolute -top-8 left-0 flex items-center gap-2 z-10">

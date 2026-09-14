@@ -78,6 +78,43 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
   const dragCountRef = useRef(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const pickerFileInputRef = useRef<HTMLInputElement>(null)
+  const assetResolutionRef = useRef<{ key: string; promise: Promise<AssetItem | null> } | null>(null)
+
+  const registerAssetByUrl = useCallback((): Promise<AssetItem | null> => {
+    if (assetId && assetUrl) return Promise.resolve({ id: assetId, url: assetUrl })
+    if (!assetUrl || !projectId) return Promise.resolve(null)
+
+    const key = `${projectId}:${assetUrl}`
+    if (assetResolutionRef.current?.key === key) return assetResolutionRef.current.promise
+
+    const promise = (async () => {
+      const query = new URLSearchParams({ projectId, url: assetUrl })
+      const lookup = await fetch(withBasePath(`/api/assets/by-url?${query}`))
+      if (!lookup.ok) throw new Error(`asset lookup returned ${lookup.status}`)
+      const existing = await lookup.json()
+      if (existing?.id) return { id: existing.id, url: assetUrl }
+
+      const registration = await fetch(withBasePath('/api/assets'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: assetUrl,
+          type: 'image',
+          filename: 'Generated image',
+          projectId,
+        }),
+      })
+      if (!registration.ok) throw new Error(`asset registration returned ${registration.status}`)
+      const created = await registration.json()
+      if (!created?.id) throw new Error('asset registration returned no id')
+      return { id: created.id as string, url: assetUrl }
+    })()
+    assetResolutionRef.current = { key, promise }
+    promise.catch(() => {
+      if (assetResolutionRef.current?.promise === promise) assetResolutionRef.current = null
+    })
+    return promise
+  }, [assetId, assetUrl, projectId])
 
   // Fetch existing folders + available assets — both scoped to the current
   // project. Without the projectId param these endpoints either fall back
@@ -116,21 +153,20 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
       setSelectedAssets([{ id: assetId, url: assetUrl }])
       return
     }
-    // Legacy reference nodes don't have data.assetId saved, so the caller
-    // passes only assetUrl. Look the asset id up by URL so it can still be
-    // pre-selected (and later added to a folder properly).
+    // Generated durable outputs live in the main asset store. Register a
+    // project-scoped Spite index row lazily so folders can reference them.
     if (assetUrl && projectId) {
       let cancelled = false
-      fetch(withBasePath(`/api/assets/by-url?projectId=${encodeURIComponent(projectId)}&url=${encodeURIComponent(assetUrl)}`))
-        .then(r => r.json())
-        .then(data => {
-          if (cancelled || !data?.id) return
-          setSelectedAssets([{ id: data.id, url: assetUrl }])
+      registerAssetByUrl()
+        .then(asset => {
+          if (!cancelled && asset) setSelectedAssets([asset])
         })
-        .catch(() => {})
+        .catch(err => {
+          if (!cancelled) toast.error(`Couldn't prepare this asset: ${err?.message || 'unknown error'}`)
+        })
       return () => { cancelled = true }
     }
-  }, [open, editFolder, assetId, assetUrl, defaultNew])
+  }, [open, editFolder, assetId, assetUrl, defaultNew, projectId, registerAssetByUrl])
 
   // Reset on close
   useEffect(() => {
@@ -237,17 +273,24 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
   )
 
   const handleAddToExisting = async (folderId: string) => {
-    if (!assetId) return
     try {
-      await fetch(withBasePath(`/api/folders/${folderId}`), {
+      const resolvedAssetId = assetUrl
+        ? (await registerAssetByUrl())?.id
+        : assetId || selectedAssets.find(asset => !asset.isUploading)?.id
+      if (!resolvedAssetId) throw new Error('asset is not ready')
+
+      const response = await fetch(withBasePath(`/api/folders/${folderId}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ addAssetIds: [assetId] })
+        body: JSON.stringify({ addAssetIds: [resolvedAssetId] })
       })
+      if (!response.ok) throw new Error(`folder update returned ${response.status}`)
       window.dispatchEvent(new CustomEvent('folders-changed'))
+      toast.success(`Added to ${typeLabels[folderType]}`)
       onClose()
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to add to folder:', err)
+      toast.error(`Couldn't add asset: ${err?.message || 'unknown error'}`)
     }
   }
 
@@ -265,9 +308,16 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
 
     setCreating(true)
     try {
-      const assetIds = selectedAssets
-        .filter(a => !a.isUploading && a.id && !a.id.startsWith('temp-'))
-        .map(a => a.id)
+      let readyAssets = selectedAssets.filter(a => !a.isUploading && a.id && !a.id.startsWith('temp-'))
+      if (!editFolder && assetUrl) {
+        const generatedAsset = await registerAssetByUrl()
+        if (!generatedAsset) throw new Error('generated asset is not ready')
+        if (!readyAssets.some(asset => asset.id === generatedAsset.id)) {
+          readyAssets = [...readyAssets, generatedAsset]
+          setSelectedAssets(prev => [...prev.filter(asset => asset.id !== generatedAsset.id), generatedAsset])
+        }
+      }
+      const assetIds = readyAssets.map(a => a.id)
 
       console.log('[folders] save', { name: newName, type: folderType, projectId, assetIds, editing: !!editFolder })
 
@@ -305,9 +355,9 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
       window.dispatchEvent(new CustomEvent('asset-status-changed'))
       window.dispatchEvent(new CustomEvent('folders-changed'))
       onClose()
-    } catch (err) {
+    } catch (err: any) {
       console.error('[folders] Save failed:', err)
-      toast.error("Couldn't save folder — network or server error.")
+      toast.error(`Couldn't save folder: ${err?.message || 'network or server error'}`)
     } finally {
       setCreating(false)
     }
