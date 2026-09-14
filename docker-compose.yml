@@ -121,7 +121,7 @@ services:
 
   nexoclip-asset-storage-init:
     image: busybox:1.37
-    command: ["sh", "-c", "mkdir -p /data/assets && chown -R 1000:1000 /data"]
+    command: ["sh", "-c", "mkdir -p /data/assets && chown -R 1001:1001 /data"]
     volumes:
       - nexoclip-assets:/data
     restart: "no"
@@ -146,6 +146,11 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       BYTEPLUS_API_KEY: ${BYTEPLUS_API_KEY:-}
       BYTEPLUS_BASE_URL: ${BYTEPLUS_BASE_URL:-}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET_NAME: ${R2_BUCKET_NAME:-}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL:-}
       IMAGE_WORKER_CONCURRENCY: ${IMAGE_WORKER_CONCURRENCY:-3}
     volumes:
       - nexoclip-assets:/data
@@ -180,6 +185,11 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       BYTEPLUS_API_KEY: ${BYTEPLUS_API_KEY:-}
       BYTEPLUS_BASE_URL: ${BYTEPLUS_BASE_URL:-}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET_NAME: ${R2_BUCKET_NAME:-}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL:-}
       VIDEO_WORKER_CONCURRENCY: ${VIDEO_WORKER_CONCURRENCY:-3}
     volumes:
       - nexoclip-assets:/data

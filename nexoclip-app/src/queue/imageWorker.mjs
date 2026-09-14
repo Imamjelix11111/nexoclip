@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { Queue, Worker } from 'bullmq';
 import IORedis from 'ioredis';
 import { getPool, closePool } from '../db/pool.js';
-import { createStorage } from '../services/assetService.js';
+import { createReferenceStorage, createStorage } from '../services/assetService.js';
 import { createDefaultSaasImageHandler } from '../services/saasImageGeneration.js';
 import { persistGenerationResult } from '../services/generationOutputService.js';
 import { createBullMqGenerationQueue } from './bullmqGenerationQueue.js';
@@ -22,6 +22,7 @@ export async function createImageWorker({
   createQueue = createBullMqGenerationQueue, createHandler = createDefaultSaasImageHandler,
   recover = recoverQueuedGenerations, recoverUnreserved = recoverUnreservedGenerations,
   persistResult = persistGenerationResult, createStorage: loadStorage = createStorage,
+  createReferenceStorage: loadReferenceStorage = createReferenceStorage,
   schedule = globalThis.setInterval, clearSchedule = globalThis.clearInterval, onError = console.error,
 } = {}) {
   const config = imageWorkerConfig(env);
@@ -32,9 +33,11 @@ export async function createImageWorker({
   await recoverNow();
   const interval = schedule(() => recoverNow().catch(onError), 30_000);
   interval.unref?.();
+  const storage = loadStorage(env);
   const processor = createGenerationProcessor({
-    pool, handler: createHandler({ pool, storage: loadStorage() }), provider: 'openrouter', persistResult,
-    onError,
+    pool,
+    handler: createHandler({ pool, storage, referenceStorage: loadReferenceStorage(env, storage) }),
+    provider: 'openrouter', persistResult, onError,
   });
   const worker = queue.createWorker(processor, { concurrency: config.concurrency });
   let closed = false;

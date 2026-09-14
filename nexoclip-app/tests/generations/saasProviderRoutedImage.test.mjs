@@ -21,9 +21,16 @@ test('worker resolves legacy Spite R2 proxy references into provider-safe data U
   let received;
   const handler = createSaasImageHandler({
     providerRouter: { async generateImage(input) { received = input; return { provider: 'google', outputs: [{ url: 'data:image/png;base64,cG5n', mimeType: 'image/png' }] }; } },
-    storage: {
-      async get(key) { assert.equal(key, 'uploads/hero.jpeg'); return { body: Buffer.from('hero'), contentType: 'image/jpeg' }; },
-      async put() {},
+    storage: { async put() {} },
+    referenceStorage: {
+      async createDownloadUrl({ key }) {
+        assert.equal(key, 'uploads/hero.jpeg');
+        return { url: 'r2://legacy-reference' };
+      },
+      async get(url) {
+        assert.equal(url, 'r2://legacy-reference');
+        return { body: Buffer.from('hero'), contentType: 'image/jpeg' };
+      },
     },
     pool: { async connect() { return { async query() { return { rows: [{ id: 'asset-1' }] }; }, release() {} }; } },
   });

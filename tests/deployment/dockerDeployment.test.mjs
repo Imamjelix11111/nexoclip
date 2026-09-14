@@ -36,6 +36,8 @@ test('production compose is AMD64 and exposes only Caddy plus declared private s
     'nexoclip',
     'spite',
     'spite-realtime',
+    'image-worker',
+    'video-worker',
   ];
   const blocks = serviceBlocks(compose, names);
 
@@ -50,21 +52,29 @@ test('production compose is AMD64 and exposes only Caddy plus declared private s
   }
 
   assert.match(blocks['spite-realtime'], /\n\s+expose:\n\s+- "3007"/);
+  for (const name of ['image-worker', 'video-worker']) {
+    assert.match(blocks[name], /R2_BUCKET_NAME: \$\{R2_BUCKET_NAME\}/);
+  }
   assert.match(blocks['spite-realtime-migrate'], /target: migrate-realtime/);
   assert.match(blocks['spite-ownership-migrate'], /target: node-runtime/);
 });
 
 test('local NexoClip services build the root-aware Dockerfile from repository root', () => {
   const compose = read('docker-compose.yml');
-  for (const block of Object.values(serviceBlocks(compose, [
+  assert.match(compose, /chown -R 1001:1001 \/data/);
+  const blocks = serviceBlocks(compose, [
     'nexoclip-migrate',
     'spite-ownership-migrate',
     'nexoclip-image-worker',
     'nexoclip-video-worker',
     'nexoclip-app',
-  ]))) {
+  ]);
+  for (const block of Object.values(blocks)) {
     assert.match(block, /context: \./);
     assert.match(block, /dockerfile: nexoclip-app\/Dockerfile/);
+  }
+  for (const name of ['nexoclip-image-worker', 'nexoclip-video-worker']) {
+    assert.match(blocks[name], /R2_BUCKET_NAME: \$\{R2_BUCKET_NAME:-\}/);
   }
 });
 
