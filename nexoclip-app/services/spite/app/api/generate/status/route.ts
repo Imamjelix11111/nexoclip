@@ -48,7 +48,11 @@ export function createGenerateStatusHandler(deps: GenerateStatusDeps = {}) {
       const realtime = createRealtimeClient()
       const document = mobile ? undefined : await realtime.exportDocument({ userId: user.id, projectId })
       const node = document?.projection.nodes.find((candidate) => candidate.id === nodeId)
-      if (!mobile && (!node || node.data.generationId !== generationId)) return projectNotFoundResponse()
+      const matchesNode = node && (
+        node.data.generationId === generationId
+        || node.data.lastGenerationId === generationId
+      )
+      if (!mobile && !matchesNode) return projectNotFoundResponse()
 
       const generation = await createGenerationClient().status({ userId: user.id, projectId, nodeId, generationId })
       const patch = createTerminalGenerationPatch(generation)

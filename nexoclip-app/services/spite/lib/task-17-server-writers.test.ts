@@ -239,12 +239,12 @@ test('writes a successful durable generation result to the owned canvas node onc
   assert.equal(response.status, 200)
   assert.deepEqual(patches[0], {
     userId: OWNER_ID, projectId: PROJECT_ID, nodeId: 'node-1',
-    set: { generationStatus: 'completed', outputUrl: '/api/assets/a/download', status: 'completed', error: null, generationError: null },
+    set: { lastGenerationId: 'g1', generationStatus: 'completed', outputUrl: '/api/assets/a/download', status: 'completed', error: null, generationError: null },
     unset: ['generationId'],
   })
 })
 
-test('rejects a repeated terminal poll after its generation marker is cleared', async () => {
+test('returns an idempotent terminal result after its active generation marker is cleared', async () => {
   const patches: unknown[] = []
   const handler = createGenerateStatusHandler({
     getAuthenticatedUser: async () => ({ id: OWNER_ID }),
@@ -259,7 +259,7 @@ test('rejects a repeated terminal poll after its generation marker is cleared', 
     }),
     createInternalRealtimeClient: () => ({
       exportDocument: async () => ({ projection: canvasWithNode('node-1', 'imageGen', {
-        generationStatus: 'completed', outputUrl: '/api/assets/a/download', status: 'completed', error: null, generationError: null,
+        lastGenerationId: 'g1', generationStatus: 'completed', outputUrl: '/api/assets/a/download', status: 'completed', error: null, generationError: null,
       }), durableSeq: 1, projectedSeq: 1 }),
       patchNodeData: async (patch: unknown) => { patches.push(patch) },
     }) as any,
@@ -267,7 +267,10 @@ test('rejects a repeated terminal poll after its generation marker is cleared', 
 
   const response = await handler(makeRequest(`http://spite.local/api/generate/status?projectId=${PROJECT_ID}&nodeId=node-1&generationId=g1`))
 
-  assert.equal(response.status, 404)
+  assert.equal(response.status, 200)
+  assert.deepEqual(await response.json(), {
+    generationId: 'g1', generationStatus: 'completed', outputUrl: '/api/assets/a/download',
+  })
   assert.equal(patches.length, 0)
 })
 

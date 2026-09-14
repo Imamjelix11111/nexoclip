@@ -25,6 +25,7 @@ export function createTerminalGenerationPatch(generation: DurableGeneration): Re
     const outputUrl = generation.outputs?.find((output) => output.download?.url)?.download?.url
     if (outputUrl) {
       return {
+        lastGenerationId: generation.id,
         generationStatus: 'completed',
         generationError: null,
         outputUrl,
@@ -33,10 +34,10 @@ export function createTerminalGenerationPatch(generation: DurableGeneration): Re
       }
     }
 
-    return failedPatch('Generation completed without media output.')
+    return failedPatch(generation.id, 'Generation completed without media output.')
   }
 
-  return failedPatch(generation.error?.message || 'Generation failed. Please retry.')
+  return failedPatch(generation.id, generation.error?.message || 'Generation failed. Please retry.')
 }
 
 export function needsDurableGenerationRecovery(data: Record<string, unknown>): boolean {
@@ -45,8 +46,9 @@ export function needsDurableGenerationRecovery(data: Record<string, unknown>): b
     && ACTIVE.has(data.generationStatus)
 }
 
-function failedPatch(message: string): Record<string, unknown> {
+function failedPatch(generationId: string, message: string): Record<string, unknown> {
   return {
+    lastGenerationId: generationId,
     generationStatus: 'failed',
     generationError: message,
     status: 'failed',
