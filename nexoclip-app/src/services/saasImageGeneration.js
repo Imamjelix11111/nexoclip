@@ -17,7 +17,7 @@ function legacyR2Key(reference) {
   }
 }
 
-export async function resolveReferenceImages({ workspaceId, referenceImages, pool, storage }) {
+export async function resolveReferenceImages({ workspaceId, referenceImages, pool, storage, referenceStorage = storage }) {
   if (!referenceImages?.length) return [];
   return Promise.all(referenceImages.map(async (reference) => {
     if (typeof reference !== 'string') throw Object.assign(new Error('Invalid asset reference'), { code: 'INVALID_REFERENCE_IMAGE' });
@@ -27,7 +27,8 @@ export async function resolveReferenceImages({ workspaceId, referenceImages, poo
     // worker storage and inline it, just as canonical workspace assets do.
     const legacyKey = legacyR2Key(reference);
     if (legacyKey) {
-      const object = await storage.get(legacyKey);
+      const download = await referenceStorage.createDownloadUrl({ key: legacyKey });
+      const object = await referenceStorage.get(download.url || download);
       return dataUrl(object.body, object.contentType || 'application/octet-stream');
     }
 
@@ -72,7 +73,7 @@ async function downloadOutput(output) {
   return { body: Buffer.from(await response.arrayBuffer()), contentType: response.headers.get('content-type') || output?.mimeType || 'image/png' };
 }
 
-export function createSaasImageHandler({ providerRouter, provider, storage, pool }) {
+export function createSaasImageHandler({ providerRouter, provider, storage, referenceStorage = storage, pool }) {
   if ((!providerRouter && !provider) || !storage || !pool) throw new TypeError('provider router, storage, and pool are required');
   return async (job) => {
     const referenceImages = await resolveReferenceImages({
@@ -80,6 +81,7 @@ export function createSaasImageHandler({ providerRouter, provider, storage, pool
       referenceImages: job.parameters?.referenceImages,
       pool,
       storage,
+      referenceStorage,
     });
     const result = providerRouter
       ? await providerRouter.generateImage(imageRequest(job, referenceImages))
@@ -108,6 +110,6 @@ export function createSaasImageHandler({ providerRouter, provider, storage, pool
   };
 }
 
-export function createDefaultSaasImageHandler({ pool, storage, providerRouter = createProviderRouter() }) {
-  return createSaasImageHandler({ pool, storage, providerRouter });
+export function createDefaultSaasImageHandler({ pool, storage, referenceStorage = storage, providerRouter = createProviderRouter() }) {
+  return createSaasImageHandler({ pool, storage, referenceStorage, providerRouter });
 }

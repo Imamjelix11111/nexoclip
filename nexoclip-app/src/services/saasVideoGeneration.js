@@ -22,12 +22,12 @@ function videoRequest(job, { referenceImages, frameImages, referenceVideos }) {
   };
 }
 
-export function createSaasVideoHandler({ pool, storage, providerRouter, createAsset = createGeneratedAsset, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), pollIntervalMs = 5_000, maxPolls = 120 }) {
+export function createSaasVideoHandler({ pool, storage, referenceStorage = storage, providerRouter, createAsset = createGeneratedAsset, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), pollIntervalMs = 5_000, maxPolls = 120 }) {
   if (!pool || !storage || !providerRouter) throw new TypeError('pool, storage, and provider router are required');
   return async (job) => {
-    const referenceImages = await resolveReferenceImages({ workspaceId: job.workspace_id, referenceImages: job.parameters?.referenceImages, pool, storage });
-    const frameImages = await resolveReferenceImages({ workspaceId: job.workspace_id, referenceImages: (job.parameters?.frameImages || []).map((frame) => frame.url), pool, storage });
-    const referenceVideos = await resolveReferenceImages({ workspaceId: job.workspace_id, referenceImages: job.parameters?.referenceVideos, pool, storage });
+    const referenceImages = await resolveReferenceImages({ workspaceId: job.workspace_id, referenceImages: job.parameters?.referenceImages, pool, storage, referenceStorage });
+    const frameImages = await resolveReferenceImages({ workspaceId: job.workspace_id, referenceImages: (job.parameters?.frameImages || []).map((frame) => frame.url), pool, storage, referenceStorage });
+    const referenceVideos = await resolveReferenceImages({ workspaceId: job.workspace_id, referenceImages: job.parameters?.referenceVideos, pool, storage, referenceStorage });
     const submitted = await providerRouter.submitVideo(videoRequest(job, { referenceImages, frameImages, referenceVideos }));
     const provider = submitted.provider || 'openrouter';
     const providerRequestId = submitted.id || submitted.providerRequestId;
@@ -53,6 +53,6 @@ export function createSaasVideoHandler({ pool, storage, providerRouter, createAs
   };
 }
 
-export function createDefaultSaasVideoHandler({ pool, storage, providerRouter = createProviderRouter() }) {
-  return createSaasVideoHandler({ pool, storage, providerRouter });
+export function createDefaultSaasVideoHandler({ pool, storage, referenceStorage = storage, providerRouter = createProviderRouter() }) {
+  return createSaasVideoHandler({ pool, storage, referenceStorage, providerRouter });
 }

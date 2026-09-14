@@ -27,6 +27,19 @@ export function createStorage(env = process.env) {
   });
 }
 
+// Canvas folders can still contain legacy Spite proxy URLs whose objects live
+// in Spite's R2 bucket. Main generation outputs may remain on local storage,
+// so references need an independent reader instead of changing output storage.
+export function createReferenceStorage(env = process.env, fallback = createStorage(env)) {
+  if (env.R2_BUCKET_NAME && env.R2_ACCOUNT_ID && env.R2_ACCESS_KEY_ID && env.R2_SECRET_ACCESS_KEY) {
+    return new R2ObjectStorage({
+      bucket: env.R2_BUCKET_NAME,
+      publicUrl: env.R2_PUBLIC_URL || 'https://legacy-reference.invalid',
+    });
+  }
+  return fallback;
+}
+
 export async function createAssetUpload(workspaceId, input, storage = createStorage()) {
   const metadata = validateAssetInput(input);
   const assetId = randomUUID();
