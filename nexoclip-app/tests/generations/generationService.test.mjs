@@ -40,6 +40,12 @@ test('rejects an image generation request without a prompt', () => {
   assert.throws(() => validateImageGenerationInput({ model: 'flux-dev' }), /Generation prompt is required/);
 });
 
+test('preserves Canvas model-specific aspect ratios', () => {
+  assert.deepEqual(validateImageGenerationInput({
+    prompt: 'wide cinematic fox', model: 'google/gemini-3-pro-image', aspectRatio: '21:9',
+  }).parameters, { aspectRatio: '21:9' });
+});
+
 test('rejects unsupported image generation parameters', () => {
   assert.throws(() => validateImageGenerationInput({ prompt: 'fox', model: 'flux-dev', aspectRatio: '2:1' }), /Aspect ratio is invalid/);
 });

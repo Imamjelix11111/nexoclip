@@ -5,7 +5,9 @@ import { findPricingRule } from '../repositories/pricingRepository.js';
 import { estimateCost } from './pricingService.js';
 import { findWorkspaceGenerationLimits, countRecentGenerations, countActiveGenerations, sumBudgetGenerations } from '../repositories/generationLimitsRepository.js';
 
-const aspectRatios = new Set(['1:1', '16:9', '9:16', '4:3', '3:4']);
+// Canvas model configurations expose these ratios. Validation must not collapse
+// a model-specific choice (for example Nano Banana's 21:9) to a default.
+const aspectRatios = new Set(['1:1', '1:4', '1:8', '2:3', '3:2', '3:4', '4:1', '4:3', '4:5', '5:4', '8:1', '9:16', '16:9', '21:9']);
 const VIMAX_KINDS = new Set(['vimax_narrative_planning', 'vimax_novel_planning', 'vimax_render_video']);
 const VIMAX_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9-]{0,95}$/;
 const VIMAX_PROMPTS = {

@@ -14,6 +14,8 @@ import { labelFromPrompt, DEFAULT_IMAGE_LABEL } from '@/lib/auto-name'
 import { getImageModels, getModelById, buildModelInput, type ModelConfig } from '@/lib/fal-models'
 import { estimateGenerationCost, formatUSD, COST_CONFIRM_THRESHOLD_USD } from '@/lib/fal-cost'
 import { resolveNodeMediaUrl } from '@/lib/node-media'
+import { compileMentionsForModel } from '@/lib/mention-prompt'
+import { useProjectFolders } from '@/hooks/use-project-folders'
 import { completeGenerationNode } from '@/lib/generation-node'
 import { ConnectedInputs } from '../connected-inputs'
 import { useCanvasCollaboration } from '../canvas-collaboration'
@@ -188,6 +190,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
   // immediately before recovery/submission; this node never owns a prompt.
   const resolvedPrompt = resolveIncomingPrompt(id, getNodes(), getEdges())
   const promptState = getGenerationPromptState(id, getNodes(), getEdges())
+  const { folders } = useProjectFolders(projectId)
 
   useEffect(() => {
     const finishSync = syncGuardRef.current.beginPropSync()
@@ -333,11 +336,6 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     syncGuardRef.current.beginUserEdit()
     createNextShot(id)
   }
-
-  // Persist state changes to node data
-  useEffect(() => {
-    patchPersistedNodeData({ modelId, aspectRatio, resolution, numImages, outputUrl, status, error, submittedAt })
-  }, [aspectRatio, error, modelId, numImages, outputUrl, patchPersistedNodeData, resolution, status, submittedAt])
 
   // Auto-name: once a generation completes, replace the default
   // "Image Generator #N" label with the first few words of the prompt.
@@ -672,7 +670,13 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
       currentModel?.imageParam === 'image_urls'
         ? (connectedImageUrl ? 1 : 0) + extraConnected.length
         : connectedImageUrl ? 1 : 0
-    const compiled = { prompt: compiledPrompt, refGroups: [] as Array<{ urls: string[] }> }
+    const compiled = compileMentionsForModel(
+      compiledPrompt,
+      resolvedPrompt.mentions,
+      folders,
+      currentModel,
+      usedSlots,
+    )
 
     // Extra connected images go ahead of folder-mention refs (they're the more
     // explicit intent), then the mention groups keep their order.
@@ -1021,7 +1025,11 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
               <button 
                 onClick={() => {
                   syncGuardRef.current.beginUserEdit()
-                  setNumImages(n => Math.max(1, n - 1))
+                  setNumImages(n => {
+                    const next = Math.max(1, n - 1)
+                    patchPersistedNodeData({ numImages: next })
+                    return next
+                  })
                 }}
                 disabled={isGenerating || numImages <= 1}
                 className="w-4 h-4 flex items-center justify-center hover:text-foreground disabled:opacity-30"
@@ -1032,7 +1040,11 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
               <button
                 onClick={() => {
                   syncGuardRef.current.beginUserEdit()
-                  setNumImages(n => Math.min(12, n + 1))
+                  setNumImages(n => {
+                    const next = Math.min(12, n + 1)
+                    patchPersistedNodeData({ numImages: next })
+                    return next
+                  })
                 }}
                 disabled={isGenerating || numImages >= 12}
                 className="w-4 h-4 flex items-center justify-center hover:text-foreground disabled:opacity-30"
@@ -1047,7 +1059,13 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
               options={modelOptions}
               onChange={(value) => {
                 syncGuardRef.current.beginUserEdit()
+                const nextModel = getModelById(value)
+                const nextAspectRatio = nextModel?.defaultAspectRatio || ''
+                const nextResolution = nextModel?.defaultResolution || ''
                 setModelId(value)
+                setAspectRatio(nextAspectRatio)
+                setResolution(nextResolution)
+                patchPersistedNodeData({ modelId: value, aspectRatio: nextAspectRatio, resolution: nextResolution })
               }}
               disabled={isGenerating}
             />
@@ -1074,6 +1092,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
                 onChange={(value) => {
                   syncGuardRef.current.beginUserEdit()
                   setResolution(value)
+                  patchPersistedNodeData({ resolution: value })
                 }}
                 disabled={isGenerating}
               />

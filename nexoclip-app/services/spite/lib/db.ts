@@ -5,7 +5,7 @@ type DatabaseEnvironment = {
   DATABASE_URL_SPITE?: string
 }
 
-export function resolveSpiteDatabaseUrl(env: DatabaseEnvironment = process.env): string {
+export function resolveSpiteDatabaseUrl(env: DatabaseEnvironment = process.env as DatabaseEnvironment): string {
   const databaseUrl = env.DATABASE_URL_SPITE || env.DATABASE_URL
   if (!databaseUrl) {
     throw new Error('DATABASE_URL_SPITE or DATABASE_URL environment variable is not set')

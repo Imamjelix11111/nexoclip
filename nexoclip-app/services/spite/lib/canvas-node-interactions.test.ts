@@ -37,13 +37,25 @@ test('resolveIncomingPrompt uses the first prompt edge by ID', () => {
   assert.deepEqual(resolveIncomingPrompt('image-1', nodes, [edgeB, edgeA]), {
     connected: true,
     prompt: 'alpha',
+    mentions: [],
   })
+})
+
+test('resolveIncomingPrompt carries Prompt Node mention selections', () => {
+  const mentioned = [
+    { ...nodes[0], data: { text: '@Hero', mentions: [{ folderId: 'folder-1', name: 'Hero', selectedAssetIds: ['asset-1'] }] } },
+    ...nodes.slice(1),
+  ]
+  assert.deepEqual(resolveIncomingPrompt('image-1', mentioned, [edgeA]).mentions, [
+    { folderId: 'folder-1', name: 'Hero', selectedAssetIds: ['asset-1'] },
+  ])
 })
 
 test('resolveIncomingPrompt reports no connection without a prompt edge', () => {
   assert.deepEqual(resolveIncomingPrompt('image-1', nodes, []), {
     connected: false,
     prompt: '',
+    mentions: [],
   })
 })
 
@@ -51,6 +63,7 @@ test('resolveIncomingPrompt reports a connected empty Text node', () => {
   assert.deepEqual(resolveIncomingPrompt('image-1', nodes, [{ ...edgeA, source: 'prompt-empty' }]), {
     connected: true,
     prompt: '',
+    mentions: [],
   })
 })
 
@@ -58,6 +71,7 @@ test('resolveIncomingPrompt ignores non-prompt source nodes', () => {
   assert.deepEqual(resolveIncomingPrompt('image-1', nodes, [{ ...edgeA, source: 'image-2' }]), {
     connected: false,
     prompt: '',
+    mentions: [],
   })
 })
 
@@ -65,6 +79,7 @@ test('resolveIncomingPrompt ignores legacy edges without the prompt-in target', 
   assert.deepEqual(resolveIncomingPrompt('image-1', nodes, [{ ...edgeA, targetHandle: null }]), {
     connected: false,
     prompt: '',
+    mentions: [],
   })
 })
 

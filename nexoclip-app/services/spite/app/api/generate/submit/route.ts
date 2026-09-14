@@ -67,7 +67,11 @@ export function createGenerateSubmitHandler(deps: GenerateSubmitDeps = {}) {
       }
 
       const parameters = mapLegacyParameters(body, kind)
-      if (!['1:1', '16:9', '9:16', '4:3', '3:4'].includes(String(parameters.aspectRatio))) delete parameters.aspectRatio
+      const supportedRatios = configuredModel?.aspectRatios ?? ['1:1', '16:9', '9:16', '4:3', '3:4']
+      if (parameters.aspectRatio === 'auto') delete parameters.aspectRatio
+      else if (parameters.aspectRatio !== undefined && !supportedRatios.includes(String(parameters.aspectRatio))) {
+        return NextResponse.json({ error: `Aspect ratio is not supported by ${configuredModel?.name ?? 'this model'}` }, { status: 400 })
+      }
       const generation = await createGenerationClient().submit({
         userId: user.id,
         projectId,
