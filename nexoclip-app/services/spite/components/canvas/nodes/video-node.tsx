@@ -265,7 +265,7 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     setSubmittedAt((data.submittedAt as number) || undefined)
     setOutputUrl(resolveNodeMediaUrl({ outputUrl: data.outputUrl }) || null)
     queueMicrotask(finishSync)
-  }, [data.aspectRatio, data.colormap, data.duration, data.enableAudio, data.enableLoop, data.error, data.modelId, data.numVideos, data.outputUrl, data.resolution, data.status, data.submittedAt, data.upscaleMode, data.voiceIds])
+  }, [data.aspectRatio, data.colormap, data.duration, data.enableAudio, data.enableLoop, data.error, data.generationError, data.generationStatus, data.modelId, data.numVideos, data.outputUrl, data.resolution, data.status, data.submittedAt, data.upscaleMode, data.voiceIds])
 
   // Repair durable asset URLs written by pre-fix bundles before rendering.
   useEffect(() => {
@@ -375,14 +375,12 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
     return () => { cancelled = true }
   }, [data.videoThumbnail, data.videoThumbnailFor, outputUrl, patchPersistedNodeData])
 
-  // Resume polling on mount when this node has an in-flight job recorded —
-  // either because it was spawned for a batch generation, or because the
-  // user refreshed the page mid-generation. We do NOT clear the data
-  // here; the marker stays until the generation actually resolves, so
-  // another refresh resumes too.
+  // Resume polling only for an active durable job. A failed/completed job can
+  // retain a legacy generationId, but must never be rendered as in queue.
   useEffect(() => {
     const pending = data.generationId as string | undefined
-    if (pending && !outputUrl && !generationId) {
+    const active = ['queued', 'processing', 'running'].includes(String(data.generationStatus))
+    if (pending && active && !outputUrl && !generationId) {
       setProviderModel((data.pendingProviderModel as string) || null)
       setGenerationId(pending)
       setStatus('in_queue')
@@ -843,6 +841,10 @@ function VideoNodeImpl({ id, data, selected }: NodeProps) {
       patchPersistedNodeData({
         generationId: ok[0].generationId,
         generationStatus: ok[0].generationStatus,
+        status: ok[0].generationStatus === 'processing' ? 'in_progress' : 'in_queue',
+        error: null,
+        generationError: null,
+        submittedAt: startedAt,
         pendingStartedAt: startedAt,
       })
 

@@ -6,9 +6,31 @@ function dataUrl(body, contentType) {
   return `data:${contentType};base64,${Buffer.from(body).toString('base64')}`;
 }
 
+function legacyR2Key(reference) {
+  try {
+    const path = new URL(reference, 'https://canvas.invalid').pathname;
+    const marker = '/api/r2-image/';
+    const index = path.indexOf(marker);
+    return index === -1 ? null : decodeURIComponent(path.slice(index + marker.length));
+  } catch {
+    return null;
+  }
+}
+
 export async function resolveReferenceImages({ workspaceId, referenceImages, pool, storage }) {
   if (!referenceImages?.length) return [];
   return Promise.all(referenceImages.map(async (reference) => {
+    if (typeof reference !== 'string') throw Object.assign(new Error('Invalid asset reference'), { code: 'INVALID_REFERENCE_IMAGE' });
+
+    // Legacy Spite folders retain /spite/api/r2-image/<key> URLs. They are
+    // browser proxy paths, not provider-fetchable URLs. Read the object with
+    // worker storage and inline it, just as canonical workspace assets do.
+    const legacyKey = legacyR2Key(reference);
+    if (legacyKey) {
+      const object = await storage.get(legacyKey);
+      return dataUrl(object.body, object.contentType || 'application/octet-stream');
+    }
+
     if (!reference.startsWith('/api/assets/')) return reference;
     const assetId = reference.match(/^\/api\/assets\/([^/]+)\/download(?:\?|$)/)?.[1];
     if (!assetId) throw Object.assign(new Error('Invalid asset reference'), { code: 'INVALID_REFERENCE_IMAGE' });

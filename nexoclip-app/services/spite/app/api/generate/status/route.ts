@@ -54,11 +54,11 @@ export function createGenerateStatusHandler(deps: GenerateStatusDeps = {}) {
       const patch = createTerminalGenerationPatch(generation)
       if (patch && node && (
         Object.entries(patch).some(([key, value]) => node.data[key] !== value)
-        || (generation.status === 'succeeded' && typeof node.data.generationId === 'string')
+        || (['succeeded', 'failed'].includes(generation.status) && typeof node.data.generationId === 'string')
       )) {
         try {
           const set = { ...patch }
-          const unset = generation.status === 'succeeded' ? ['generationId'] : []
+          const unset = ['succeeded', 'failed'].includes(generation.status) ? ['generationId'] : []
           await realtime.patchNodeData({ userId: user.id, projectId, nodeId, set, unset })
         } catch (error) {
           console.error('[generation-status] terminal reconciliation deferred', error)

@@ -17,6 +17,24 @@ test('worker routes image jobs through the server provider router and persists t
   assert.deepEqual(result.usage, { total_tokens: 12 });
 });
 
+test('worker resolves legacy Spite R2 proxy references into provider-safe data URLs', async () => {
+  let received;
+  const handler = createSaasImageHandler({
+    providerRouter: { async generateImage(input) { received = input; return { provider: 'google', outputs: [{ url: 'data:image/png;base64,cG5n', mimeType: 'image/png' }] }; } },
+    storage: {
+      async get(key) { assert.equal(key, 'uploads/hero.jpeg'); return { body: Buffer.from('hero'), contentType: 'image/jpeg' }; },
+      async put() {},
+    },
+    pool: { async connect() { return { async query() { return { rows: [{ id: 'asset-1' }] }; }, release() {} }; } },
+  });
+
+  await handler({
+    id: 'g1', workspace_id: 'w1', model: 'google/gemini-3-pro-image', prompt: 'hero',
+    parameters: { referenceImages: ['/spite/api/r2-image/uploads/hero.jpeg'] },
+  });
+  assert.deepEqual(received.referenceImages, ['data:image/jpeg;base64,aGVybw==']);
+});
+
 test('worker writes generated output directly to R2 object storage', async () => {
   const puts = [];
   const handler = createSaasImageHandler({

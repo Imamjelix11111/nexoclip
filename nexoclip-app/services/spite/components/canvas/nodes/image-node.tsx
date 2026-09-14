@@ -208,7 +208,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     setSubmittedAt((data.submittedAt as number) || undefined)
     setOutputUrl(resolveNodeMediaUrl({ outputUrl: data.outputUrl }) || null)
     queueMicrotask(finishSync)
-  }, [data.aspectRatio, data.error, data.modelId, data.numImages, data.outputUrl, data.resolution, data.status, data.submittedAt])
+  }, [data.aspectRatio, data.error, data.generationError, data.generationStatus, data.modelId, data.numImages, data.outputUrl, data.resolution, data.status, data.submittedAt])
 
   // Repair outputs written before durable asset URLs were kept outside /spite.
   useEffect(() => {
@@ -242,13 +242,12 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Resume polling after a page refresh: if the saved data has a pending
-  // request id, pick up the in-flight job. We do NOT clear generationId
-  // here — the data stays on the node until the generation actually
-  // resolves (success / failure / cancel), so a second refresh resumes too.
+  // Resume polling only for an active durable job. A failed/completed job can
+  // retain a legacy generationId, but must never be rendered as in queue.
   useEffect(() => {
     const pending = data.generationId as string | undefined
-    if (pending && !outputUrl && !generationId) {
+    const active = ['queued', 'processing', 'running'].includes(String(data.generationStatus))
+    if (pending && active && !outputUrl && !generationId) {
       setProviderModel((data.pendingProviderModel as string) || null)
       setGenerationId(pending)
       setStatus('in_queue')
@@ -787,6 +786,10 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
       patchPersistedNodeData({
         generationId: ok[0].generationId,
         generationStatus: ok[0].generationStatus,
+        status: ok[0].generationStatus === 'processing' ? 'in_progress' : 'in_queue',
+        error: null,
+        generationError: null,
+        submittedAt: startedAt,
         pendingStartedAt: startedAt,
       })
 
