@@ -22,6 +22,7 @@ import { ConnectedInputs } from '../connected-inputs'
 import { useCanvasCollaboration } from '../canvas-collaboration'
 import { createLocalStateSyncGuard } from '@/lib/local-state-sync'
 import { createGenerationStatusQuery, getGenerationPromptState, parseAspectRatio, resolveIncomingPrompt } from '@/lib/canvas-node-interactions'
+import { GenerationFeedbackOverlay, getGenerationFeedbackState, isTerminalGenerationStatus, getTerminalGenerationToast } from './generation-feedback'
 
 const IMAGE_MODELS = getImageModels()
 
@@ -171,6 +172,9 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
   const [labelDraft, setLabelDraft] = useState('')
   
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
+  const announcedOutputRef = useRef(outputUrl)
+  const lastAnnouncedGenerationRef = useRef<string | null>(null)
+  const regenerationRef = useRef(false)
   // React state updates after this event; lock synchronous repeat clicks meanwhile.
   const submitInFlightRef = useRef(false)
   // Set true to immediately stop polling (cancel / unmount), so an in-flight
@@ -213,6 +217,50 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     queueMicrotask(finishSync)
   }, [data.aspectRatio, data.error, data.generationError, data.generationStatus, data.modelId, data.numImages, data.outputUrl, data.resolution, data.status, data.submittedAt])
 
+  useEffect(() => {
+    if (outputUrl && outputUrl !== announcedOutputRef.current) {
+      window.dispatchEvent(new CustomEvent('asset-status-changed'))
+    }
+    announcedOutputRef.current = outputUrl
+  }, [outputUrl])
+
+  const durableGenerationId = (data.lastGenerationId as string | undefined) || (data.generationId as string | undefined) || null
+
+  // Seed initial announced generation on mount: if the node loads with a
+  // terminal durable generation already present, mark it announced so we
+  // don't replay its toast. If the node loads with an active generation
+  // (in-progress/queued) that's a regeneration, do NOT seed it so when the
+  // same id later becomes terminal it'll notify exactly once.
+  useEffect(() => {
+    if (durableGenerationId && isTerminalGenerationStatus(data.generationStatus)) {
+      lastAnnouncedGenerationRef.current = durableGenerationId
+    }
+    // run only on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Emit a terminal toast once per generation id when we observe a terminal
+  // state. lastAnnouncedGenerationRef prevents duplicates across re-renders
+  // and polling reconciliation.
+  useEffect(() => {
+    if (!durableGenerationId) return
+
+    const notice = getTerminalGenerationToast({
+      mediaKind: 'image',
+      generationId: durableGenerationId,
+      generationStatus: data.generationStatus,
+      error: (data.generationError as string) || (data.error as string) || null,
+      isRegeneration: regenerationRef.current,
+      lastAnnouncedGenerationId: lastAnnouncedGenerationRef.current,
+    })
+    if (!notice) return
+
+    lastAnnouncedGenerationRef.current = notice.generationId
+    const toastId = `${id}-${notice.generationId}-terminal`
+    if (notice.tone === 'success') toast.success(notice.message, { id: toastId })
+    else toast.error(notice.message, { id: toastId })
+  }, [data.error, data.generationError, data.generationStatus, durableGenerationId, id])
+
   // Repair outputs written before durable asset URLs were kept outside /spite.
   useEffect(() => {
     if (typeof data.outputUrl !== 'string' || !data.outputUrl.startsWith('/spite/api/assets/')) return
@@ -250,7 +298,8 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
   useEffect(() => {
     const pending = data.generationId as string | undefined
     const active = ['queued', 'processing', 'running'].includes(String(data.generationStatus))
-    if (pending && active && !outputUrl && !generationId) {
+    if (pending && active && !generationId) {
+      regenerationRef.current = Boolean(outputUrl)
       setProviderModel((data.pendingProviderModel as string) || null)
       setGenerationId(pending)
       setStatus('in_queue')
@@ -657,10 +706,11 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
       return
     }
 
+    const isReplacement = Boolean(outputUrl)
+    regenerationRef.current = isReplacement
     setSubmittedAt(Date.now())
     setStatus('submitting')
     setError(null)
-    setOutputUrl(null)
     setProgress(undefined)
 
     // For image_urls-style models, the first connected image is the primary
@@ -769,8 +819,10 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
           : status === 503 ? 'generation disabled (GENERATION_DISABLED env var)'
           : `HTTP ${status || 'error'}`
         const reason = sessionExpired ? hint : falMsg ? `${hint} — ${falMsg}` : hint
+        const message = `Failed to submit job — ${reason}`
         setStatus('failed')
-        setError(`Failed to submit job — ${reason}`)
+        setError(message)
+        toast.error(message, { id: `${id}-submission-error` })
         return
       }
       // Partial success — let the user know they got fewer outputs than
@@ -839,8 +891,10 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
         }
       }
     } catch (err: any) {
+      const message = err.message || 'Failed to submit job'
       setStatus('failed')
-      setError(err.message || 'Failed to submit job')
+      setError(message)
+      toast.error(message, { id: `${id}-submission-error` })
     }
   }
 
@@ -879,8 +933,10 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     })
   }
 
+  const feedbackState = getGenerationFeedbackState({ status: status === 'cancelled' ? 'idle' : status, hasOutput: Boolean(outputUrl) })
   const isGenerating = status === 'submitting' || status === 'in_queue' || status === 'in_progress'
   const isTaggedToShot = !!selectedShotId
+  const feedbackFrameStyle = feedbackState.isRegenerating || feedbackState.isFailedRegeneration ? feedbackState.frameStyle : {}
 
   // Build options from current model's config
   const modelOptions = IMAGE_MODELS.map(m => ({ value: m.id, label: m.name }))
@@ -981,16 +1037,16 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
         className="flex flex-col rounded-xl overflow-hidden transition-all duration-200"
         style={{
           background: '#0D0F12',
-          border: isTaggedToShot 
+          border: feedbackFrameStyle.border || (isTaggedToShot
             ? '1.5px solid rgba(251,191,36,0.7)' 
             : selected 
               ? '1.5px solid rgba(107,143,168,0.85)' 
-              : '1.5px solid rgba(107,143,168,0.25)',
-          boxShadow: isTaggedToShot
+              : '1.5px solid rgba(107,143,168,0.25)'),
+          boxShadow: feedbackFrameStyle.boxShadow || (isTaggedToShot
             ? '0 0 0 1px rgba(251,191,36,0.2), 0 0 20px rgba(251,191,36,0.25), 0 0 40px rgba(251,191,36,0.1)'
             : selected 
               ? '0 0 0 1px rgba(107,143,168,0.2), 0 0 24px rgba(107,143,168,0.15)' 
-              : 'none',
+              : 'none'),
         }}
       >
         {/* Preview area - image displays at natural aspect ratio */}
@@ -1023,7 +1079,9 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
             </div>
           )}
           
-          {error && (
+          <GenerationFeedbackOverlay state={feedbackState} error={error} onRetry={requestGenerate} />
+
+          {error && !feedbackState.isFailedRegeneration && (
             <div className="absolute bottom-2 left-2 right-2 bg-red-500/20 border border-red-500/30 rounded px-2 py-1">
               <span className="text-[9px] font-mono text-red-400">{error}</span>
             </div>
