@@ -1,6 +1,9 @@
 import { neon } from '@neondatabase/serverless'
 
-type DatabaseEnvironment = Partial<Pick<NodeJS.ProcessEnv, 'DATABASE_URL' | 'DATABASE_URL_SPITE'>>
+type DatabaseEnvironment = {
+  DATABASE_URL?: string
+  DATABASE_URL_SPITE?: string
+}
 
 export function resolveSpiteDatabaseUrl(env: DatabaseEnvironment = process.env): string {
   const databaseUrl = env.DATABASE_URL_SPITE || env.DATABASE_URL
