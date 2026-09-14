@@ -1,0 +1,46 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import test from 'node:test'
+
+import { createStableAssetId } from '@/app/api/assets/route'
+
+const imageNode = readFileSync(
+  new URL('../components/canvas/nodes/image-node.tsx', import.meta.url),
+  'utf8',
+)
+const folderModal = readFileSync(
+  new URL('../components/canvas/add-to-folder-modal.tsx', import.meta.url),
+  'utf8',
+)
+const assetsRoute = readFileSync(
+  new URL('../app/api/assets/route.ts', import.meta.url),
+  'utf8',
+)
+
+test('image generation node exposes generated output to the folder modal', () => {
+  assert.match(imageNode, /import \{ AddToFolderModal \}/)
+  assert.match(imageNode, /onAddToFolder=\{outputUrl \? handleAddToFolder : undefined\}/)
+  assert.match(imageNode, /<AddToFolderModal[\s\S]*?assetUrl=\{outputUrl\}/)
+})
+
+test('folder modal registers an unindexed generated output and uses the resolved asset id', () => {
+  assert.match(folderModal, /registerAssetByUrl/)
+  assert.doesNotMatch(folderModal, /if \(!assetId\) return/)
+  assert.match(folderModal, /const resolvedAssetId = assetUrl[\s\S]*?await registerAssetByUrl\(\)/)
+  assert.match(folderModal, /addAssetIds: \[resolvedAssetId\]/)
+})
+
+test('new folder creation waits for generated asset registration', () => {
+  assert.match(
+    folderModal,
+    /const handleSave[\s\S]*?await registerAssetByUrl\(\)[\s\S]*?assetIds[\s\S]*?fetch\(withBasePath\('\/api\/folders'\)/,
+  )
+})
+
+test('generated asset registration is idempotent across concurrent service instances', () => {
+  const first = createStableAssetId('project-a', '/api/assets/output/download')
+  assert.equal(first, createStableAssetId('project-a', '/api/assets/output/download'))
+  assert.notEqual(first, createStableAssetId('project-b', '/api/assets/output/download'))
+  assert.notEqual(first, createStableAssetId('project-a', '/api/assets/other/download'))
+  assert.match(assetsRoute, /ON CONFLICT \(id\) DO UPDATE/)
+})
