@@ -11,6 +11,8 @@ import { MagnifyingGlass, Plus, ArrowLeft, User, MapPin, Package, X, UploadSimpl
 
 type FolderType = 'character' | 'prop' | 'location' | 'general'
 
+type AddedFolder = { id: string; name: string; type: FolderType }
+
 interface AssetItem {
   id: string
   url: string
@@ -43,6 +45,7 @@ interface AddToFolderModalProps {
   // Character/Prop/…" buttons so the user doesn't have to click an extra
   // step before naming a new folder.
   defaultNew?: boolean
+  onAdded?: (folder: AddedFolder) => void
 }
 
 const typeLabels: Record<FolderType, string> = {
@@ -287,6 +290,11 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
       if (!response.ok) throw new Error(`folder update returned ${response.status}`)
       window.dispatchEvent(new CustomEvent('folders-changed'))
       toast.success(`Added to ${typeLabels[folderType]}`)
+      // Invoke success callback with the folder info after confirmed success
+      const f = folders.find(f => f.id === folderId)
+      if (f && typeof onAdded === 'function') {
+        onAdded({ id: f.id, name: f.name, type: f.type })
+      }
       onClose()
     } catch (err: any) {
       console.error('Failed to add to folder:', err)
@@ -349,6 +357,18 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
         console.error('[folders] save failed', res.status, body)
         toast.error(`Couldn't save folder (HTTP ${res.status}). Check console for details.`)
         return
+      }
+
+      // Successful save
+      if (!editFolder && typeof onAdded === 'function') {
+        // New folder: parse response for id, then invoke callback with trimmed name and type
+        try {
+          const parsed = await res.json()
+          const id = parsed?.id as string | undefined
+          if (id) {
+            onAdded({ id, name: newName.trim(), type: folderType })
+          }
+        } catch {}
       }
 
       toast.success(editFolder ? 'Folder updated' : `${typeLabels[folderType]} "${newName.trim()}" created`)

@@ -1,6 +1,7 @@
 'use client'
 
 import { withBasePath } from '@/lib/base-path'
+import { uploadedMediaLabel } from '@/lib/canvas-media-label'
 import {
   createInvocationTimeRuntimeControls,
   getCanvasRuntimeCapabilities,
@@ -780,7 +781,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
   const pasteImageFile = useCallback(async (file: File, pos?: { x: number; y: number }) => {
     if (!allowDocumentMutation) return
     const flowPos = pos || screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
-    const nodeLabel = file.name.replace(/\.[^.]+$/, '')
+    const nodeLabel = uploadedMediaLabel(file.name)
     const n = makeNode('reference', flowPos, nodeLabel, activeSceneId)
     
     // Create temp blob URL for immediate display
@@ -819,7 +820,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
       const assetRes = await fetch(withBasePath('/api/assets'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: proxyUrl, type: mediaType, filename: nodeLabel, projectId }),
+        body: JSON.stringify({ url: proxyUrl, type: mediaType, filename: file.name, projectId }),
       })
       const assetData = await assetRes.json()
       console.log('Asset recorded:', { assetData, status: assetRes.status })

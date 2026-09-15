@@ -12,6 +12,7 @@ import { useSceneShots } from './use-scene-shots'
 import { Lightbox } from '../lightbox'
 import { AddToFolderModal } from '../add-to-folder-modal'
 import { labelFromPrompt, DEFAULT_IMAGE_LABEL } from '@/lib/auto-name'
+import { folderMediaLabel } from '@/lib/canvas-media-label'
 import { getImageModels, getModelById, buildModelInput, type ModelConfig } from '@/lib/fal-models'
 import { estimateGenerationCost, formatUSD, COST_CONFIRM_THRESHOLD_USD } from '@/lib/fal-cost'
 import { resolveNodeMediaUrl } from '@/lib/node-media'
@@ -973,6 +974,10 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
           folderType={folderType}
           projectId={projectId}
           assetUrl={outputUrl}
+          onAdded={(folder) => {
+            syncGuardRef.current.beginUserEdit()
+            patchPersistedNodeData({ label: folderMediaLabel(folder.name) })
+          }}
         />
       )}
 
