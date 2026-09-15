@@ -10,6 +10,8 @@ import {
   ImageSquare,
   FilmSlate,
 } from '@phosphor-icons/react'
+import { toast } from 'sonner'
+import { resolveDurableJobId, shortJobId } from '../../lib/job-tracing'
 
 type Job = {
   id: string
@@ -19,6 +21,7 @@ type Job = {
   outputUrl?: string
   submittedAt?: number
   modelId?: string
+  generationId?: string | null
   mediaType: 'image' | 'video'
   position: { x: number; y: number }
   width?: number
@@ -71,6 +74,7 @@ export function JobsPanel({ open, onClose }: { open: boolean; onClose: () => voi
           outputUrl: data.outputUrl as string | undefined,
           submittedAt: data.submittedAt as number | undefined,
           modelId: data.modelId as string | undefined,
+          generationId: resolveDurableJobId(data),
           mediaType: (n.type === 'imageGen' ? 'image' : 'video') as 'image' | 'video',
           position: n.position,
           width: (n as any).width || undefined,
@@ -143,47 +147,69 @@ function JobRow({ job, onClick }: { job: Job; onClick: () => void }) {
     job.status === 'in_progress'
 
   return (
-    <button
-      onClick={onClick}
-      className="w-full flex items-start gap-3 px-3 py-2.5 border-b border-white/[0.04] hover:bg-white/[0.04] transition-colors text-left"
-      title="Click to focus this node on the canvas"
-    >
-      {/* Thumbnail */}
-      <div className="w-12 h-12 rounded-md bg-zinc-900/80 flex-shrink-0 overflow-hidden flex items-center justify-center border border-white/5">
-        {job.outputUrl && (job.status === 'completed' || job.status === 'failed') ? (
-          job.mediaType === 'image' ? (
-            <img src={job.outputUrl} className="w-full h-full object-cover" alt="" draggable={false} />
+    <div className="w-full flex items-start gap-3 px-3 py-2.5 border-b border-white/[0.04] hover:bg-white/[0.04] transition-colors">
+      <button
+        onClick={onClick}
+        className="flex-1 flex items-start gap-3 text-left"
+        title="Click to focus this node on the canvas"
+      >
+        {/* Thumbnail */}
+        <div className="w-12 h-12 rounded-md bg-zinc-900/80 flex-shrink-0 overflow-hidden flex items-center justify-center border border-white/5">
+          {job.outputUrl && (job.status === 'completed' || job.status === 'failed') ? (
+            job.mediaType === 'image' ? (
+              <img src={job.outputUrl} className="w-full h-full object-cover" alt="" draggable={false} />
+            ) : (
+              <video src={job.outputUrl} muted playsInline className="w-full h-full object-cover" />
+            )
+          ) : job.mediaType === 'image' ? (
+            <ImageSquare size={16} weight="thin" className="text-muted-foreground/40" />
           ) : (
-            <video src={job.outputUrl} muted playsInline className="w-full h-full object-cover" />
-          )
-        ) : job.mediaType === 'image' ? (
-          <ImageSquare size={16} weight="thin" className="text-muted-foreground/40" />
-        ) : (
-          <FilmSlate size={16} weight="thin" className="text-muted-foreground/40" />
-        )}
-      </div>
-
-      {/* Info */}
-      <div className="flex-1 min-w-0">
-        <div className="text-[11px] font-mono text-foreground/90 truncate leading-tight">
-          {job.label}
-        </div>
-        <div className="flex items-center gap-2 mt-0.5">
-          <span className="text-[9px] font-mono text-muted-foreground/55 tracking-wide">
-            {age}
-          </span>
-          {job.modelId && (
-            <span className="text-[9px] font-mono text-muted-foreground/35 truncate">
-              {job.modelId}
-            </span>
+            <FilmSlate size={16} weight="thin" className="text-muted-foreground/40" />
           )}
         </div>
-        {job.status === 'failed' && job.error && (
-          <div className="text-[9px] font-mono text-red-400/80 mt-1 leading-snug">
-            {job.error}
+
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          <div className="text-[11px] font-mono text-foreground/90 truncate leading-tight">
+            {job.label}
           </div>
-        )}
-      </div>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-[9px] font-mono text-muted-foreground/55 tracking-wide">
+              {age}
+            </span>
+            {job.modelId && (
+              <span className="text-[9px] font-mono text-muted-foreground/35 truncate">
+                {job.modelId}
+              </span>
+            )}
+          </div>
+          {job.status === 'failed' && job.error && (
+            <div className="text-[9px] font-mono text-red-400/80 mt-1 leading-snug">
+              {job.error}
+            </div>
+          )}
+        </div>
+      </button>
+
+      {/* Copy durable job id */}
+      {job.generationId ? (
+        <button
+          type="button"
+          title={job.generationId}
+          aria-label={`Copy full job ID ${job.generationId}`}
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(job.generationId!)
+              toast.success('Job ID copied')
+            } catch (err) {
+              toast.error("Couldn't copy Job ID")
+            }
+          }}
+          className="flex-shrink-0 ml-1 px-2 py-1 rounded-md glass-hover text-muted-foreground hover:text-foreground transition-colors text-[11px] font-mono"
+        >
+          {shortJobId(job.generationId)}
+        </button>
+      ) : null}
 
       {/* Status icon */}
       <div className="flex-shrink-0 mt-0.5">
@@ -200,6 +226,6 @@ function JobRow({ job, onClick }: { job: Job; onClick: () => void }) {
           <CircleNotch size={14} weight="thin" className="text-accent animate-spin" />
         )}
       </div>
-    </button>
+    </div>
   )
 }
