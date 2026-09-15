@@ -13,6 +13,7 @@ import { createPortal } from 'react-dom'
 import { X, User, Package, MapPin, Folder, Check, PencilSimple, Trash } from '@phosphor-icons/react'
 import { AssetThumb } from './asset-thumb'
 import { mentionStateKey } from '@/lib/mention-state'
+import { placeMentionMenu } from '@/lib/mention-position'
 
 export type FolderType = 'character' | 'prop' | 'location' | 'general'
 
@@ -466,6 +467,64 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
     : folders
   ).slice(0, 8)
 
+  // Menu positioning: we render the suggestions into a fixed portal and
+  // compute its coordinates based on the active query range's
+  // getBoundingClientRect(). We remeasure on open, query changes, and
+  // on scroll/resize while open.
+  const menuRef = useRef<HTMLDivElement | null>(null)
+  const [menuPos, setMenuPos] = useState<{ left: number; top: number; placement: 'above' | 'below' } | null>(null)
+
+  const computePlacement = useCallback(() => {
+    if (!open) return
+    const el = editorRef.current
+    if (!el) return
+    let caretRect: DOMRect
+    try {
+      const q = findActiveAtQuery()
+      if (q && q.range) {
+        const r = q.range.getBoundingClientRect()
+        if (r.width === 0 && r.height === 0) caretRect = el.getBoundingClientRect()
+        else caretRect = r
+      } else {
+        caretRect = el.getBoundingClientRect()
+      }
+    } catch (e) {
+      caretRect = el.getBoundingClientRect()
+    }
+
+    const menuEl = menuRef.current
+    const menuSize = menuEl
+      ? { width: menuEl.offsetWidth, height: menuEl.offsetHeight }
+      : { width: 240, height: 180 }
+
+    const viewport = { width: window.innerWidth, height: window.innerHeight }
+    const pos = placeMentionMenu(
+      { left: caretRect.left, right: caretRect.right, top: caretRect.top, bottom: caretRect.bottom },
+      menuSize,
+      viewport,
+      8,
+    )
+    setMenuPos(pos)
+  }, [open, query, filteredFolders.length])
+
+  useEffect(() => {
+    if (!open) {
+      setMenuPos(null)
+      return
+    }
+    let raf = 0
+    raf = requestAnimationFrame(() => computePlacement())
+    const onScroll = () => computePlacement()
+    const onResize = () => computePlacement()
+    window.addEventListener('scroll', onScroll, true)
+    window.addEventListener('resize', onResize)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('scroll', onScroll, true)
+      window.removeEventListener('resize', onResize)
+    }
+  }, [open, computePlacement])
+
   // Input handler — detects @query and shows the dropdown, then emits the
   // serialized value.
   const handleInput = () => {
@@ -742,8 +801,18 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
       </div>
 
       {/* Folder suggestion dropdown */}
-      {open && (
-        <div className="absolute right-full top-0 mr-2 z-50 w-64 max-h-60 overflow-y-auto rounded-lg border border-white/10 bg-[#0E1014] py-1 shadow-xl">
+      {open && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={menuRef}
+          className="fixed z-50 max-h-60 overflow-y-auto rounded-lg border border-white/10 bg-[#0E1014] py-1 shadow-xl"
+          style={{
+            left: menuPos ? menuPos.left : -9999,
+            top: menuPos ? menuPos.top : -9999,
+            width: 240,
+            visibility: menuPos ? 'visible' : 'hidden',
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
           {filteredFolders.length === 0 && (
             <div className="px-3 py-2 text-[11px] text-muted-foreground/60">
               {folders.length === 0 ? 'No Characters, Props, or Locations yet.' : 'No matching folder.'}
@@ -755,11 +824,9 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
               <button
                 key={f.id}
                 type="button"
-                onClick={() => insertChipAtCursor(f, new Set(f.assets.map((a) => a.id)))}
+                onClick={() => { insertChipAtCursor(f, new Set(f.assets.map((a) => a.id))) }}
                 onMouseEnter={() => setHi(i)}
-                className={`w-full flex items-center gap-2 px-2 py-1.5 text-left ${
-                  i === hi ? 'bg-white/10' : 'hover:bg-white/5'
-                }`}
+                className={`w-full flex items-center gap-2 px-2 py-1.5 text-left ${i === hi ? 'bg-white/10' : 'hover:bg-white/5'}`}
               >
                 <div className={`w-5 h-5 rounded flex items-center justify-center ${COLOR[f.type]}`}>
                   <Icon size={10} weight="fill" />
@@ -773,7 +840,8 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
               </button>
             )
           })}
-        </div>
+        </div>,
+        document.body,
       )}
 
       {popoverEl}
