@@ -239,6 +239,146 @@ function placeCaretAfter(node: Node) {
   sel.addRange(range)
 }
 
+// Capture the collapsed caret's offset into the serialized editor string
+// (the same format used by serializeEditor) so we can restore it after a
+// full DOM re-render. Returns null if there's no collapsed caret inside
+// `el` or we can't compute a mapping.
+export function captureCaretOffset(el: HTMLElement): number | null {
+  const sel = window.getSelection()
+  if (!sel || sel.rangeCount === 0) return null
+  const range = sel.getRangeAt(0)
+  if (!range.collapsed) return null
+  const start = range.startContainer
+  const startOffset = range.startOffset
+  // Ensure the selection is inside the editor
+  if (!el.contains(start)) return null
+
+  let offset = 0
+  for (const node of Array.from(el.childNodes)) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const t = node as Text
+      if (node === start) {
+        return offset + Math.min(startOffset, t.data.length)
+      }
+      offset += t.data.length
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const e = node as HTMLElement
+      if (e.dataset?.mention === '1') {
+        // A chip serializes as @<tagFromName(name)>
+        const tag = `@${tagFromName(e.dataset.name || '')}`
+        const len = tag.length
+        // If the caret is inside a text node child of the chip (unlikely
+        // since chips are contentEditable=false), consider it as after.
+        if (e.contains(start)) return offset + len
+        offset += len
+      } else if (e.tagName === 'BR') {
+        if (node === start) return offset
+        offset += 1
+      } else {
+        const txt = e.textContent || ''
+        if (e.contains(start)) {
+          // If selection is inside a nested element, try to map to
+          // its text nodes by walking its child nodes.
+          let innerOffset = 0
+          const walker = document.createTreeWalker(e, NodeFilter.SHOW_TEXT, null)
+          let cur: Node | null
+          while ((cur = walker.nextNode())) {
+            if (cur === start) return offset + innerOffset + Math.min(startOffset, (cur as Text).data.length)
+            innerOffset += (cur as Text).data.length
+          }
+          return offset + innerOffset
+        }
+        offset += txt.length
+      }
+    }
+  }
+  // If we fell through, place at end
+  return offset
+}
+
+// Restore a collapsed caret previously captured with captureCaretOffset.
+// Best-effort: if the exact mapping isn't possible we place the caret at
+// the closest sensible boundary (after a chip or at end).
+export function restoreCaretFromOffset(el: HTMLElement, targetOffset: number) {
+  let offset = targetOffset
+  for (const node of Array.from(el.childNodes)) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const t = node as Text
+      if (offset <= t.data.length) {
+        const sel = window.getSelection()
+        if (!sel) return
+        const range = document.createRange()
+        range.setStart(t, offset)
+        range.collapse(true)
+        sel.removeAllRanges()
+        sel.addRange(range)
+        return
+      }
+      offset -= t.data.length
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const e = node as HTMLElement
+      if (e.dataset?.mention === '1') {
+        const tag = `@${tagFromName(e.dataset.name || '')}`
+        const len = tag.length
+        if (offset <= len) {
+          // Place caret after the chip
+          placeCaretAfter(e)
+          return
+        }
+        offset -= len
+      } else if (e.tagName === 'BR') {
+        if (offset <= 1) {
+          placeCaretAfter(e)
+          return
+        }
+        offset -= 1
+      } else {
+        const txt = e.textContent || ''
+        if (offset <= txt.length) {
+          // Find the text node to place into
+          const walker = document.createTreeWalker(e, NodeFilter.SHOW_TEXT, null)
+          let cur: Node | null
+          let soFar = 0
+          while ((cur = walker.nextNode())) {
+            const len = (cur as Text).data.length
+            if (offset <= soFar + len) {
+              const sel = window.getSelection()
+              if (!sel) return
+              const range = document.createRange()
+              range.setStart(cur as Text, offset - soFar)
+              range.collapse(true)
+              sel.removeAllRanges()
+              sel.addRange(range)
+              return
+            }
+            soFar += len
+          }
+          // fallback: place after element
+          placeCaretAfter(e)
+          return
+        }
+        offset -= txt.length
+      }
+    }
+  }
+  // If target beyond end, place caret at end of editor.
+  const last = el.lastChild
+  if (last) {
+    if (last.nodeType === Node.TEXT_NODE) {
+      const t = last as Text
+      const sel = window.getSelection()
+      if (!sel) return
+      const range = document.createRange()
+      range.setStart(t, t.data.length)
+      range.collapse(true)
+      sel.removeAllRanges()
+      sel.addRange(range)
+    } else {
+      placeCaretAfter(last)
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -279,12 +419,37 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
     // so comparing text alone leaves the other guest with a plain @tag.
     const foldersJustResolved = lastFoldersLen.current === 0 && folders.length > 0
     if (incomingStateKey === lastSerialized.current && !foldersJustResolved) return
+
+    // Capture collapsed caret offset (if any) before we replace the DOM so
+    // that editing guests don't lose their caret when a remote metadata-only
+    // update arrives.
+    let capturedOffset: number | null = null
+    try {
+      const sel = window.getSelection()
+      if (sel && sel.rangeCount > 0 && sel.isCollapsed) {
+        const range = sel.getRangeAt(0)
+        if (el.contains(range.startContainer)) {
+          capturedOffset = captureCaretOffset(el)
+        }
+      }
+    } catch (e) {
+      capturedOffset = null
+    }
+
     renderInitial(el, value, mentions, folders)
     setShowPlaceholder(el.textContent === '')
     lastSerialized.current = incomingStateKey
     lastFoldersLen.current = folders.length
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, incomingStateKey, folders.length])
+
+    // Best-effort restore of a previously-captured caret position.
+    if (capturedOffset !== null) {
+      try {
+        restoreCaretFromOffset(el, capturedOffset)
+      } catch (e) {
+        // ignore — non-fatal
+      }
+    }
+  }, [incomingStateKey, folders.length])
 
   // Read the current DOM state and bubble it up.
   const emit = useCallback(() => {
@@ -547,6 +712,8 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
         {/* contentEditable surface. */}
         <div
           ref={editorRef}
+          role="textbox"
+          aria-multiline="true"
           contentEditable={!disabled}
           suppressContentEditableWarning
           onInput={handleInput}
