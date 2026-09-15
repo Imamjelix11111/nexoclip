@@ -62,7 +62,7 @@ const typeIcons = {
   general: Package,
 }
 
-export function AddToFolderModal({ open, onClose, folderType, projectId, assetId, assetUrl, editFolder, defaultNew }: AddToFolderModalProps) {
+export function AddToFolderModal({ open, onClose, folderType, projectId, assetId, assetUrl, editFolder, defaultNew, onAdded }: AddToFolderModalProps) {
   const [folders, setFolders] = useState<Folder[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
