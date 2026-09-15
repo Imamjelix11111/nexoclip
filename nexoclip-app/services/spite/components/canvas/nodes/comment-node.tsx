@@ -59,7 +59,10 @@ function CommentNodeImpl({ id, data, selected }: NodeProps) {
           Delete key flow doesn't reach comments. A persistent on-hover X
           is the most discoverable way out. */}
       <button
+        type="button"
+        onPointerDown={(event) => event.stopPropagation()}
         onClick={(e) => {
+          e.preventDefault()
           e.stopPropagation()
           deleteNodes([id])
         }}
