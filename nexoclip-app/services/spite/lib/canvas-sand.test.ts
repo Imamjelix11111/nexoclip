@@ -57,6 +57,18 @@ test('jobs-panel applies a distinct sand active treatment for active jobs', () =
   assert.match(src, /isActive \? 'bg-\[var\(--sand-active\)\]'/)
 })
 
+// Strengthened: Forbid representative theme leakage tokens in Full Sand regions
+
+test('sand panels do not contain text-foreground/text-muted-foreground or white hover tokens', () => {
+  const left = read('../components/canvas/left-toolbar.tsx')
+  const jobs = read('../components/canvas/jobs-panel.tsx')
+  for (const src of [left, jobs]) {
+    assert.doesNotMatch(src, /text-foreground/)
+    assert.doesNotMatch(src, /text-muted-foreground/)
+    assert.doesNotMatch(src, /hover:bg-white\//)
+  }
+})
+
 // Ensure the Full Sand panel token is not applied to unrelated controls
 
 test('canvas-toolbar, bottom-bar, image-node, and video-node do NOT receive the sand panel token', () => {
