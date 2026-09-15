@@ -100,11 +100,23 @@ export function JobsPanel({ open, onClose }: { open: boolean; onClose: () => voi
   if (!open) return null
 
   return (
-    <div className="fixed right-0 top-12 bottom-0 w-80 glass border-l border-white/[0.06] z-30 flex flex-col"
-      style={{ backdropFilter: 'blur(20px)' }}
+    <div
+      className="fixed right-0 top-12 bottom-0 w-80 border-l z-30 flex flex-col"
+      style={{
+        '--sand-bg': '#D7BD83',
+        '--sand-surface': '#C7AA70',
+        '--sand-active': '#FFF2C8',
+        '--sand-border': '#EEDAA8',
+        '--sand-text': '#493718',
+        '--sand-muted': '#6B542A',
+        background: 'var(--sand-bg)',
+        color: 'var(--sand-text)',
+        borderColor: 'var(--sand-border)',
+        backdropFilter: 'blur(20px)',
+      } as React.CSSProperties}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 h-12 border-b border-white/[0.06] shrink-0">
+      <div className="flex items-center justify-between px-4 h-12 border-b shrink-0" style={{ borderColor: 'var(--sand-border)' }}>
         <div className="flex items-baseline gap-2">
           <h3 className="text-[11px] font-mono uppercase tracking-[0.18em] text-foreground/80">Jobs</h3>
           <span className="text-[10px] font-mono text-muted-foreground/50">
@@ -114,7 +126,7 @@ export function JobsPanel({ open, onClose }: { open: boolean; onClose: () => voi
         </div>
         <button
           onClick={onClose}
-          className="flex items-center justify-center w-6 h-6 rounded-md glass-hover text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center justify-center w-6 h-6 rounded-md text-muted-foreground hover:text-foreground hover:bg-[var(--sand-active)] transition-colors"
           title="Close jobs panel"
         >
           <X size={12} weight="thin" />
@@ -147,7 +159,7 @@ function JobRow({ job, onClick }: { job: Job; onClick: () => void }) {
     job.status === 'in_progress'
 
   return (
-    <div className="w-full flex items-start gap-3 px-3 py-2.5 border-b border-white/[0.04] hover:bg-white/[0.04] transition-colors">
+    <div className="w-full flex items-start gap-3 px-3 py-2.5 border-b hover:bg-[var(--sand-active)] transition-colors" style={{ borderColor: 'var(--sand-border)' }}>
       <button
         onClick={onClick}
         className="flex-1 flex items-start gap-3 text-left"
@@ -205,7 +217,7 @@ function JobRow({ job, onClick }: { job: Job; onClick: () => void }) {
               toast.error("Couldn't copy Job ID")
             }
           }}
-          className="flex-shrink-0 ml-1 px-2 py-1 rounded-md glass-hover text-muted-foreground hover:text-foreground transition-colors text-[11px] font-mono"
+          className="flex-shrink-0 ml-1 px-2 py-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-[var(--sand-active)] transition-colors text-[11px] font-mono"
         >
           {shortJobId(job.generationId)}
         </button>

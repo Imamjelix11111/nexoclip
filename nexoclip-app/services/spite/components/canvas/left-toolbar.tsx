@@ -599,9 +599,23 @@ export function LeftToolbar({
         />
         
         {/* Modal */}
-        <div data-tour="assets-expanded" className="fixed inset-8 z-50 bg-card rounded-2xl border border-border/30 flex overflow-hidden shadow-2xl">
+        <div
+          data-tour="assets-expanded"
+          className="fixed inset-8 z-50 rounded-2xl border flex overflow-hidden shadow-2xl"
+          style={{
+            '--sand-bg': '#D7BD83',
+            '--sand-surface': '#C7AA70',
+            '--sand-active': '#FFF2C8',
+            '--sand-border': '#EEDAA8',
+            '--sand-text': '#493718',
+            '--sand-muted': '#6B542A',
+            background: 'var(--sand-bg)',
+            color: 'var(--sand-text)',
+            borderColor: 'var(--sand-border)',
+          } as React.CSSProperties}
+        >
           {/* Left Sidebar */}
-          <div className="w-56 border-r border-border/30 flex flex-col bg-card">
+          <div className="w-56 border-r flex flex-col bg-[var(--sand-surface)]" style={{ borderColor: 'var(--sand-border)' }}>
             <div className="px-4 py-3 border-b border-border/30">
               <span className="text-xs font-mono text-muted-foreground/60 uppercase tracking-wider">Creations</span>
             </div>
@@ -614,7 +628,7 @@ export function LeftToolbar({
               <button
                 onClick={() => { setHistoryFilter('all'); setExpandedView({ kind: 'history' }); setSelectedGenAsset(null) }}
                 className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                  expandedView.kind === 'history' ? 'bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
+                  expandedView.kind === 'history' ? 'bg-[var(--sand-active)] text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-[var(--sand-active)]'
                 }`}
               >
                 <ClockCounterClockwise size={16} />
@@ -623,7 +637,7 @@ export function LeftToolbar({
               <button
                 onClick={() => { setHistoryFilter('uploads'); setExpandedView({ kind: 'uploads' }); setSelectedGenAsset(null) }}
                 className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                  expandedView.kind === 'uploads' ? 'bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
+                  expandedView.kind === 'uploads' ? 'bg-[var(--sand-active)] text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-[var(--sand-active)]'
                 }`}
               >
                 <UploadSimple size={16} />
@@ -1436,7 +1450,21 @@ export function LeftToolbar({
   // COMPACT ASSETS PANEL VIEW (current sidebar panel)
   if (historyOpen) {
     return (
-      <div data-tour="assets-panel" className="absolute left-3 top-3 bottom-3 z-20 glass rounded-2xl w-80 flex flex-col overflow-hidden">
+      <div
+        data-tour="assets-panel"
+        className="absolute left-3 top-3 bottom-3 z-20 rounded-2xl w-80 flex flex-col overflow-hidden border"
+        style={{
+          '--sand-bg': '#D7BD83',
+          '--sand-surface': '#C7AA70',
+          '--sand-active': '#FFF2C8',
+          '--sand-border': '#EEDAA8',
+          '--sand-text': '#493718',
+          '--sand-muted': '#6B542A',
+          background: 'var(--sand-bg)',
+          color: 'var(--sand-text)',
+          borderColor: 'var(--sand-border)'
+        } as React.CSSProperties}
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border/30">
           <h2 className="text-sm font-semibold text-foreground">Assets</h2>
@@ -1923,8 +1951,19 @@ export function LeftToolbar({
 
   // COMPACT TOOLBAR (normal view when history is closed)
   return (
-    <div data-tour="left-toolbar" className="absolute left-3 top-1/2 -translate-y-1/2 z-20 flex items-start gap-2">
-      <div className="flex flex-col gap-1 glass rounded-xl p-1.5">
+    <div
+      data-tour="left-toolbar"
+      className="absolute left-3 top-1/2 -translate-y-1/2 z-20 flex items-start gap-2"
+      style={{
+        '--sand-bg': '#D7BD83',
+        '--sand-surface': '#C7AA70',
+        '--sand-active': '#FFF2C8',
+        '--sand-border': '#EEDAA8',
+        '--sand-text': '#493718',
+        '--sand-muted': '#6B542A',
+      } as React.CSSProperties}
+    >
+      <div className="flex flex-col gap-1 rounded-xl p-1.5 bg-[var(--sand-surface)] border" style={{ borderColor: 'var(--sand-border)' }}>
         {TOOLS.map((tool) => (
           <button
             key={tool.id}
@@ -1985,7 +2024,7 @@ export function LeftToolbar({
           disabled={!canUndo}
           className={`flex items-center justify-center w-7 h-7 rounded-lg transition-colors ${
             canUndo 
-              ? 'text-muted-foreground hover:text-foreground hover:bg-white/5' 
+              ? 'text-muted-foreground hover:text-foreground hover:bg-[var(--sand-active)]' 
               : 'text-muted-foreground/30 cursor-not-allowed'
           }`}
           title="Undo"
@@ -1997,7 +2036,7 @@ export function LeftToolbar({
           disabled={!canRedo}
           className={`flex items-center justify-center w-7 h-7 rounded-lg transition-colors ${
             canRedo 
-              ? 'text-muted-foreground hover:text-foreground hover:bg-white/5' 
+              ? 'text-muted-foreground hover:text-foreground hover:bg-[var(--sand-active)]' 
               : 'text-muted-foreground/30 cursor-not-allowed'
           }`}
           title="Redo"
@@ -2008,14 +2047,14 @@ export function LeftToolbar({
 
       {/* Expanded asset category panel */}
       {expanded && !historyOpen && (
-        <div className="glass rounded-xl w-72 max-h-[70vh] flex flex-col overflow-hidden">
+        <div className="rounded-xl w-72 max-h-[70vh] flex flex-col overflow-hidden bg-[var(--sand-surface)] border" style={{ borderColor: 'var(--sand-border)' }}>
           <div className="flex items-center justify-between px-3 py-2 border-b border-border/30">
             <span className="text-[11px] font-mono font-medium text-foreground">
               {ASSET_CATEGORIES.find(c => c.id === expandedCategory)?.label || 'Assets'}
             </span>
             <button
               onClick={() => setExpanded(false)}
-              className="w-5 h-5 rounded flex items-center justify-center hover:bg-white/10 text-muted-foreground"
+              className="w-5 h-5 rounded flex items-center justify-center hover:bg-[var(--sand-active)] text-muted-foreground"
             >
               <X size={10} />
             </button>
