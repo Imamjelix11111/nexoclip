@@ -50,7 +50,6 @@ import {
   Check,
   Lifebuoy,
   CircleNotch,
-  Note as NoteIcon,
 } from '@phosphor-icons/react'
 
 export type AssetCategory = 'characters' | 'props' | 'locations' | 'general'
@@ -71,7 +70,6 @@ const TOOLS = [
   { id: 'cut', icon: Scissors, label: 'Cut connections' },
   { id: 'sticker', icon: Smiley, label: 'Add sticker' },
   { id: 'comment', icon: ChatCircle, label: 'Add comment' },
-  { id: 'note', icon: NoteIcon, label: 'Add note' },
 ] as const
 
 const ASSET_CATEGORIES: { id: AssetCategory; icon: typeof User; label: string; color: string }[] = [
@@ -98,7 +96,7 @@ interface GeneratedAsset {
 
 interface LeftToolbarProps {
   onAddNode?: (type: string) => void
-  onSetTool?: (tool: 'select' | 'cut' | 'sticker' | 'comment' | 'note') => void
+  onSetTool?: (tool: 'select' | 'cut' | 'sticker' | 'comment') => void
   activeTool?: string
   onUndo?: () => void
   onRedo?: () => void
@@ -580,7 +578,7 @@ export function LeftToolbar({
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel className="bg-white/5 border-white/10 hover:bg-[var(--sand-active)]" disabled={bulkDeleting}>Cancel</AlertDialogCancel>
+              <AlertDialogCancel className="bg-white/5 border-white/10 hover:bg-white/10" disabled={bulkDeleting}>Cancel</AlertDialogCancel>
               <AlertDialogAction
                 className="bg-red-500/20 text-red-400 hover:bg-red-500/30 border-red-500/30"
                 disabled={bulkDeleting}
@@ -599,25 +597,11 @@ export function LeftToolbar({
         />
         
         {/* Modal */}
-        <div
-          data-tour="assets-expanded"
-          className="fixed inset-8 z-50 rounded-2xl border flex overflow-hidden shadow-2xl"
-          style={{
-            '--sand-bg': '#D7BD83',
-            '--sand-surface': '#C7AA70',
-            '--sand-active': '#FFF2C8',
-            '--sand-border': '#EEDAA8',
-            '--sand-text': '#493718',
-            '--sand-muted': '#6B542A',
-            background: 'var(--sand-bg)',
-            color: 'var(--sand-text)',
-            borderColor: 'var(--sand-border)',
-          } as React.CSSProperties}
-        >
+        <div data-tour="assets-expanded" className="fixed inset-8 z-50 bg-card rounded-2xl border border-border/30 flex overflow-hidden shadow-2xl">
           {/* Left Sidebar */}
-          <div className="w-56 border-r flex flex-col bg-[var(--sand-surface)]" style={{ borderColor: 'var(--sand-border)' }}>
-            <div className="px-4 py-3 border-b border-[var(--sand-border)]">
-              <span className="text-xs font-mono text-[var(--sand-muted)] opacity-60 uppercase tracking-wider">Creations</span>
+          <div className="w-56 border-r border-border/30 flex flex-col bg-card">
+            <div className="px-4 py-3 border-b border-border/30">
+              <span className="text-xs font-mono text-muted-foreground/60 uppercase tracking-wider">Creations</span>
             </div>
 
             {/* Navigation. Filter tabs in the header switch between
@@ -628,7 +612,7 @@ export function LeftToolbar({
               <button
                 onClick={() => { setHistoryFilter('all'); setExpandedView({ kind: 'history' }); setSelectedGenAsset(null) }}
                 className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                  expandedView.kind === 'history' ? 'bg-[var(--sand-active)] text-[var(--sand-text)]' : 'text-[var(--sand-muted)] hover:text-[var(--sand-text)] hover:bg-[var(--sand-active)]'
+                  expandedView.kind === 'history' ? 'bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
                 }`}
               >
                 <ClockCounterClockwise size={16} />
@@ -637,7 +621,7 @@ export function LeftToolbar({
               <button
                 onClick={() => { setHistoryFilter('uploads'); setExpandedView({ kind: 'uploads' }); setSelectedGenAsset(null) }}
                 className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                  expandedView.kind === 'uploads' ? 'bg-[var(--sand-active)] text-[var(--sand-text)]' : 'text-[var(--sand-muted)] hover:text-[var(--sand-text)] hover:bg-[var(--sand-active)]'
+                  expandedView.kind === 'uploads' ? 'bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
                 }`}
               >
                 <UploadSimple size={16} />
@@ -651,10 +635,10 @@ export function LeftToolbar({
                   are auto-protected (the folders API sets
                   used_in_canvas=true, expires_at=NULL on every add), so
                   they survive cleanup until you delete them yourself. */}
-              <div className="mt-4 pt-4 border-t border-[var(--sand-border)] space-y-1">
+              <div className="mt-4 pt-4 border-t border-border/30 space-y-1">
                 <div className="px-3 pb-1 flex items-center justify-between">
-                  <span className="text-[10px] text-[var(--sand-muted)] opacity-50 uppercase tracking-wider">Folders</span>
-                  <span className="text-[10px] text-[var(--sand-muted)] opacity-40">{folders.length}</span>
+                  <span className="text-[10px] text-muted-foreground/50 uppercase tracking-wider">Folders</span>
+                  <span className="text-[10px] text-muted-foreground/40">{folders.length}</span>
                 </div>
                 {(['character', 'prop', 'location', 'general'] as const).map(t => {
                   const ofType = folders.filter(f => f.type === t)
@@ -668,11 +652,11 @@ export function LeftToolbar({
                           caret zone (separate click target) just toggles
                           inline expand without changing the view. */}
                       <div className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md transition-colors group ${
-                        isActive ? 'bg-[var(--sand-active)]' : 'hover:bg-[var(--sand-active)]'
+                        isActive ? 'bg-white/10' : 'hover:bg-white/5'
                       }`}>
                         <button
                           onClick={(e) => { e.stopPropagation(); setExpandedFolderSections(s => ({ ...s, [t]: !s[t] })) }}
-                          className="text-[var(--sand-muted)] opacity-60 hover:text-[var(--sand-text)]"
+                          className="text-muted-foreground/60 hover:text-foreground"
                           aria-label={isOpen ? 'Collapse' : 'Expand'}
                         >
                           {isOpen ? <CaretDown size={9} /> : <CaretRight size={9} />}
@@ -682,14 +666,14 @@ export function LeftToolbar({
                           className="flex-1 flex items-center gap-2 text-left"
                         >
                           <Icon size={12} className={isActive ? 'text-accent' : 'text-accent/80'} />
-                          <span className="text-[11px] text-[var(--sand-text)] opacity-80 group-hover:text-[var(--sand-text)] tracking-wide flex-1">{label}</span>
-                          <span className="text-[10px] text-[var(--sand-muted)] opacity-50">{ofType.length}</span>
+                          <span className="text-[11px] text-foreground/80 group-hover:text-foreground tracking-wide flex-1">{label}</span>
+                          <span className="text-[10px] text-muted-foreground/50">{ofType.length}</span>
                         </button>
                       </div>
                       {isOpen && (
                         <div className="pl-2 mt-0.5 space-y-0.5">
                           {ofType.length === 0 ? (
-                            <div className="px-3 py-1.5 text-[10px] text-[var(--sand-muted)] opacity-30 italic">
+                            <div className="px-3 py-1.5 text-[10px] text-muted-foreground/30 italic">
                               No {label.toLowerCase()} yet
                             </div>
                           ) : (
@@ -700,11 +684,11 @@ export function LeftToolbar({
                                   key={f.id}
                                   onClick={() => { setExpandedView({ kind: 'folder', folderId: f.id }); setSelectedGenAsset(null) }}
                                   className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors text-left ${
-                                    folderActive ? 'bg-[var(--sand-active)]' : 'hover:bg-[var(--sand-active)]'
+                                    folderActive ? 'bg-white/10' : 'hover:bg-white/5'
                                   }`}
                                   title="View folder"
                                 >
-                                  <div className="w-7 h-7 rounded overflow-hidden bg-card border border-[var(--sand-border)] shrink-0 flex items-center justify-center">
+                                  <div className="w-7 h-7 rounded overflow-hidden bg-card border border-border/30 shrink-0 flex items-center justify-center">
                                     {f.assets[0]?.r2_url ? (
                                       <img
                                         src={f.assets[0].r2_url}
@@ -714,11 +698,11 @@ export function LeftToolbar({
                                         decoding="async"
                                       />
                                     ) : (
-                                      <Icon size={11} className="text-[var(--sand-muted)] opacity-30" />
+                                      <Icon size={11} className="text-muted-foreground/30" />
                                     )}
                                   </div>
-                                  <span className="flex-1 truncate text-[12px] text-[var(--sand-text)] opacity-80">{f.name}</span>
-                                  <span className="text-[10px] text-[var(--sand-muted)] opacity-50 shrink-0">{f.assets.length}</span>
+                                  <span className="flex-1 truncate text-[12px] text-foreground/80">{f.name}</span>
+                                  <span className="text-[10px] text-muted-foreground/50 shrink-0">{f.assets.length}</span>
                                 </button>
                               )
                             })
@@ -755,19 +739,19 @@ export function LeftToolbar({
             return (
           <div className="flex-1 flex flex-col">
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--sand-border)] gap-4">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border/30 gap-4">
               <div className="flex items-center gap-4 min-w-0">
                 {/* Breadcrumb back-to-category from a folder view */}
                 {activeFolder && categoryLabel && (
                   <button
                     onClick={() => setExpandedView({ kind: 'category', type: activeFolder.type })}
-                    className="flex items-center gap-1 text-xs text-[var(--sand-muted)] opacity-70 hover:text-[var(--sand-text)] transition-colors"
+                    className="flex items-center gap-1 text-xs text-muted-foreground/70 hover:text-foreground transition-colors"
                   >
                     <CaretLeft size={10} weight="bold" />
                     {categoryLabel}
                   </button>
                 )}
-                <h2 className="text-lg font-semibold text-[var(--sand-text)] truncate">
+                <h2 className="text-lg font-semibold text-foreground truncate">
                   {headerTitle}
                 </h2>
                 {showFilterTabs && (
@@ -779,7 +763,7 @@ export function LeftToolbar({
                         className={`px-3 py-1.5 rounded-md text-xs transition-colors ${
                           historyFilter === filter
                             ? 'bg-accent/20 text-accent'
-                            : 'text-[var(--sand-muted)] hover:text-[var(--sand-text)] hover:bg-[var(--sand-active)]'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
                         }`}
                       >
                         {filter.charAt(0).toUpperCase() + filter.slice(1)}
@@ -789,39 +773,39 @@ export function LeftToolbar({
                 )}
               </div>
               <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-input border border-[var(--sand-border)] w-64">
-                  <MagnifyingGlass size={14} className="text-[var(--sand-muted)] opacity-60" />
+                <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-input border border-border/50 w-64">
+                  <MagnifyingGlass size={14} className="text-muted-foreground/60" />
                   <input
                     type="text"
                     placeholder="Search"
                     value={historySearch}
                     onChange={(e) => setHistorySearch(e.target.value)}
-                    className="flex-1 bg-transparent text-sm text-[var(--sand-text)] placeholder:text-[var(--sand-muted)] placeholder:opacity-40 outline-none"
+                    className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/40 outline-none"
                   />
                 </div>
                 {/* Select-mode toggle */}
                 {!selectMode ? (
                   <button
                     onClick={enterSelectMode}
-                    className="px-3 py-2 rounded-lg border border-[var(--sand-border)] text-sm text-[var(--sand-text)] hover:bg-[var(--sand-active)] transition-colors"
+                    className="px-3 py-2 rounded-lg border border-border/50 text-sm text-foreground hover:bg-white/5 transition-colors"
                   >
                     Select
                   </button>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-[var(--sand-muted)] opacity-70">
+                    <span className="text-xs text-muted-foreground/70">
                       {selectedAssetIds.size} selected
                     </span>
                     <button
                       onClick={selectAllVisible}
-                      className="px-3 py-1.5 rounded-md text-xs text-[var(--sand-text)] hover:bg-[var(--sand-active)] transition-colors"
+                      className="px-3 py-1.5 rounded-md text-xs text-foreground hover:bg-white/5 transition-colors"
                     >
                       Select all
                     </button>
                     <button
                       onClick={performBulkDownload}
                       disabled={selectedAssetIds.size === 0 || bulkDownloading}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs bg-[var(--sand-active)] hover:bg-[var(--sand-active)] text-[var(--sand-text)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed min-w-[140px] justify-center"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs bg-white/10 hover:bg-white/15 text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed min-w-[140px] justify-center"
                       title={bulkDownloading
                         ? 'Building the zip — please keep this tab open'
                         : `Download ${selectedAssetIds.size} selected as a zip`}
@@ -853,7 +837,7 @@ export function LeftToolbar({
                     <button
                       onClick={exitSelectMode}
                       disabled={bulkDownloading}
-                      className="px-3 py-1.5 rounded-md text-xs text-[var(--sand-muted)] hover:text-[var(--sand-text)] hover:bg-[var(--sand-active)] transition-colors disabled:opacity-40"
+                      className="px-3 py-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors disabled:opacity-40"
                     >
                       Cancel
                     </button>
@@ -873,8 +857,8 @@ export function LeftToolbar({
                     : expandedView.type === 'location' ? MapPin : Folder
                   return (
                     <div className="flex flex-col items-center gap-4 py-24 text-center">
-                      <TypeIcon size={48} className="text-[var(--sand-muted)] opacity-30" />
-                      <span className="text-sm text-[var(--sand-muted)] opacity-50">
+                      <TypeIcon size={48} className="text-muted-foreground/30" />
+                      <span className="text-sm text-muted-foreground/50">
                         No {(categoryLabel || '').toLowerCase()} yet
                       </span>
                       <button
@@ -892,7 +876,7 @@ export function LeftToolbar({
                       <button
                         key={f.id}
                         onClick={() => setExpandedView({ kind: 'folder', folderId: f.id })}
-                        className="text-left rounded-xl overflow-hidden bg-card border border-[var(--sand-border)] hover:border-accent/50 transition-all group"
+                        className="text-left rounded-xl overflow-hidden bg-card border border-border/30 hover:border-accent/50 transition-all group"
                       >
                         <div className="aspect-video bg-[#0D0F12] relative overflow-hidden">
                           {f.assets[0]?.r2_url ? (
@@ -904,7 +888,7 @@ export function LeftToolbar({
                               decoding="async"
                             />
                           ) : (
-                            <div className="absolute inset-0 flex items-center justify-center text-[var(--sand-muted)] opacity-30">
+                            <div className="absolute inset-0 flex items-center justify-center text-muted-foreground/30">
                               {(() => {
                                 const TypeIcon = f.type === 'character' ? User : f.type === 'prop' ? Package : f.type === 'location' ? MapPin : Folder
                                 return <TypeIcon size={40} />
@@ -914,8 +898,8 @@ export function LeftToolbar({
                         </div>
                         <div className="px-4 py-3 border-t border-white/5 flex items-center justify-between">
                           <div className="min-w-0">
-                            <div className="text-sm text-[var(--sand-text)] truncate">{f.name}</div>
-                            <div className="text-[11px] text-[var(--sand-muted)] opacity-60">
+                            <div className="text-sm text-foreground truncate">{f.name}</div>
+                            <div className="text-[11px] text-muted-foreground/60">
                               {f.assets.length} asset{f.assets.length !== 1 ? 's' : ''}
                             </div>
                           </div>
@@ -930,8 +914,8 @@ export function LeftToolbar({
                 if (!activeFolder) {
                   return (
                     <div className="flex flex-col items-center gap-3 py-24 text-center">
-                      <Folder size={48} className="text-[var(--sand-muted)] opacity-30" />
-                      <span className="text-sm text-[var(--sand-muted)] opacity-50">Folder not found</span>
+                      <Folder size={48} className="text-muted-foreground/30" />
+                      <span className="text-sm text-muted-foreground/50">Folder not found</span>
                     </div>
                   )
                 }
@@ -940,25 +924,25 @@ export function LeftToolbar({
                 return (
                   <div>
                     {/* Folder metadata strip */}
-                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mb-6 text-xs text-[var(--sand-muted)] opacity-70">
+                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mb-6 text-xs text-muted-foreground/70">
                       <div>
-                        <span className="text-[var(--sand-muted)] opacity-50">Assets:</span>{' '}
-                        <span className="text-[var(--sand-text)]">{activeFolder.assets.length}</span>
+                        <span className="text-muted-foreground/50">Assets:</span>{' '}
+                        <span className="text-foreground">{activeFolder.assets.length}</span>
                       </div>
                       {createdAt && (
                         <div>
-                          <span className="text-[var(--sand-muted)] opacity-50">Created:</span>{' '}
-                          <span className="text-[var(--sand-text)]">{formatDate(createdAt)}</span>
+                          <span className="text-muted-foreground/50">Created:</span>{' '}
+                          <span className="text-foreground">{formatDate(createdAt)}</span>
                         </div>
                       )}
                       {updatedAt && (
                         <div>
-                          <span className="text-[var(--sand-muted)] opacity-50">Updated:</span>{' '}
-                          <span className="text-[var(--sand-text)]">{formatDate(updatedAt)}</span>
+                          <span className="text-muted-foreground/50">Updated:</span>{' '}
+                          <span className="text-foreground">{formatDate(updatedAt)}</span>
                         </div>
                       )}
                       {activeFolder.description && (
-                        <div className="basis-full text-[var(--sand-text)] opacity-80 italic">{activeFolder.description}</div>
+                        <div className="basis-full text-foreground/80 italic">{activeFolder.description}</div>
                       )}
                       {(() => {
                         const typeLabel =
@@ -986,7 +970,7 @@ export function LeftToolbar({
                                   setSelectedAssetIds(new Set())
                                   setSelectedGenAsset(null)
                                 }}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white/5 hover:bg-[var(--sand-active)] text-[var(--sand-text)] text-xs transition-colors"
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white/5 hover:bg-white/10 text-foreground text-xs transition-colors"
                                 title="Pick multiple assets to delete or rearrange"
                               >
                                 <Check size={11} weight="bold" />
@@ -994,12 +978,12 @@ export function LeftToolbar({
                               </button>
                             ) : (
                               <div className="flex items-center gap-2">
-                                <span className="text-xs text-[var(--sand-muted)] opacity-70">
+                                <span className="text-xs text-muted-foreground/70">
                                   {selectedInFolder.length} selected
                                 </span>
                                 <button
                                   onClick={() => setSelectedAssetIds(new Set(folderAssetIds))}
-                                  className="px-3 py-1.5 rounded-md text-xs text-[var(--sand-text)] hover:bg-[var(--sand-active)] transition-colors"
+                                  className="px-3 py-1.5 rounded-md text-xs text-foreground hover:bg-white/5 transition-colors"
                                 >
                                   Select all
                                 </button>
@@ -1013,7 +997,7 @@ export function LeftToolbar({
                                 </button>
                                 <button
                                   onClick={() => { setSelectMode(false); setSelectedAssetIds(new Set()) }}
-                                  className="px-3 py-1.5 rounded-md text-xs text-[var(--sand-muted)] hover:text-[var(--sand-text)] hover:bg-[var(--sand-active)] transition-colors"
+                                  className="px-3 py-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
                                 >
                                   Cancel
                                 </button>
@@ -1057,8 +1041,8 @@ export function LeftToolbar({
 
                     {activeFolder.assets.length === 0 ? (
                       <div className="flex flex-col items-center gap-3 py-16 text-center">
-                        <Folder size={40} className="text-[var(--sand-muted)] opacity-30" />
-                        <span className="text-sm text-[var(--sand-muted)] opacity-50">No assets in this folder yet</span>
+                        <Folder size={40} className="text-muted-foreground/30" />
+                        <span className="text-sm text-muted-foreground/50">No assets in this folder yet</span>
                         <button
                           onClick={() => setEditingFolder(activeFolder)}
                           className="text-xs text-accent hover:underline"
@@ -1094,8 +1078,8 @@ export function LeftToolbar({
                               }}
                               className={`relative aspect-square rounded-lg overflow-hidden bg-card border transition-all group ${
                                 selectMode
-                                  ? (isSel ? 'border-accent ring-2 ring-accent/60 cursor-pointer' : 'border-[var(--sand-border)] hover:border-accent/50 cursor-pointer')
-                                  : 'border-[var(--sand-border)] hover:border-accent/50 hover:scale-[1.02] cursor-grab active:cursor-grabbing'
+                                  ? (isSel ? 'border-accent ring-2 ring-accent/60 cursor-pointer' : 'border-border/30 hover:border-accent/50 cursor-pointer')
+                                  : 'border-border/30 hover:border-accent/50 hover:scale-[1.02] cursor-grab active:cursor-grabbing'
                               }`}
                               title={selectMode ? 'Click to toggle selection' : 'Click to view · drag to canvas'}
                             >
@@ -1139,17 +1123,17 @@ export function LeftToolbar({
               })()
               : loadingHistory ? (
                 <div className="flex items-center justify-center py-24">
-                  <span className="text-sm font-mono text-[var(--sand-muted)] opacity-50">Loading...</span>
+                  <span className="text-sm font-mono text-muted-foreground/50">Loading...</span>
                 </div>
               ) : Object.keys(groupedGenAssets).length === 0 ? (
                 <div className="flex flex-col items-center gap-4 py-24 text-center">
-                  <ClockCounterClockwise size={48} className="text-[var(--sand-muted)] opacity-30" />
-                  <span className="text-sm font-mono text-[var(--sand-muted)] opacity-50">No generations yet</span>
+                  <ClockCounterClockwise size={48} className="text-muted-foreground/30" />
+                  <span className="text-sm font-mono text-muted-foreground/50">No generations yet</span>
                 </div>
               ) : (
                 Object.entries(groupedGenAssets).map(([monthYear, monthAssets]) => (
                   <div key={monthYear} className="mb-6">
-                    <h3 className="text-sm text-[var(--sand-muted)] opacity-60 mb-3">
+                    <h3 className="text-sm text-muted-foreground/60 mb-3">
                       {monthYear}
                     </h3>
                     <div className="grid grid-cols-7 gap-3">
@@ -1165,7 +1149,7 @@ export function LeftToolbar({
                             className={`relative aspect-square rounded-lg overflow-hidden bg-card border transition-all group ${
                               isSel
                                 ? 'border-accent ring-2 ring-accent/60'
-                                : 'border-[var(--sand-border)] hover:border-accent/50 hover:scale-[1.02]'
+                                : 'border-border/30 hover:border-accent/50 hover:scale-[1.02]'
                             }`}
                           >
                             <AssetThumb url={asset.r2_url} type={asset.type} />
@@ -1220,12 +1204,12 @@ export function LeftToolbar({
               so the video preview is actually watchable without going
               fullscreen — at the old width the preview was ~162px tall
               which is too small to review motion. */}
-          <div className="w-[480px] border-l border-[var(--sand-border)] flex flex-col bg-card">
+          <div className="w-[480px] border-l border-border/30 flex flex-col bg-card">
             {/* Close button */}
             <div className="flex justify-end px-4 py-3">
               <button
                 onClick={handleCloseHistory}
-                className="w-10 h-10 rounded-full flex items-center justify-center bg-card border border-[var(--sand-border)] hover:bg-[var(--sand-active)] text-[var(--sand-text)] transition-colors"
+                className="w-10 h-10 rounded-full flex items-center justify-center bg-card border border-border/30 hover:bg-white/10 text-foreground transition-colors"
               >
                 <X size={20} />
               </button>
@@ -1236,7 +1220,7 @@ export function LeftToolbar({
                 {/* Preview — black background + object-contain so the
                     full frame is visible without cropping. Old code used
                     object-cover, which cropped the video to fit. */}
-                <div className="rounded-lg overflow-hidden bg-black border border-[var(--sand-border)] mb-4 aspect-video">
+                <div className="rounded-lg overflow-hidden bg-black border border-border/30 mb-4 aspect-video">
                   <AssetThumb
                     url={selectedGenAsset.r2_url}
                     type={selectedGenAsset.type}
@@ -1249,21 +1233,21 @@ export function LeftToolbar({
                     placeholders (Workflow name / Resolution / Seed) were
                     hardcoded strings and would have lied to the user. */}
                 <div className="space-y-3 text-sm">
-                  <div className="flex justify-between text-[var(--sand-muted)] opacity-60">
+                  <div className="flex justify-between text-muted-foreground/60">
                     <span>Type</span>
-                    <span className="text-[var(--sand-text)] capitalize">{selectedGenAsset.type}</span>
+                    <span className="text-foreground capitalize">{selectedGenAsset.type}</span>
                   </div>
-                  <div className="flex justify-between text-[var(--sand-muted)] opacity-60">
+                  <div className="flex justify-between text-muted-foreground/60">
                     <span>Date Created</span>
-                    <span className="text-[var(--sand-text)]">{formatDate(selectedGenAsset.created_at)}</span>
+                    <span className="text-foreground">{formatDate(selectedGenAsset.created_at)}</span>
                   </div>
-                  <div className="flex justify-between text-[var(--sand-muted)] opacity-60">
+                  <div className="flex justify-between text-muted-foreground/60">
                     <span>AI Model</span>
-                    <span className="text-[var(--sand-text)]">{selectedGenAsset.model.split('/').pop() || '—'}</span>
+                    <span className="text-foreground">{selectedGenAsset.model.split('/').pop() || '—'}</span>
                   </div>
-                  <div className="flex justify-between text-[var(--sand-muted)] opacity-60">
+                  <div className="flex justify-between text-muted-foreground/60">
                     <span>Status</span>
-                    <span className={selectedGenAsset.used_in_canvas ? 'text-accent' : 'text-[var(--sand-muted)]'}>
+                    <span className={selectedGenAsset.used_in_canvas ? 'text-accent' : 'text-muted-foreground'}>
                       {selectedGenAsset.used_in_canvas ? 'Protected' : 'Temporary'}
                     </span>
                   </div>
@@ -1272,7 +1256,7 @@ export function LeftToolbar({
                 {/* Prompt */}
                 <div className="mt-4">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-[var(--sand-muted)] opacity-60 uppercase">Prompt</span>
+                    <span className="text-xs text-muted-foreground/60 uppercase">Prompt</span>
                     <button
                       onClick={() => copyPrompt(selectedGenAsset.prompt)}
                       className="flex items-center gap-1 text-xs text-accent hover:underline"
@@ -1280,7 +1264,7 @@ export function LeftToolbar({
                       <Copy size={12} /> Copy
                     </button>
                   </div>
-                  <p className="text-sm text-[var(--sand-text)] opacity-80 bg-card rounded-lg p-3 border border-[var(--sand-border)] leading-relaxed">
+                  <p className="text-sm text-foreground/80 bg-card rounded-lg p-3 border border-border/30 leading-relaxed">
                     {selectedGenAsset.prompt}
                   </p>
                 </div>
@@ -1292,7 +1276,7 @@ export function LeftToolbar({
                       navigator.clipboard.writeText(window.location.origin + selectedGenAsset.r2_url)
                       toast.success('Asset URL copied')
                     }}
-                    className="flex-1 px-4 py-2 rounded-lg border border-[var(--sand-border)] text-sm text-[var(--sand-text)] hover:bg-[var(--sand-active)] transition-colors"
+                    className="flex-1 px-4 py-2 rounded-lg border border-border/30 text-sm text-foreground hover:bg-white/5 transition-colors"
                   >
                     Copy link
                   </button>
@@ -1331,7 +1315,7 @@ export function LeftToolbar({
                   className={`mt-2 w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${
                     selectedGenAsset.recovered
                       ? 'bg-blue-500/20 text-blue-300 hover:bg-blue-500/30'
-                      : 'border border-[var(--sand-border)] text-[var(--sand-muted)] hover:bg-[var(--sand-active)] hover:text-[var(--sand-text)]'
+                      : 'border border-border/30 text-muted-foreground hover:bg-white/5 hover:text-foreground'
                   }`}
                   title="Mark / unmark this asset as recovered from a stuck generation"
                 >
@@ -1354,7 +1338,7 @@ export function LeftToolbar({
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel className="bg-white/5 border-white/10 hover:bg-[var(--sand-active)]">Cancel</AlertDialogCancel>
+                      <AlertDialogCancel className="bg-white/5 border-white/10 hover:bg-white/10">Cancel</AlertDialogCancel>
                       <AlertDialogAction
                         className="bg-red-500/20 text-red-400 hover:bg-red-500/30 border-red-500/30"
                         onClick={async () => {
@@ -1388,12 +1372,12 @@ export function LeftToolbar({
               </div>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center px-4 text-center">
-                <p className="text-sm text-[var(--sand-muted)] opacity-50 mb-4">
+                <p className="text-sm text-muted-foreground/50 mb-4">
                   Drop an image or upload<br />your own media
                 </p>
                 <button
                   onClick={() => expandedUploadRef.current?.click()}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg border border-[var(--sand-border)] text-sm text-[var(--sand-text)] hover:bg-[var(--sand-active)]"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border/30 text-sm text-foreground hover:bg-white/5"
                 >
                   <UploadSimple size={16} />
                   Upload media
@@ -1450,31 +1434,17 @@ export function LeftToolbar({
   // COMPACT ASSETS PANEL VIEW (current sidebar panel)
   if (historyOpen) {
     return (
-      <div
-        data-tour="assets-panel"
-        className="absolute left-3 top-3 bottom-3 z-20 rounded-2xl w-80 flex flex-col overflow-hidden border"
-        style={{
-          '--sand-bg': '#D7BD83',
-          '--sand-surface': '#C7AA70',
-          '--sand-active': '#FFF2C8',
-          '--sand-border': '#EEDAA8',
-          '--sand-text': '#493718',
-          '--sand-muted': '#6B542A',
-          background: 'var(--sand-bg)',
-          color: 'var(--sand-text)',
-          borderColor: 'var(--sand-border)'
-        } as React.CSSProperties}
-      >
+      <div data-tour="assets-panel" className="absolute left-3 top-3 bottom-3 z-20 glass rounded-2xl w-80 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--sand-border)]">
-          <h2 className="text-sm font-semibold text-[var(--sand-text)]">Assets</h2>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border/30">
+          <h2 className="text-sm font-semibold text-foreground">Assets</h2>
           <div className="flex items-center gap-1">
             <button
               onClick={selectMode ? exitSelectMode : enterSelectMode}
               className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${
                 selectMode
                   ? 'bg-accent/20 text-accent'
-                  : 'hover:bg-[var(--sand-active)] text-[var(--sand-muted)] hover:text-[var(--sand-text)]'
+                  : 'hover:bg-white/10 text-muted-foreground hover:text-foreground'
               }`}
               title={selectMode ? 'Exit select mode' : 'Select multiple'}
             >
@@ -1482,14 +1452,14 @@ export function LeftToolbar({
             </button>
             <button
               onClick={() => setHistoryExpanded(true)}
-              className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-[var(--sand-active)] text-[var(--sand-muted)] hover:text-[var(--sand-text)] transition-colors"
+              className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
               title="Expand"
             >
               <ArrowsOut size={14} />
             </button>
             <button
               onClick={handleCloseHistory}
-              className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-[var(--sand-active)] text-[var(--sand-muted)] hover:text-[var(--sand-text)] transition-colors"
+              className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
             >
               <X size={14} />
             </button>
@@ -1497,18 +1467,18 @@ export function LeftToolbar({
         </div>
 
         {/* Search */}
-        <div className="px-3 py-2 border-b border-[var(--sand-border)]">
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-input border border-[var(--sand-border)]">
-            <MagnifyingGlass size={12} className="text-[var(--sand-muted)] opacity-60" />
+        <div className="px-3 py-2 border-b border-border/30">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-input border border-border/50">
+            <MagnifyingGlass size={12} className="text-muted-foreground/60" />
             <input
               type="text"
               placeholder="Search"
               value={historySearch}
               onChange={(e) => setHistorySearch(e.target.value)}
-              className="flex-1 bg-transparent text-xs font-mono text-[var(--sand-text)] placeholder:text-[var(--sand-muted)] placeholder:opacity-40 outline-none"
+              className="flex-1 bg-transparent text-xs font-mono text-foreground placeholder:text-muted-foreground/40 outline-none"
             />
             {historySearch && (
-              <button onClick={() => setHistorySearch('')} className="text-[var(--sand-muted)] hover:text-[var(--sand-text)]">
+              <button onClick={() => setHistorySearch('')} className="text-muted-foreground hover:text-foreground">
                 <X size={10} />
               </button>
             )}
@@ -1516,7 +1486,7 @@ export function LeftToolbar({
         </div>
 
         {/* Filter tabs */}
-        <div className="flex gap-1 px-3 py-2 border-b border-[var(--sand-border)]">
+        <div className="flex gap-1 px-3 py-2 border-b border-border/30">
           {(['all', 'image', 'video', 'audio', 'uploads'] as const).map((filter) => (
             <button
               key={filter}
@@ -1524,7 +1494,7 @@ export function LeftToolbar({
               className={`flex-1 px-2 py-1.5 rounded text-xs font-mono transition-colors ${
                 historyFilter === filter
                   ? 'bg-accent/20 text-accent'
-                  : 'text-[var(--sand-muted)] hover:text-[var(--sand-text)] hover:bg-[var(--sand-active)]'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
               }`}
             >
               {filter.charAt(0).toUpperCase() + filter.slice(1)}
@@ -1549,8 +1519,8 @@ export function LeftToolbar({
                       >
                         {expandedFolderSections.character ? <CaretDown size={10} /> : <CaretRight size={10} />}
                         <User size={12} className="text-accent" />
-                        <span className="text-xs font-mono text-[var(--sand-muted)] opacity-70 uppercase tracking-wider">Characters</span>
-                        <span className="text-[10px] text-[var(--sand-muted)] opacity-40 ml-auto">{characterFolders.length}</span>
+                        <span className="text-xs font-mono text-muted-foreground/70 uppercase tracking-wider">Characters</span>
+                        <span className="text-[10px] text-muted-foreground/40 ml-auto">{characterFolders.length}</span>
                       </button>
                       {expandedFolderSections.character && (
                         <div className="grid grid-cols-3 gap-2 pl-2">
@@ -1558,7 +1528,7 @@ export function LeftToolbar({
                             <button
                               key={folder.id}
                               onClick={() => openExpandedFolder(folder.id)}
-                              className="text-left p-2 rounded-lg bg-white/5 hover:bg-[var(--sand-active)] transition-colors"
+                              className="text-left p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
                             >
                               <div className="flex gap-1 mb-1.5">
                                 {folder.assets.slice(0, 2).map((asset, i) => (
@@ -1568,12 +1538,12 @@ export function LeftToolbar({
                                 ))}
                                 {folder.assets.length === 0 && (
                                   <div className="w-8 h-8 rounded bg-white/5 flex items-center justify-center">
-                                    <User size={12} className="text-[var(--sand-muted)] opacity-30" />
+                                    <User size={12} className="text-muted-foreground/30" />
                                   </div>
                                 )}
                               </div>
-                              <div className="text-[10px] font-mono text-[var(--sand-text)] truncate">{folder.name}</div>
-                              <div className="text-[9px] text-[var(--sand-muted)] opacity-50">{folder.assets.length} assets</div>
+                              <div className="text-[10px] font-mono text-foreground truncate">{folder.name}</div>
+                              <div className="text-[9px] text-muted-foreground/50">{folder.assets.length} assets</div>
                             </button>
                           ))}
                         </div>
@@ -1590,8 +1560,8 @@ export function LeftToolbar({
                       >
                         {expandedFolderSections.prop ? <CaretDown size={10} /> : <CaretRight size={10} />}
                         <Package size={12} className="text-accent" />
-                        <span className="text-xs font-mono text-[var(--sand-muted)] opacity-70 uppercase tracking-wider">Props</span>
-                        <span className="text-[10px] text-[var(--sand-muted)] opacity-40 ml-auto">{propFolders.length}</span>
+                        <span className="text-xs font-mono text-muted-foreground/70 uppercase tracking-wider">Props</span>
+                        <span className="text-[10px] text-muted-foreground/40 ml-auto">{propFolders.length}</span>
                       </button>
                       {expandedFolderSections.prop && (
                         <div className="grid grid-cols-3 gap-2 pl-2">
@@ -1599,7 +1569,7 @@ export function LeftToolbar({
                             <button
                               key={folder.id}
                               onClick={() => openExpandedFolder(folder.id)}
-                              className="text-left p-2 rounded-lg bg-white/5 hover:bg-[var(--sand-active)] transition-colors"
+                              className="text-left p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
                             >
                               <div className="flex gap-1 mb-1.5">
                                 {folder.assets.slice(0, 2).map((asset, i) => (
@@ -1609,12 +1579,12 @@ export function LeftToolbar({
                                 ))}
                                 {folder.assets.length === 0 && (
                                   <div className="w-8 h-8 rounded bg-white/5 flex items-center justify-center">
-                                    <Package size={12} className="text-[var(--sand-muted)] opacity-30" />
+                                    <Package size={12} className="text-muted-foreground/30" />
                                   </div>
                                 )}
                               </div>
-                              <div className="text-[10px] font-mono text-[var(--sand-text)] truncate">{folder.name}</div>
-                              <div className="text-[9px] text-[var(--sand-muted)] opacity-50">{folder.assets.length} assets</div>
+                              <div className="text-[10px] font-mono text-foreground truncate">{folder.name}</div>
+                              <div className="text-[9px] text-muted-foreground/50">{folder.assets.length} assets</div>
                             </button>
                           ))}
                         </div>
@@ -1631,8 +1601,8 @@ export function LeftToolbar({
                       >
                         {expandedFolderSections.location ? <CaretDown size={10} /> : <CaretRight size={10} />}
                         <MapPin size={12} className="text-accent" />
-                        <span className="text-xs font-mono text-[var(--sand-muted)] opacity-70 uppercase tracking-wider">Locations</span>
-                        <span className="text-[10px] text-[var(--sand-muted)] opacity-40 ml-auto">{locationFolders.length}</span>
+                        <span className="text-xs font-mono text-muted-foreground/70 uppercase tracking-wider">Locations</span>
+                        <span className="text-[10px] text-muted-foreground/40 ml-auto">{locationFolders.length}</span>
                       </button>
                       {expandedFolderSections.location && (
                         <div className="grid grid-cols-3 gap-2 pl-2">
@@ -1640,7 +1610,7 @@ export function LeftToolbar({
                             <button
                               key={folder.id}
                               onClick={() => openExpandedFolder(folder.id)}
-                              className="text-left p-2 rounded-lg bg-white/5 hover:bg-[var(--sand-active)] transition-colors"
+                              className="text-left p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
                             >
                               <div className="flex gap-1 mb-1.5">
                                 {folder.assets.slice(0, 2).map((asset, i) => (
@@ -1650,12 +1620,12 @@ export function LeftToolbar({
                                 ))}
                                 {folder.assets.length === 0 && (
                                   <div className="w-8 h-8 rounded bg-white/5 flex items-center justify-center">
-                                    <MapPin size={12} className="text-[var(--sand-muted)] opacity-30" />
+                                    <MapPin size={12} className="text-muted-foreground/30" />
                                   </div>
                                 )}
                               </div>
-                              <div className="text-[10px] font-mono text-[var(--sand-text)] truncate">{folder.name}</div>
-                              <div className="text-[9px] text-[var(--sand-muted)] opacity-50">{folder.assets.length} assets</div>
+                              <div className="text-[10px] font-mono text-foreground truncate">{folder.name}</div>
+                              <div className="text-[9px] text-muted-foreground/50">{folder.assets.length} assets</div>
                             </button>
                           ))}
                         </div>
@@ -1668,17 +1638,17 @@ export function LeftToolbar({
               {/* Assets grid */}
               {loadingHistory ? (
                 <div className="flex items-center justify-center py-12">
-                  <span className="text-xs font-mono text-[var(--sand-muted)] opacity-50">Loading...</span>
+                  <span className="text-xs font-mono text-muted-foreground/50">Loading...</span>
                 </div>
               ) : Object.keys(groupedGenAssets).length === 0 ? (
                 <div className="flex flex-col items-center gap-3 py-12 text-center">
-                  <ClockCounterClockwise size={24} className="text-[var(--sand-muted)] opacity-30" />
-                  <span className="text-xs font-mono text-[var(--sand-muted)] opacity-50">No generations yet</span>
+                  <ClockCounterClockwise size={24} className="text-muted-foreground/30" />
+                  <span className="text-xs font-mono text-muted-foreground/50">No generations yet</span>
                 </div>
               ) : (
                 Object.entries(groupedGenAssets).map(([monthYear, monthAssets]) => (
                   <div key={monthYear} className="mb-4">
-                    <h3 className="text-xs text-[var(--sand-muted)] opacity-50 uppercase tracking-wider px-2 mb-2">
+                    <h3 className="text-xs text-muted-foreground/50 uppercase tracking-wider px-2 mb-2">
                       {monthYear}
                     </h3>
                     <div className="grid grid-cols-6 gap-2">
@@ -1694,7 +1664,7 @@ export function LeftToolbar({
                             className={`relative aspect-square rounded-lg overflow-hidden bg-card border transition-colors group ${
                               isSel
                                 ? 'border-accent ring-2 ring-accent/60'
-                                : 'border-[var(--sand-border)] hover:border-accent/50'
+                                : 'border-border/30 hover:border-accent/50'
                             }`}
                           >
                             <AssetThumb url={asset.r2_url} type={asset.type} audioIconSize={24} />
@@ -1750,7 +1720,7 @@ export function LeftToolbar({
                 ← Back
               </button>
 
-              <div className="rounded-lg overflow-hidden bg-card border border-[var(--sand-border)] mb-3 aspect-video">
+              <div className="rounded-lg overflow-hidden bg-card border border-border/30 mb-3 aspect-video">
                 <AssetThumb
                   url={selectedGenAsset.r2_url}
                   type={selectedGenAsset.type}
@@ -1759,21 +1729,21 @@ export function LeftToolbar({
               </div>
 
               <div className="space-y-2 mb-4 text-xs font-mono">
-                <div className="flex justify-between text-[var(--sand-muted)] opacity-60">
+                <div className="flex justify-between text-muted-foreground/60">
                   <span>Type</span>
-                  <span className="text-[var(--sand-text)] capitalize">{selectedGenAsset.type}</span>
+                  <span className="text-foreground capitalize">{selectedGenAsset.type}</span>
                 </div>
-                <div className="flex justify-between text-[var(--sand-muted)] opacity-60">
+                <div className="flex justify-between text-muted-foreground/60">
                   <span>Date Created</span>
-                  <span className="text-[var(--sand-text)]">{formatDate(selectedGenAsset.created_at)}</span>
+                  <span className="text-foreground">{formatDate(selectedGenAsset.created_at)}</span>
                 </div>
-                <div className="flex justify-between text-[var(--sand-muted)] opacity-60">
+                <div className="flex justify-between text-muted-foreground/60">
                   <span>AI Model</span>
-                  <span className="text-[var(--sand-text)] truncate ml-2">{selectedGenAsset.model.split('/').pop()}</span>
+                  <span className="text-foreground truncate ml-2">{selectedGenAsset.model.split('/').pop()}</span>
                 </div>
-                <div className="flex justify-between text-[var(--sand-muted)] opacity-60">
+                <div className="flex justify-between text-muted-foreground/60">
                   <span>Status</span>
-                    <span className={selectedGenAsset.used_in_canvas ? 'text-accent' : 'text-[var(--sand-muted)]'}>
+                    <span className={selectedGenAsset.used_in_canvas ? 'text-accent' : 'text-muted-foreground'}>
                       {selectedGenAsset.used_in_canvas ? 'Protected' : 'Temporary'}
                   </span>
                 </div>
@@ -1781,7 +1751,7 @@ export function LeftToolbar({
 
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-mono text-[var(--sand-muted)] opacity-60 uppercase">Prompt</span>
+                  <span className="text-xs font-mono text-muted-foreground/60 uppercase">Prompt</span>
                   <button
                     onClick={() => copyPrompt(selectedGenAsset.prompt)}
                     className="flex items-center gap-1 text-xs font-mono text-accent hover:underline"
@@ -1789,7 +1759,7 @@ export function LeftToolbar({
                     <Copy size={12} /> Copy
                   </button>
                 </div>
-                <p className="text-xs font-mono text-[var(--sand-text)] opacity-80 bg-card/50 rounded p-2 border border-[var(--sand-border)] leading-relaxed">
+                <p className="text-xs font-mono text-foreground/80 bg-card/50 rounded p-2 border border-border/30 leading-relaxed">
                   {selectedGenAsset.prompt}
                 </p>
               </div>
@@ -1823,7 +1793,7 @@ export function LeftToolbar({
                   className={`px-3 py-2 rounded-lg text-xs font-mono transition-colors ${
                     selectedGenAsset.recovered
                       ? 'bg-blue-500/20 text-blue-300 hover:bg-blue-500/30'
-                      : 'bg-white/5 text-[var(--sand-muted)] hover:bg-[var(--sand-active)] hover:text-[var(--sand-text)]'
+                      : 'bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground'
                   }`}
                   title={selectedGenAsset.recovered ? 'Unmark as recovered' : 'Mark as recovered'}
                 >
@@ -1845,7 +1815,7 @@ export function LeftToolbar({
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel className="bg-white/5 border-white/10 hover:bg-[var(--sand-active)]">Cancel</AlertDialogCancel>
+                      <AlertDialogCancel className="bg-white/5 border-white/10 hover:bg-white/10">Cancel</AlertDialogCancel>
                       <AlertDialogAction
                         className="bg-red-500/20 text-red-400 hover:bg-red-500/30 border-red-500/30"
                         onClick={async () => {
@@ -1895,7 +1865,7 @@ export function LeftToolbar({
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel className="bg-white/5 border-white/10 hover:bg-[var(--sand-active)]" disabled={bulkDeleting}>Cancel</AlertDialogCancel>
+              <AlertDialogCancel className="bg-white/5 border-white/10 hover:bg-white/10" disabled={bulkDeleting}>Cancel</AlertDialogCancel>
               <AlertDialogAction
                 className="bg-red-500/20 text-red-400 hover:bg-red-500/30 border-red-500/30"
                 disabled={bulkDeleting}
@@ -1909,9 +1879,9 @@ export function LeftToolbar({
 
         {/* Bulk action bar — only visible in select mode */}
         {selectMode && (
-          <div className="px-3 py-2 border-t border-[var(--sand-border)] flex items-center justify-between bg-accent/5">
+          <div className="px-3 py-2 border-t border-border/30 flex items-center justify-between bg-accent/5">
             <div className="flex items-center gap-2">
-              <span className="text-[11px] text-[var(--sand-text)] opacity-90">
+              <span className="text-[11px] text-foreground/90">
                 {selectedAssetIds.size} selected
               </span>
               <button
@@ -1932,7 +1902,7 @@ export function LeftToolbar({
               </button>
               <button
                 onClick={exitSelectMode}
-                className="px-2 py-1 rounded text-[11px] text-[var(--sand-muted)] hover:text-[var(--sand-text)] hover:bg-[var(--sand-active)] transition-colors"
+                className="px-2 py-1 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
               >
                 Cancel
               </button>
@@ -1941,7 +1911,7 @@ export function LeftToolbar({
         )}
 
         {/* Footer */}
-        <div className="px-3 py-2 border-t border-[var(--sand-border)] flex justify-between text-xs text-[var(--sand-muted)] opacity-50">
+        <div className="px-3 py-2 border-t border-border/30 flex justify-between text-xs text-muted-foreground/50">
           <span>{filteredGenAssets.length} items</span>
             <span>{filteredGenAssets.filter(a => a.is_upload).length} uploads</span>
         </div>
@@ -1951,19 +1921,8 @@ export function LeftToolbar({
 
   // COMPACT TOOLBAR (normal view when history is closed)
   return (
-    <div
-      data-tour="left-toolbar"
-      className="absolute left-3 top-1/2 -translate-y-1/2 z-20 flex items-start gap-2"
-      style={{
-        '--sand-bg': '#D7BD83',
-        '--sand-surface': '#C7AA70',
-        '--sand-active': '#FFF2C8',
-        '--sand-border': '#EEDAA8',
-        '--sand-text': '#493718',
-        '--sand-muted': '#6B542A',
-      } as React.CSSProperties}
-    >
-      <div className="flex flex-col gap-1 rounded-xl p-1.5 bg-[var(--sand-surface)] border" style={{ borderColor: 'var(--sand-border)' }}>
+    <div data-tour="left-toolbar" className="absolute left-3 top-1/2 -translate-y-1/2 z-20 flex items-start gap-2">
+      <div className="flex flex-col gap-1 glass rounded-xl p-1.5">
         {TOOLS.map((tool) => (
           <button
             key={tool.id}
@@ -1975,12 +1934,11 @@ export function LeftToolbar({
               if (tool.id === 'select' && onSetTool) onSetTool('select')
               if (tool.id === 'sticker' && onSetTool) onSetTool('sticker')
               if (tool.id === 'comment' && onSetTool) onSetTool('comment')
-              if (tool.id === 'note' && onSetTool) onSetTool('note')
             }}
             className={`flex items-center justify-center w-7 h-7 rounded-lg transition-colors ${
               activeTool === tool.id
-                ? 'bg-[var(--sand-active)] text-[var(--sand-text)]'
-                : 'text-[var(--sand-muted)] hover:text-[var(--sand-text)] hover:bg-[var(--sand-active)]'
+                ? 'bg-white/10 text-foreground'
+                : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
             }`}
             title={tool.label}
           >
@@ -1988,12 +1946,12 @@ export function LeftToolbar({
           </button>
         ))}
 
-        <div className="h-px bg-[var(--sand-border)] my-1" />
+        <div className="h-px bg-border my-1" />
 
         <button
           data-tour="assets-button"
           onClick={handleToggleHistory}
-          className="flex items-center justify-center w-7 h-7 rounded-lg transition-colors text-[var(--sand-muted)] hover:text-[var(--sand-text)] hover:bg-[var(--sand-active)]"
+          className="flex items-center justify-center w-7 h-7 rounded-lg transition-colors text-muted-foreground hover:text-foreground hover:bg-white/5"
             title="Assets"
         >
           <ClockCounterClockwise size={14} weight="thin" />
@@ -2008,8 +1966,8 @@ export function LeftToolbar({
             }}
             className={`flex items-center justify-center w-7 h-7 rounded-lg transition-colors ${
               expanded && expandedCategory === cat.id
-                ? 'bg-[var(--sand-active)] text-[var(--sand-text)]'
-                : 'text-[var(--sand-muted)] hover:text-[var(--sand-text)] hover:bg-[var(--sand-active)]'
+                ? 'bg-white/10 text-foreground'
+                : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
             }`}
             title={cat.label}
           >
@@ -2017,15 +1975,15 @@ export function LeftToolbar({
           </button>
         ))}
 
-        <div className="h-px bg-[var(--sand-border)] my-1" />
+        <div className="h-px bg-border my-1" />
 
         <button
           onClick={onUndo}
           disabled={!canUndo}
           className={`flex items-center justify-center w-7 h-7 rounded-lg transition-colors ${
             canUndo 
-              ? 'text-[var(--sand-muted)] hover:text-[var(--sand-text)] hover:bg-[var(--sand-active)]' 
-              : 'text-[var(--sand-muted)] opacity-30 cursor-not-allowed'
+              ? 'text-muted-foreground hover:text-foreground hover:bg-white/5' 
+              : 'text-muted-foreground/30 cursor-not-allowed'
           }`}
           title="Undo"
         >
@@ -2036,8 +1994,8 @@ export function LeftToolbar({
           disabled={!canRedo}
           className={`flex items-center justify-center w-7 h-7 rounded-lg transition-colors ${
             canRedo 
-              ? 'text-[var(--sand-muted)] hover:text-[var(--sand-text)] hover:bg-[var(--sand-active)]' 
-              : 'text-[var(--sand-muted)] opacity-30 cursor-not-allowed'
+              ? 'text-muted-foreground hover:text-foreground hover:bg-white/5' 
+              : 'text-muted-foreground/30 cursor-not-allowed'
           }`}
           title="Redo"
         >
@@ -2047,20 +2005,20 @@ export function LeftToolbar({
 
       {/* Expanded asset category panel */}
       {expanded && !historyOpen && (
-        <div className="rounded-xl w-72 max-h-[70vh] flex flex-col overflow-hidden bg-[var(--sand-surface)] border" style={{ borderColor: 'var(--sand-border)' }}>
-          <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--sand-border)]">
-            <span className="text-[11px] font-mono font-medium text-[var(--sand-text)]">
+        <div className="glass rounded-xl w-72 max-h-[70vh] flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-border/30">
+            <span className="text-[11px] font-mono font-medium text-foreground">
               {ASSET_CATEGORIES.find(c => c.id === expandedCategory)?.label || 'Assets'}
             </span>
             <button
               onClick={() => setExpanded(false)}
-              className="w-5 h-5 rounded flex items-center justify-center hover:bg-[var(--sand-active)] text-[var(--sand-muted)]"
+              className="w-5 h-5 rounded flex items-center justify-center hover:bg-white/10 text-muted-foreground"
             >
               <X size={10} />
             </button>
           </div>
 
-          <div className="flex gap-0.5 px-2 py-1.5 border-b border-[var(--sand-border)]">
+          <div className="flex gap-0.5 px-2 py-1.5 border-b border-border/30">
             {ASSET_CATEGORIES.map((cat) => (
               <button
                 key={cat.id}
@@ -2068,7 +2026,7 @@ export function LeftToolbar({
                 className={`flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded text-[9px] font-mono transition-colors ${
                   expandedCategory === cat.id
                     ? 'bg-accent/20 text-accent'
-                    : 'text-[var(--sand-muted)] hover:text-[var(--sand-text)] hover:bg-[var(--sand-active)]'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
                 }`}
               >
                 <cat.icon size={10} weight="thin" />
@@ -2077,17 +2035,17 @@ export function LeftToolbar({
           </div>
 
           <div className="px-2 py-1.5">
-            <div className="flex items-center gap-2 px-2 py-1 rounded-lg bg-input border border-[var(--sand-border)]">
-              <MagnifyingGlass size={10} className="text-[var(--sand-muted)] opacity-60" />
+            <div className="flex items-center gap-2 px-2 py-1 rounded-lg bg-input border border-border/50">
+              <MagnifyingGlass size={10} className="text-muted-foreground/60" />
               <input
                 type="text"
                 placeholder="Search..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="flex-1 bg-transparent text-[10px] font-mono text-[var(--sand-text)] placeholder:text-[var(--sand-muted)] placeholder:opacity-40 outline-none"
+                className="flex-1 bg-transparent text-[10px] font-mono text-foreground placeholder:text-muted-foreground/40 outline-none"
               />
               {search && (
-                <button onClick={() => setSearch('')} className="text-[var(--sand-muted)] hover:text-[var(--sand-text)]">
+                <button onClick={() => setSearch('')} className="text-muted-foreground hover:text-foreground">
                   <X size={8} />
                 </button>
               )}
@@ -2107,13 +2065,13 @@ export function LeftToolbar({
               if (categoryFolders.length === 0) {
                 return (
                   <div className="flex flex-col items-center gap-2 py-6 text-center">
-                    <div className="w-10 h-10 rounded-lg bg-card/50 border border-dashed border-[var(--sand-border)] flex items-center justify-center">
-                      <cat.icon size={16} className="text-[var(--sand-muted)] opacity-40" />
+                    <div className="w-10 h-10 rounded-lg bg-card/50 border border-dashed border-border/50 flex items-center justify-center">
+                      <cat.icon size={16} className="text-muted-foreground/40" />
                     </div>
-                    <span className="text-[10px] font-mono text-[var(--sand-muted)] opacity-50">
+                    <span className="text-[10px] font-mono text-muted-foreground/50">
                       No {cat.label.toLowerCase()} yet
                     </span>
-                    <span className="text-[9px] text-[var(--sand-muted)] opacity-30">
+                    <span className="text-[9px] text-muted-foreground/30">
                       Add via node context menu
                     </span>
                   </div>
@@ -2145,28 +2103,28 @@ export function LeftToolbar({
                             e.dataTransfer.effectAllowed = 'copy'
                           }}
                           onClick={() => openExpandedFolder(folder.id)}
-                          className="w-full flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-[var(--sand-active)] transition-colors group cursor-pointer"
+                          className="w-full flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-white/5 transition-colors group cursor-pointer"
                         >
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); setExpandedFolderId(isOpen ? null : folder.id) }}
-                            className="shrink-0 text-[var(--sand-muted)] opacity-60 hover:text-[var(--sand-text)]"
+                            className="shrink-0 text-muted-foreground/60 hover:text-foreground"
                             aria-label={isOpen ? 'Collapse preview' : 'Expand preview'}
                           >
                             {isOpen ? <CaretDown size={9} /> : <CaretRight size={9} />}
                           </button>
-                          <div className="w-10 h-10 rounded overflow-hidden shrink-0 bg-card border border-[var(--sand-border)]">
+                          <div className="w-10 h-10 rounded overflow-hidden shrink-0 bg-card border border-border/30">
                             {folder.assets[0]?.r2_url ? (
                               <img src={folder.assets[0].r2_url} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center">
-                                <cat.icon size={14} className="text-[var(--sand-muted)] opacity-30" />
+                                <cat.icon size={14} className="text-muted-foreground/30" />
                               </div>
                             )}
                           </div>
                           <div className="flex-1 min-w-0 text-left">
-                            <div className="text-[10px] text-[var(--sand-text)] opacity-80 truncate">{folder.name}</div>
-                            <div className="text-[9px] text-[var(--sand-muted)] opacity-50">
+                            <div className="text-[10px] text-foreground/80 truncate">{folder.name}</div>
+                            <div className="text-[9px] text-muted-foreground/50">
                               {folder.assets.length} asset{folder.assets.length !== 1 ? 's' : ''}
                             </div>
                           </div>
@@ -2174,7 +2132,7 @@ export function LeftToolbar({
                               so clicking the icon doesn't also toggle expand. */}
                           <button
                             onClick={(e) => { e.stopPropagation(); setEditingFolder(folder) }}
-                            className="opacity-0 group-hover:opacity-100 w-5 h-5 rounded flex items-center justify-center hover:bg-[var(--sand-active)] text-[var(--sand-muted)] hover:text-[var(--sand-text)] transition-opacity"
+                            className="opacity-0 group-hover:opacity-100 w-5 h-5 rounded flex items-center justify-center hover:bg-white/10 text-muted-foreground hover:text-foreground transition-opacity"
                             title="Edit folder"
                           >
                             <Tag size={10} />
@@ -2196,7 +2154,7 @@ export function LeftToolbar({
                                   }))
                                   e.dataTransfer.effectAllowed = 'copy'
                                 }}
-                                className="aspect-square rounded overflow-hidden bg-card border border-[var(--sand-border)] hover:border-accent/50 cursor-grab active:cursor-grabbing"
+                                className="aspect-square rounded overflow-hidden bg-card border border-border/30 hover:border-accent/50 cursor-grab active:cursor-grabbing"
                                 title={asset.prompt || 'Drag to canvas'}
                               >
                                 <AssetThumb url={asset.r2_url} type={asset.type} audioIconSize={20} />
@@ -2205,7 +2163,7 @@ export function LeftToolbar({
                           </div>
                         )}
                         {isOpen && folder.assets.length === 0 && (
-                          <div className="px-3 pb-2 text-[10px] text-[var(--sand-muted)] opacity-40 italic">
+                          <div className="px-3 pb-2 text-[10px] text-muted-foreground/40 italic">
                             No assets yet
                           </div>
                         )}
@@ -2229,7 +2187,7 @@ export function LeftToolbar({
               : folderType === 'location' ? 'New Location'
               : 'New Folder'
             return (
-              <div className="px-2 py-2 border-t border-[var(--sand-border)]">
+              <div className="px-2 py-2 border-t border-border/30">
                 <button
                   onClick={() => setCreatingFolderType(folderType)}
                   className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg bg-accent/10 hover:bg-accent/20 text-accent text-[10px] transition-colors"
