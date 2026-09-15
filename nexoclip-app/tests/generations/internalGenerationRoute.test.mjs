@@ -22,11 +22,12 @@ test('returns Canvas outputs as authenticated main-app asset URLs', async () => 
 
 test('publishes a successfully reserved internal image generation', async () => {
   const published = [];
+  const reservations = [];
   const handler = createInternalGenerationHandler({
     verify: () => true,
     getDefaultWorkspace: async () => ({ id: 'workspace-1' }),
     getPool: () => ({ id: 'pool' }),
-    reserve: async () => ({ id: 'generation-1', kind: 'image' }),
+    reserve: async (...args) => { reservations.push(args); return { id: 'generation-1', kind: 'image' }; },
     publish: async (input) => published.push(input),
   });
   const response = await handler(new Request('http://app/api/internal/generations', {
@@ -38,5 +39,6 @@ test('publishes a successfully reserved internal image generation', async () => 
   }));
 
   assert.equal(response.status, 201);
+  assert.deepEqual(reservations[0][3], { userId, allowLegacyCanvasReferences: true });
   assert.deepEqual(published, [{ pool: { id: 'pool' }, kind: 'image' }]);
 });

@@ -42,11 +42,14 @@ export function validateImageGenerationInput(input) {
   return { prompt, model, parameters };
 }
 
-function validAssetReferences(values) {
-  return Array.isArray(values) && values.every((url) => typeof url === 'string' && /^\/api\/assets\/[^/]+\/download(?:\?|$)/.test(url));
+function validAssetReferences(values, { allowLegacyCanvasReferences = false } = {}) {
+  return Array.isArray(values) && values.every((url) => typeof url === 'string' && (
+    /^\/api\/assets\/[^/]+\/download(?:\?|$)/.test(url)
+    || (allowLegacyCanvasReferences && /^\/(?:spite\/)?api\/r2-image\/.+/.test(url))
+  ));
 }
 
-export function validateVideoGenerationInput(input) {
+export function validateVideoGenerationInput(input, options = {}) {
   const prompt = String(input?.prompt || '').trim();
   const model = String(input?.model || '').trim();
   const supplied = input?.parameters && Object.getPrototypeOf(input.parameters) === Object.prototype ? input.parameters : {};
@@ -63,12 +66,12 @@ export function validateVideoGenerationInput(input) {
   for (const key of ['resolution', 'seed']) if (supplied[key] !== undefined) parameters[key] = supplied[key];
   for (const key of ['referenceImages', 'referenceVideos']) {
     if (supplied[key] !== undefined) {
-      if (!validAssetReferences(supplied[key]) || supplied[key].length > 10) throw new Error(`Video ${key} must be tenant asset references`);
+      if (!validAssetReferences(supplied[key], options) || supplied[key].length > 10) throw new Error(`Video ${key} must be tenant asset references`);
       parameters[key] = supplied[key];
     }
   }
   if (supplied.frameImages !== undefined) {
-    if (!Array.isArray(supplied.frameImages) || supplied.frameImages.length > 2 || !supplied.frameImages.every((frame) => typeof frame?.url === 'string' && /^\/api\/assets\/[^/]+\/download(?:\?|$)/.test(frame.url) && ['first_frame', 'last_frame'].includes(frame.frameType))) throw new Error('Video frame images must be tenant asset references');
+    if (!Array.isArray(supplied.frameImages) || supplied.frameImages.length > 2 || !supplied.frameImages.every((frame) => validAssetReferences([frame?.url], options) && ['first_frame', 'last_frame'].includes(frame.frameType))) throw new Error('Video frame images must be tenant asset references');
     parameters.frameImages = supplied.frameImages;
   }
   return { kind: 'video', prompt, model, parameters };
@@ -121,10 +124,10 @@ async function enforceGenerationLimits(client, workspaceId, cost) {
   }
 }
 
-export async function createImageGenerationJobWithReservation(pool, workspaceId, input, { userId } = {}) {
+export async function createImageGenerationJobWithReservation(pool, workspaceId, input, { userId, allowLegacyCanvasReferences = false } = {}) {
   if (!workspaceId || !input?.idempotencyKey) throw new Error('Generation idempotency key is required');
   if (!userId) throw new Error('Generation user is required');
-  const validated = input?.kind === 'video' ? validateVideoGenerationInput(input) : validateImageGenerationInput(input);
+  const validated = input?.kind === 'video' ? validateVideoGenerationInput(input, { allowLegacyCanvasReferences }) : validateImageGenerationInput(input);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
