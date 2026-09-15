@@ -41,7 +41,7 @@ test('assets/[assetId] hides foreign assets and only deletes owned stored keys',
   const sql = async (strings: TemplateStringsArray, ...values: unknown[]) => {
     const normalized = strings.join(' ? ').replace(/\s+/g, ' ').trim().toLowerCase()
 
-    if (normalized.includes('from generation_history g join projects p on p.id::text = g.project_id')) {
+    if (normalized.includes('from generation_history g join projects p on p.id = g.project_id')) {
       const userId = String(values[0])
       const assetId = String(values[1])
       if (userId === OWNER_ID && assetId === 'owned-asset') {
