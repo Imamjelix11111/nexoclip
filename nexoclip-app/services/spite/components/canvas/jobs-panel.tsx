@@ -185,11 +185,11 @@ function JobRow({ job, onClick }: { job: Job; onClick: () => void }) {
             {job.label}
           </div>
           <div className="flex items-center gap-2 mt-0.5">
-            <span className="text-[9px] font-mono text-[var(--sand-muted)] opacity-55 tracking-wide">
+            <span className="text-[9px] font-mono text-[var(--sand-muted)] opacity-[0.55] tracking-wide">
               {age}
             </span>
             {job.modelId && (
-              <span className="text-[9px] font-mono text-[var(--sand-muted)] opacity-35 truncate">
+              <span className="text-[9px] font-mono text-[var(--sand-muted)] opacity-[0.35] truncate">
                 {job.modelId}
               </span>
             )}
@@ -231,7 +231,7 @@ function JobRow({ job, onClick }: { job: Job; onClick: () => void }) {
           <XCircle size={14} weight="fill" className="text-red-400" />
         )}
         {job.status === 'cancelled' && (
-          <XCircle size={14} weight="thin" className="text-white/40" />
+          <XCircle size={14} weight="thin" className="text-[var(--sand-muted)] opacity-40" />
         )}
         {isActive && (
           <CircleNotch size={14} weight="thin" className="text-accent animate-spin" />

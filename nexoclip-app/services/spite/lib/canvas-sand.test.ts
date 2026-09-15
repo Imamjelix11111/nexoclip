@@ -69,6 +69,43 @@ test('sand panels do not contain text-foreground/text-muted-foreground or white 
   }
 })
 
+// New: Jobs panel must not use unsupported opacity utilities; require arbitrary opacities instead
+
+test('jobs-panel replaces unsupported opacity utilities with arbitrary values', () => {
+  const src = read('../components/canvas/jobs-panel.tsx')
+  assert.doesNotMatch(src, /opacity-55/)
+  assert.doesNotMatch(src, /opacity-35/)
+  assert.match(src, /opacity-\[0\.55\]/)
+  assert.match(src, /opacity-\[0\.35\]/)
+})
+
+// New: Left toolbar search inputs should use placeholder:opacity-40 instead of applying opacity-40 to the whole input
+
+test('left-toolbar search inputs use placeholder:opacity-40', () => {
+  const src = read('../components/canvas/left-toolbar.tsx')
+  // Ensure we migrated placeholders to placeholder:opacity-40
+  assert.match(src, /placeholder:opacity-40/)
+  // Forbid the old pattern where opacity-40 applied to the entire input alongside placeholder text
+  assert.doesNotMatch(src, /placeholder:text-\[var\(--sand-muted\)\] opacity-40/)
+})
+
+// New: Compact tool strip dividers inside sand scope should use the sand border var
+
+test('left-toolbar maps compact divider bg-border to sand border var', () => {
+  const src = read('../components/canvas/left-toolbar.tsx')
+  assert.doesNotMatch(src, /bg-border/)
+  assert.match(src, /bg-\[var\(--sand-border\)\]/)
+})
+
+// New: Jobs cancelled icon should use sand-muted instead of white/40
+
+test('jobs-panel cancelled icon uses sand-muted token', () => {
+  const src = read('../components/canvas/jobs-panel.tsx')
+  // Ensure the cancelled branch uses sand-muted for the icon, but allow white/40 elsewhere (thumbnail placeholders)
+  assert.doesNotMatch(src, /job\.status === 'cancelled'[\s\S]*text-white\/40/)
+  assert.match(src, /job\.status === 'cancelled'[\s\S]*text-\[var\(--sand-muted\)\]/)
+})
+
 // Ensure the Full Sand panel token is not applied to unrelated controls
 
 test('canvas-toolbar, bottom-bar, image-node, and video-node do NOT receive the sand panel token', () => {

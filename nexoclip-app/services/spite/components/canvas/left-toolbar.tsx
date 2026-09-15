@@ -796,7 +796,7 @@ export function LeftToolbar({
                     placeholder="Search"
                     value={historySearch}
                     onChange={(e) => setHistorySearch(e.target.value)}
-                    className="flex-1 bg-transparent text-sm text-[var(--sand-text)] placeholder:text-[var(--sand-muted)] opacity-40 outline-none"
+                    className="flex-1 bg-transparent text-sm text-[var(--sand-text)] placeholder:text-[var(--sand-muted)] placeholder:opacity-40 outline-none"
                   />
                 </div>
                 {/* Select-mode toggle */}
@@ -1505,7 +1505,7 @@ export function LeftToolbar({
               placeholder="Search"
               value={historySearch}
               onChange={(e) => setHistorySearch(e.target.value)}
-              className="flex-1 bg-transparent text-xs font-mono text-[var(--sand-text)] placeholder:text-[var(--sand-muted)] opacity-40 outline-none"
+              className="flex-1 bg-transparent text-xs font-mono text-[var(--sand-text)] placeholder:text-[var(--sand-muted)] placeholder:opacity-40 outline-none"
             />
             {historySearch && (
               <button onClick={() => setHistorySearch('')} className="text-[var(--sand-muted)] hover:text-[var(--sand-text)]">
@@ -1988,7 +1988,7 @@ export function LeftToolbar({
           </button>
         ))}
 
-        <div className="h-px bg-border my-1" />
+        <div className="h-px bg-[var(--sand-border)] my-1" />
 
         <button
           data-tour="assets-button"
@@ -2017,7 +2017,7 @@ export function LeftToolbar({
           </button>
         ))}
 
-        <div className="h-px bg-border my-1" />
+        <div className="h-px bg-[var(--sand-border)] my-1" />
 
         <button
           onClick={onUndo}
@@ -2084,7 +2084,7 @@ export function LeftToolbar({
                 placeholder="Search..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="flex-1 bg-transparent text-[10px] font-mono text-[var(--sand-text)] placeholder:text-[var(--sand-muted)] opacity-40 outline-none"
+                className="flex-1 bg-transparent text-[10px] font-mono text-[var(--sand-text)] placeholder:text-[var(--sand-muted)] placeholder:opacity-40 outline-none"
               />
               {search && (
                 <button onClick={() => setSearch('')} className="text-[var(--sand-muted)] hover:text-[var(--sand-text)]">
