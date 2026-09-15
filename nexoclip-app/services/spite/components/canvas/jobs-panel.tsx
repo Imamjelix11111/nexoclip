@@ -112,7 +112,6 @@ export function JobsPanel({ open, onClose }: { open: boolean; onClose: () => voi
         background: 'var(--sand-bg)',
         color: 'var(--sand-text)',
         borderColor: 'var(--sand-border)',
-        backdropFilter: 'blur(20px)',
       } as React.CSSProperties}
     >
       {/* Header */}
@@ -159,7 +158,7 @@ function JobRow({ job, onClick }: { job: Job; onClick: () => void }) {
     job.status === 'in_progress'
 
   return (
-    <div className="w-full flex items-start gap-3 px-3 py-2.5 border-b hover:bg-[var(--sand-active)] transition-colors" style={{ borderColor: 'var(--sand-border)' }}>
+    <div className={`w-full flex items-start gap-3 px-3 py-2.5 border-b transition-colors ${isActive ? 'bg-[var(--sand-active)]' : 'hover:bg-[var(--sand-active)]'}`} style={{ borderColor: 'var(--sand-border)' }}>
       <button
         onClick={onClick}
         className="flex-1 flex items-start gap-3 text-left"

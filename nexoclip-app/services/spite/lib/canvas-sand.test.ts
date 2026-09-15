@@ -25,11 +25,36 @@ test('left-toolbar uses all approved Full Sand palette values', () => {
   }
 })
 
+// Strengthened: Sand assets roots explicitly set sand borderColor and use sand active hover
+
+test('left-toolbar sand-scoped roots set sand border/text and use sand active treatments', () => {
+  const src = read('../components/canvas/left-toolbar.tsx')
+  // Both sand roots have inline borderColor
+  assert.match(src, /data-tour=\"assets-expanded\"[\s\S]*borderColor: 'var\(--sand-border\)'/)
+  assert.match(src, /data-tour=\"assets-panel\"[\s\S]*borderColor: 'var\(--sand-border\)'/)
+  // Ensure at least one sand-active hover or active class exists
+  assert.match(src, /bg-\[var\(--sand-active\)\]/)
+})
+
 test('jobs-panel uses all approved Full Sand palette values', () => {
   const src = read('../components/canvas/jobs-panel.tsx')
   for (const hex of SAND_VALUES) {
     assert.match(src, new RegExp(hex.replace('#', '#')))
   }
+})
+
+// Strengthened: Jobs panel should not use backdropFilter on solid sand panel
+
+test('jobs-panel removes obsolete backdropFilter', () => {
+  const src = read('../components/canvas/jobs-panel.tsx')
+  assert.doesNotMatch(src, /backdropFilter/)
+})
+
+// Strengthened: Active job rows have a distinct readable cue on sand
+
+test('jobs-panel applies a distinct sand active treatment for active jobs', () => {
+  const src = read('../components/canvas/jobs-panel.tsx')
+  assert.match(src, /isActive \? 'bg-\[var\(--sand-active\)\]'/)
 })
 
 // Ensure the Full Sand panel token is not applied to unrelated controls
