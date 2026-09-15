@@ -10,6 +10,7 @@ import { MentionTextarea, type Mention, type MentionTextareaRef } from '../menti
 import { useProjectFolders } from '@/hooks/use-project-folders'
 import { useCanvasCollaboration } from '../canvas-collaboration'
 import { createLocalStateSyncGuard } from '@/lib/local-state-sync'
+import { shouldApplyRemoteMentionState } from '@/lib/mention-state'
 
 function HandleIcon({ icon: Icon, color, style }: { icon: React.ElementType; color: string; style?: React.CSSProperties }) {
   return (
@@ -51,12 +52,21 @@ function PromptNodeImpl({ id, data, selected }: NodeProps) {
   const syncGuardRef = useRef(createLocalStateSyncGuard())
 
   useEffect(() => {
-    if (editing) return
+    const incomingText = (data.text as string) || ''
+    const incomingMentions = (data.mentions as Mention[]) || []
+    if (!shouldApplyRemoteMentionState({
+      editing,
+      localText: text,
+      localMentions: mentions,
+      incomingText,
+      incomingMentions,
+    })) return
+
     const finishSync = syncGuardRef.current.beginPropSync()
-    setText((data.text as string) || '')
-    setMentions((data.mentions as Mention[]) || [])
+    setText(incomingText)
+    setMentions(incomingMentions)
     queueMicrotask(finishSync)
-  }, [data.text, data.mentions, editing])
+  }, [data.text, data.mentions, editing, text, mentions])
 
   const handleChange = useCallback((nextText: string, nextMentions: Mention[]) => {
     syncGuardRef.current.beginUserEdit()

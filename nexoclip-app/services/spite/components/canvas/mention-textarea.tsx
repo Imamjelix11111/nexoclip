@@ -12,6 +12,7 @@ import {
 import { createPortal } from 'react-dom'
 import { X, User, Package, MapPin, Folder, Check, PencilSimple, Trash } from '@phosphor-icons/react'
 import { AssetThumb } from './asset-thumb'
+import { mentionStateKey } from '@/lib/mention-state'
 
 export type FolderType = 'character' | 'prop' | 'location' | 'general'
 
@@ -267,32 +268,30 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
   // when the parent changes them out-of-band (e.g. loaded from data). Once
   // mounted, the user types and we emit onChange, but we don't sync back
   // from props — that would clobber the caret on every keystroke.
-  const lastSerialized = useRef<string>('')
+  const lastSerialized = useRef(mentionStateKey('', []))
   const lastFoldersLen = useRef<number>(0)
+  const incomingStateKey = mentionStateKey(value, mentions)
   useEffect(() => {
     const el = editorRef.current
     if (!el) return
-    // Skip if the incoming value matches what we last emitted (parent
-    // bounced our own update back). This stops the editor from being
-    // re-rendered on every keystroke.
-    // EXCEPT: if folders just resolved from empty, re-render so chips that
-    // were drawn with the type='general' fallback (because no folder was
-    // available at mount) get upgraded to their proper type/colour.
+    // Skip only when both text and chip metadata match what this editor
+    // emitted. A remote mention selection keeps the same serialized text,
+    // so comparing text alone leaves the other guest with a plain @tag.
     const foldersJustResolved = lastFoldersLen.current === 0 && folders.length > 0
-    if (value === lastSerialized.current && !foldersJustResolved) return
+    if (incomingStateKey === lastSerialized.current && !foldersJustResolved) return
     renderInitial(el, value, mentions, folders)
     setShowPlaceholder(el.textContent === '')
-    lastSerialized.current = value
+    lastSerialized.current = incomingStateKey
     lastFoldersLen.current = folders.length
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, mentions.length, folders.length])
+  }, [value, incomingStateKey, folders.length])
 
   // Read the current DOM state and bubble it up.
   const emit = useCallback(() => {
     const el = editorRef.current
     if (!el) return
     const { text, mentions } = serializeEditor(el)
-    lastSerialized.current = text
+    lastSerialized.current = mentionStateKey(text, mentions)
     setShowPlaceholder(el.textContent === '')
     onChange(text, mentions)
   }, [onChange])
