@@ -13,6 +13,20 @@ test('validates a durable SaaS video request and preserves provider parameters',
   });
 });
 
+test('accepts owned legacy Canvas references only for the signed internal bridge', () => {
+  const input = {
+    kind: 'video', prompt: 'Nathan walks', model: 'bytedance/seedance-2.0',
+    parameters: {
+      referenceImages: ['/spite/api/r2-image/uploads/nathan.png'],
+      frameImages: [{ frameType: 'first_frame', url: '/api/r2-image/uploads/start.png' }],
+    },
+  };
+
+  assert.throws(() => validateVideoGenerationInput(input), /tenant asset references/i);
+  assert.deepEqual(validateVideoGenerationInput(input, { allowLegacyCanvasReferences: true }).parameters, input.parameters);
+});
+
 test('rejects unsafe video reference URLs', () => {
   assert.throws(() => validateVideoGenerationInput({ kind: 'video', prompt: 'x', model: 'bytedance/seedance-2.0', parameters: { referenceVideos: ['https://untrusted.example/video.mp4'] } }), /reference/i);
+  assert.throws(() => validateVideoGenerationInput({ kind: 'video', prompt: 'x', model: 'bytedance/seedance-2.0', parameters: { referenceVideos: ['https://untrusted.example/video.mp4'] } }, { allowLegacyCanvasReferences: true }), /reference/i);
 });
