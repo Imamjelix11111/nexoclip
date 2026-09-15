@@ -220,6 +220,7 @@ function makeNode(
       thumbnail: undefined as string | undefined,
       isUploading: false,
       uploadError: false,
+      ...(type === 'note' ? { text: '' } : {}),
       // Spread initialData last so callers (e.g. menu presets) can
       // override fields like `modelId` without us clobbering them.
       ...(initialData || {}),

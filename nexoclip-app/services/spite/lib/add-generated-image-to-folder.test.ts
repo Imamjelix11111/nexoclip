@@ -37,6 +37,13 @@ test('new folder creation waits for generated asset registration', () => {
   )
 })
 
+test('new folder success callback prefers server-returned normalized name', () => {
+  // Ensure we parse the response and prefer parsed.name with a trimmed fallback
+  assert.match(folderModal, /parsed\?\.name/)
+  assert.match(folderModal, /const\s+effectiveName\s*=\s*serverName\s*\|\|\s*newName\.trim\(\)/)
+  assert.match(folderModal, /onAdded\(\{ id, name: effectiveName, type: folderType \}\)/)
+})
+
 test('generated asset registration is idempotent across concurrent service instances', () => {
   const first = createStableAssetId('project-a', '/api/assets/output/download')
   assert.equal(first, createStableAssetId('project-a', '/api/assets/output/download'))

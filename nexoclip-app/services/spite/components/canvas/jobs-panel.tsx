@@ -160,6 +160,7 @@ function JobRow({ job, onClick }: { job: Job; onClick: () => void }) {
   return (
     <div className={`w-full flex items-start gap-3 px-3 py-2.5 border-b transition-colors ${isActive ? 'bg-[var(--sand-active)]' : 'hover:bg-[var(--sand-active)]'}`} style={{ borderColor: 'var(--sand-border)' }}>
       <button
+        type="button"
         onClick={onClick}
         className="flex-1 flex items-start gap-3 text-left"
         title="Click to focus this node on the canvas"

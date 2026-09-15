@@ -14,7 +14,14 @@ export function mentionStateKey(text: string, mentions: PersistedMention[]): str
       m.name,
       Array.from(new Set(m.selectedAssetIds)).sort(),
     ] as [string, string, string[]])
-    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+    .sort((a, b) => {
+      if (a[0] !== b[0]) return a[0] < b[0] ? -1 : 1
+      if (a[1] !== b[1]) return a[1] < b[1] ? -1 : 1
+      const aa = a[2].join('\u0000')
+      const bb = b[2].join('\u0000')
+      if (aa === bb) return 0
+      return aa < bb ? -1 : 1
+    })
   return JSON.stringify([text, normalized])
 }
 

@@ -483,7 +483,7 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
       const q = findActiveAtQuery()
       if (q && q.range) {
         const r = q.range.getBoundingClientRect()
-        if (r.width === 0 && r.height === 0) caretRect = el.getBoundingClientRect()
+        if (r.width === 0 || r.height === 0) caretRect = el.getBoundingClientRect()
         else caretRect = r
       } else {
         caretRect = el.getBoundingClientRect()
@@ -513,11 +513,21 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
       return
     }
     let raf = 0
+    const scheduledRef = { current: false }
+    const schedule = () => {
+      if (scheduledRef.current) return
+      scheduledRef.current = true
+      raf = requestAnimationFrame(() => {
+        scheduledRef.current = false
+        computePlacement()
+      })
+    }
     raf = requestAnimationFrame(() => computePlacement())
-    const onScroll = () => computePlacement()
-    const onResize = () => computePlacement()
-    window.addEventListener('scroll', onScroll, true)
-    window.addEventListener('resize', onResize)
+    const onScroll = () => schedule()
+    const onResize = () => schedule()
+    // Use passive listeners where safe; capture scroll to follow nested scrollables.
+    window.addEventListener('scroll', onScroll, { capture: true, passive: true })
+    window.addEventListener('resize', onResize, { passive: true })
     return () => {
       cancelAnimationFrame(raf)
       window.removeEventListener('scroll', onScroll, true)
@@ -804,11 +814,10 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
       {open && typeof document !== 'undefined' && createPortal(
         <div
           ref={menuRef}
-          className="fixed z-50 max-h-60 overflow-y-auto rounded-lg border border-white/10 bg-[#0E1014] py-1 shadow-xl"
+          className="fixed z-50 max-h-60 overflow-y-auto rounded-lg border border-white/10 bg-[#0E1014] py-1 shadow-xl min-w-[200px] max-w-[360px]"
           style={{
             left: menuPos ? menuPos.left : -9999,
             top: menuPos ? menuPos.top : -9999,
-            width: 240,
             visibility: menuPos ? 'visible' : 'hidden',
           }}
           onMouseDown={(e) => e.stopPropagation()}

@@ -361,12 +361,14 @@ export function AddToFolderModal({ open, onClose, folderType, projectId, assetId
 
       // Successful save
       if (!editFolder && typeof onAdded === 'function') {
-        // New folder: parse response for id, then invoke callback with trimmed name and type
+        // New folder: prefer the server-returned normalized name; fall back to trimmed local
         try {
-          const parsed = await res.json()
+          const parsed = await res.json().catch(() => null as any)
           const id = parsed?.id as string | undefined
+          const serverName = typeof parsed?.name === 'string' ? String(parsed.name).trim() : ''
+          const effectiveName = serverName || newName.trim()
           if (id) {
-            onAdded({ id, name: newName.trim(), type: folderType })
+            onAdded({ id, name: effectiveName, type: folderType })
           }
         } catch {}
       }

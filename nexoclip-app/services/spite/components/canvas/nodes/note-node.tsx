@@ -28,7 +28,7 @@ function NoteNodeImpl({ id, data, selected }: NodeProps) {
       className="group"
     >
       <div
-        className="absolute inset-0 rounded-lg"
+        className="absolute inset-0 rounded-lg pointer-events-none"
         style={{
           background: 'rgba(30,32,38,0.9)',
           border: selected ? '1px solid rgba(107,143,168,0.6)' : '1px solid rgba(255,255,255,0.08)',
