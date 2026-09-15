@@ -92,6 +92,79 @@ test('submits an owned image node as a durable NexoClip generation and patches i
   assert.equal(typeof (patches[0] as any).set.submittedAt, 'number')
 })
 
+test('submits owned video nodes with legacy Canvas folder references', async () => {
+  const submissions: unknown[] = []
+  let checkedLegacyReferences: string[] = []
+  const handler = createGenerateSubmitHandler({
+    getAuthenticatedUser: async () => ({ id: OWNER_ID }),
+    getDb: () => (async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      const query = strings.join(' ').replace(/\s+/g, ' ').toLowerCase()
+      if (query.includes('select 1 from projects where id =')) return [{ ok: 1 }]
+      if (query.includes('count(distinct')) {
+        checkedLegacyReferences = values.find(Array.isArray) as string[]
+        return [{ owned_count: 1 }]
+      }
+      throw new Error(`Unhandled SQL: ${strings.join(' ')}`)
+    }) as any,
+    createNexoClipGenerationClient: () => ({
+      submit: async (input) => { submissions.push(input); return { id: 'generation-video-1', kind: 'video', status: 'queued' } },
+      status: async () => { throw new Error('status should not be called') },
+    }),
+    createInternalRealtimeClient: () => ({
+      exportDocument: async () => ({ projection: canvasWithNode('video-node-1', 'videoGen'), durableSeq: 1, projectedSeq: 1 }),
+      patchNodeData: async () => {},
+    }) as any,
+  })
+
+  const response = await handler(makeRequest('http://spite.local/api/generate/submit', {
+    method: 'POST',
+    body: {
+      projectId: PROJECT_ID, nodeId: 'video-node-1', kind: 'video', prompt: 'Nathan walking', model: 'seedance-2.0',
+      referenceGroups: [{ urls: ['/spite/api/r2-image/uploads/nathan.png'] }],
+      settings: { aspectRatio: '16:9', duration: '5s', resolution: '720p' },
+    },
+  }))
+
+  assert.equal(response.status, 202)
+  assert.deepEqual((submissions[0] as any).input.parameters.referenceImages, [
+    '/spite/api/r2-image/uploads/nathan.png',
+  ])
+  assert.deepEqual(checkedLegacyReferences, ['/api/r2-image/uploads/nathan.png'])
+})
+
+test('rejects legacy Canvas references outside the owned project', async () => {
+  let submitted = false
+  const handler = createGenerateSubmitHandler({
+    getAuthenticatedUser: async () => ({ id: OWNER_ID }),
+    getDb: () => (async (strings: TemplateStringsArray) => {
+      const query = strings.join(' ').replace(/\s+/g, ' ').toLowerCase()
+      if (query.includes('select 1 from projects where id =')) return [{ ok: 1 }]
+      if (query.includes('count(distinct')) return [{ owned_count: 0 }]
+      throw new Error(`Unhandled SQL: ${strings.join(' ')}`)
+    }) as any,
+    createNexoClipGenerationClient: () => ({
+      submit: async () => { submitted = true; throw new Error('submit should not be called') },
+      status: async () => { throw new Error('status should not be called') },
+    }),
+    createInternalRealtimeClient: () => ({
+      exportDocument: async () => ({ projection: canvasWithNode('video-node-1', 'videoGen'), durableSeq: 1, projectedSeq: 1 }),
+      patchNodeData: async () => {},
+    }) as any,
+  })
+
+  const response = await handler(makeRequest('http://spite.local/api/generate/submit', {
+    method: 'POST',
+    body: {
+      projectId: PROJECT_ID, nodeId: 'video-node-1', kind: 'video', prompt: 'Nathan walking', model: 'seedance-2.0',
+      referenceGroups: [{ urls: ['/spite/api/r2-image/uploads/not-owned.png'] }],
+      settings: { duration: '5s' },
+    },
+  }))
+
+  assert.equal(response.status, 404)
+  assert.equal(submitted, false)
+})
+
 test('rejects a second submit while its canvas node has an active durable generation', async () => {
   let submitted = false
   const handler = createGenerateSubmitHandler({
