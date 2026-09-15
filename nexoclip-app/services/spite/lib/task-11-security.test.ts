@@ -41,7 +41,7 @@ test('assets/[assetId] hides foreign assets and only deletes owned stored keys',
   const sql = async (strings: TemplateStringsArray, ...values: unknown[]) => {
     const normalized = strings.join(' ? ').replace(/\s+/g, ' ').trim().toLowerCase()
 
-    if (normalized.includes('from generation_history g join projects p on p.id = g.project_id')) {
+    if (normalized.includes('from generation_history g join projects p on p.id::text = g.project_id')) {
       const userId = String(values[0])
       const assetId = String(values[1])
       if (userId === OWNER_ID && assetId === 'owned-asset') {
@@ -232,7 +232,7 @@ test('folders reject foreign asset ids atomically on create and replace', async 
       return [{ ok: 1 }]
     }
 
-    if (normalized.includes('select count(*)::int as owned_count from generation_history g join projects p on p.id = g.project_id') && normalized.includes('g.id = any(')) {
+    if (normalized.includes('select count(*)::int as owned_count from generation_history g join projects p on p.id::text = g.project_id') && normalized.includes('g.id = any(')) {
       return [{ owned_count: 1 }]
     }
 
@@ -415,14 +415,12 @@ test('generate/recover bulk cleanup uses projectId+nodeId pair when node ids rep
   assert.deepEqual(cleanupCalls, [{ projectId: OWNER_PROJECT_ID, nodeId: 'shared-node' }])
 })
 
-test('auth/check reports authenticated for trusted main sessions as well as legacy spite sessions', async () => {
+test('auth/check: trusted main session -> 200/authenticated true; legacy spite-only session -> 401/authenticated false', async () => {
   const trusted = createAuthCheckHandler({
     getAuthenticatedUser: async () => ({ id: OWNER_ID }),
-    isSessionValid: async () => false,
   })
   const legacy = createAuthCheckHandler({
     getAuthenticatedUser: async () => null,
-    isSessionValid: async () => true,
   })
 
   const trustedResponse = await trusted(makeRequest('http://spite.local/api/auth/check', {
@@ -434,6 +432,6 @@ test('auth/check reports authenticated for trusted main sessions as well as lega
 
   assert.equal(trustedResponse.status, 200)
   assert.deepEqual(await trustedResponse.json(), { authenticated: true })
-  assert.equal(legacyResponse.status, 200)
-  assert.deepEqual(await legacyResponse.json(), { authenticated: true })
+  assert.equal(legacyResponse.status, 401)
+  assert.deepEqual(await legacyResponse.json(), { authenticated: false })
 })
