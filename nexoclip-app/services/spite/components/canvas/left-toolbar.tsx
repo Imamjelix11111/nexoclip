@@ -50,6 +50,7 @@ import {
   Check,
   Lifebuoy,
   CircleNotch,
+  Note as NoteIcon,
 } from '@phosphor-icons/react'
 
 export type AssetCategory = 'characters' | 'props' | 'locations' | 'general'
@@ -70,6 +71,7 @@ const TOOLS = [
   { id: 'cut', icon: Scissors, label: 'Cut connections' },
   { id: 'sticker', icon: Smiley, label: 'Add sticker' },
   { id: 'comment', icon: ChatCircle, label: 'Add comment' },
+  { id: 'note', icon: NoteIcon, label: 'Add note' },
 ] as const
 
 const ASSET_CATEGORIES: { id: AssetCategory; icon: typeof User; label: string; color: string }[] = [
@@ -96,7 +98,7 @@ interface GeneratedAsset {
 
 interface LeftToolbarProps {
   onAddNode?: (type: string) => void
-  onSetTool?: (tool: 'select' | 'cut' | 'sticker' | 'comment') => void
+  onSetTool?: (tool: 'select' | 'cut' | 'sticker' | 'comment' | 'note') => void
   activeTool?: string
   onUndo?: () => void
   onRedo?: () => void
@@ -1934,6 +1936,7 @@ export function LeftToolbar({
               if (tool.id === 'select' && onSetTool) onSetTool('select')
               if (tool.id === 'sticker' && onSetTool) onSetTool('sticker')
               if (tool.id === 'comment' && onSetTool) onSetTool('comment')
+              if (tool.id === 'note' && onSetTool) onSetTool('note')
             }}
             className={`flex items-center justify-center w-7 h-7 rounded-lg transition-colors ${
               activeTool === tool.id

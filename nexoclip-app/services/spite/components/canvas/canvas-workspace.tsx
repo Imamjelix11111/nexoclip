@@ -65,6 +65,7 @@ import { ReferenceNode } from './nodes/reference-node'
 import { CommentNode } from './nodes/comment-node'
 import { StickerNode, getLastSticker } from './nodes/sticker-node'
 import { CompressNode } from './nodes/compress-node'
+import { NoteNode } from './nodes/note-node'
 import { RealtimePresenceOverlay } from './realtime-presence'
 import { CanvasCollaborationProvider } from './canvas-collaboration'
 import { resolveFollowTarget } from '@/lib/canvas-node-interactions'
@@ -76,6 +77,7 @@ const NODE_TYPES: NodeTypes = {
   reference: ReferenceNode,
   comment: CommentNode,
   sticker: StickerNode,
+  note: NoteNode,
   compress: CompressNode,
 }
 
@@ -206,6 +208,7 @@ function makeNode(
     compress: `Compress #${count}`,
     comment: '',
     sticker: '',
+    note: 'Note',
   }
   return {
     id: makeId(),
@@ -341,7 +344,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
   )
 
   // Active tool state
-  const [activeTool, setActiveTool] = useState<'select' | 'cut' | 'sticker' | 'comment'>('select')
+  const [activeTool, setActiveTool] = useState<'select' | 'cut' | 'sticker' | 'comment' | 'note'>('select')
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -1252,7 +1255,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
                 window.dispatchEvent(new Event('closeStickerPickers'))
 
                 // Place sticker or comment if tool is active
-                if (allowDocumentMutation && (activeTool === 'sticker' || activeTool === 'comment')) {
+                if (allowDocumentMutation && (activeTool === 'sticker' || activeTool === 'comment' || activeTool === 'note')) {
                   const flowPos = screenToFlowPosition({ x: e.clientX, y: e.clientY })
                   addNode(activeTool, flowPos)
                   setActiveTool('select')
@@ -1283,7 +1286,7 @@ function CanvasInner({ projectId }: { projectId: string }) {
                 background: '#0D0F12',
                 cursor: !allowDocumentMutation ? 'default' : activeTool === 'cut' ? 'crosshair' :
                        activeTool === 'sticker' ? 'none' :
-                       activeTool === 'comment' ? 'copy' : 'default'
+                       activeTool === 'comment' || activeTool === 'note' ? 'copy' : 'default'
               }}
               proOptions={{ hideAttribution: true }}
               // Keep nodes mounted while they are off-screen. Generator polling,
