@@ -60,11 +60,17 @@ function tagFromName(name: string): string {
   return name.replace(/[^\w]+/g, '-').replace(/^-+|-+$/g, '')
 }
 
-const ROLE_BY_TYPE: Record<FolderType, string> = {
-  character: 'character',
-  prop: 'object',
-  location: 'location',
-  general: 'subject',
+function exactReference(type: FolderType, reference: string): string {
+  if (type === 'character') {
+    return `the exact same person/character shown in ${reference}, and preserve facial identity, facial structure, skin tone, hairstyle, and distinguishing features without substitution or redesign`
+  }
+  if (type === 'prop') {
+    return `the exact same object shown in ${reference}, and preserve its shape, geometry, materials, colors, markings, and distinguishing details without substitution or redesign`
+  }
+  if (type === 'location') {
+    return `the exact same location shown in ${reference}, and preserve its spatial layout, architecture, landmarks, materials, and distinguishing details without substitution or redesign`
+  }
+  return `the exact same subject shown in ${reference}, and preserve its identity and distinguishing details without substitution or redesign`
 }
 
 export function pickRefStrategy(model: ModelConfig | null | undefined): RefStrategy {
@@ -158,31 +164,31 @@ export function compileMentionsForModel(
     const group = groupsByFolderId.get(folderId)!
     const name = group.folderName || ''
     const type = group.folderType || 'general'
-    const role = ROLE_BY_TYPE[type] || 'subject'
 
     if (strategy === 'citation-flat') {
       const start = slotStarts.get(folderId)!
       const cite = model!.referenceCite
-      return Array.from(
+      const references = Array.from(
         { length: group.urls.length },
         (_, i) => `${cite}${start + i + 1}`,
       ).join(' ')
+      return exactReference(type, references)
     }
     if (strategy === 'citation-elements') {
       const i = orderedFolderIds.indexOf(folderId)
       const cite = model!.referenceCite
-      return `${cite}${prefixRefCount + i + 1}`
+      return exactReference(type, `${cite}${prefixRefCount + i + 1}`)
     }
     if (strategy === 'multi') {
       const start = slotStarts.get(folderId)!
-      if (group.urls.length > 1) {
-        return `the ${role} shown in reference images ${start + 1}-${start + group.urls.length}`
-      }
-      return `the ${role} shown in reference image ${start + 1}`
+      const references = group.urls.length > 1
+        ? `reference images ${start + 1}-${start + group.urls.length}`
+        : `reference image ${start + 1}`
+      return exactReference(type, references)
     }
     if (strategy === 'single') {
       if (folderId !== firstFolderId) return name
-      return `the ${role} shown in reference image 1`
+      return exactReference(type, 'reference image 1')
     }
     return name
   }

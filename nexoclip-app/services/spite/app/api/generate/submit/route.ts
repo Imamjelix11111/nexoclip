@@ -9,6 +9,7 @@ import { createQueuedGenerationPatch } from '@/lib/durable-generation'
 import { getModelById } from '@/lib/fal-models'
 import { getAuthenticatedUser } from '@/lib/main-session'
 import {
+  assetNotFoundResponse,
   projectNotFoundResponse,
   unauthorizedResponse,
   userOwnsProject,
@@ -41,7 +42,8 @@ export function createGenerateSubmitHandler(deps: GenerateSubmitDeps = {}) {
       const projectId = typeof body.projectId === 'string' ? body.projectId : undefined
       const user = await resolveUser(request)
       if (!user) return unauthorizedResponse()
-      if (!projectId || !(await userOwnsProject(db(), user.id, projectId))) return projectNotFoundResponse()
+      const sql = db()
+      if (!projectId || !(await userOwnsProject(sql, user.id, projectId))) return projectNotFoundResponse()
 
       const nodeId = typeof body.nodeId === 'string' ? body.nodeId : undefined
       const mobile = body.mobile === true
@@ -64,6 +66,12 @@ export function createGenerateSubmitHandler(deps: GenerateSubmitDeps = {}) {
         if (typeof node.data.generationId === 'string' && ['queued', 'processing', 'running'].includes(String(node.data.generationStatus))) {
           return NextResponse.json({ error: 'This node already has an active generation' }, { status: 409 })
         }
+      }
+
+      const references = collectReferences(body)
+      const legacyReferences = references.filter(isLegacyCanvasReference)
+      if (legacyReferences.length && !(await projectOwnsLegacyReferences(sql, projectId, legacyReferences))) {
+        return assetNotFoundResponse()
       }
 
       const parameters = mapLegacyParameters(body, kind)
@@ -123,8 +131,8 @@ function mapLegacyParameters(body: Record<string, unknown>, kind: 'image' | 'vid
   ].filter(Boolean)
   const videoUrl = typeof settings.videoUrl === 'string' ? settings.videoUrl : undefined
   const tenantReferences = [...referenceImages, ...frameImages.map((frame) => frame!.url), ...(videoUrl ? [videoUrl] : [])]
-  if (tenantReferences.some((url) => !/^\/api\/assets\/[^/]+\/download(?:\?|$)/.test(url))) {
-    throw Object.assign(new Error('Video references must be tenant asset URLs (/api/assets/:id/download)'), { status: 400 })
+  if (tenantReferences.some((url) => !/^\/api\/assets\/[^/]+\/download(?:\?|$)/.test(url) && !isLegacyCanvasReference(url))) {
+    throw Object.assign(new Error('Video references must be tenant assets or owned Canvas references'), { status: 400 })
   }
   const parameters: Record<string, unknown> = {}
   for (const key of ['aspectRatio', 'resolution', 'seed']) if (settings[key] !== undefined && settings[key] !== '') parameters[key] = settings[key]
@@ -133,6 +141,21 @@ function mapLegacyParameters(body: Record<string, unknown>, kind: 'image' | 'vid
   if (videoUrl) parameters.referenceVideos = [videoUrl]
   if (frameImages.length) parameters.frameImages = frameImages
   return parameters
+}
+
+function isLegacyCanvasReference(url: string): boolean {
+  return /^\/(?:spite\/)?api\/r2-image\/.+/.test(url)
+}
+
+async function projectOwnsLegacyReferences(sql: ReturnType<typeof getDb>, projectId: string, references: string[]): Promise<boolean> {
+  const normalizedReferences = [...new Set(references.map((url) => url.replace(/^\/spite/, '')))]
+  const rows = await sql`
+    SELECT count(DISTINCT regexp_replace(r2_url, '^/spite', ''))::int AS owned_count
+    FROM generation_history
+    WHERE project_id = ${projectId}
+      AND regexp_replace(r2_url, '^/spite', '') = ANY(${normalizedReferences}::text[])
+  ` as Array<{ owned_count: number }>
+  return Number(rows[0]?.owned_count ?? 0) === normalizedReferences.length
 }
 
 function collectReferences(body: Record<string, unknown>): string[] {
