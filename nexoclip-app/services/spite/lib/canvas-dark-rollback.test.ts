@@ -6,6 +6,7 @@ const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf
 const toolbar = read('../components/canvas/left-toolbar.tsx')
 const workspace = read('../components/canvas/canvas-workspace.tsx')
 const mention = read('../components/canvas/mention-textarea.tsx')
+const jobs = read('../components/canvas/jobs-panel.tsx')
 
 test('dark controls remove Sand and Notes while preserving current features', () => {
   assert.doesNotMatch(toolbar, /--sand-/)
@@ -14,4 +15,11 @@ test('dark controls remove Sand and Notes while preserving current features', ()
   assert.equal(existsSync(new URL('../components/canvas/nodes/note-node.tsx', import.meta.url)), false)
   assert.match(workspace, /uploadedMediaLabel\(file\.name\)/)
   assert.match(mention, /placeMentionMenu/)
+
+  // Jobs panel must be dark (no Sand vars) and preserve durable ID UX
+  assert.doesNotMatch(jobs, /--sand-/)
+  assert.match(jobs, /resolveDurableJobId/)
+  assert.match(jobs, /shortJobId/)
+  assert.match(jobs, /navigator\.clipboard\.writeText\(job\.generationId!\)/)
+  assert.match(jobs, /type="button"/)
 })
