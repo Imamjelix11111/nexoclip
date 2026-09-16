@@ -43,8 +43,12 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
     const output = await providerRouter.downloadVideo(provider, providerRequestId, 0);
     const key = `${job.workspace_id}/${randomUUID()}`;
     const contentType = output.contentType || 'video/mp4';
-    const upload = await storage.createUploadUrl({ key, contentType });
-    await storage.put(upload.url || upload, output.buffer, contentType);
+    if (typeof storage.createUploadUrl === 'function') {
+      const upload = await storage.createUploadUrl({ key, contentType });
+      await storage.put(upload.url || upload, output.buffer, contentType);
+    } else {
+      await storage.put(key, output.buffer, contentType);
+    }
     const client = await pool.connect();
     try {
       const asset = await createAsset(client, { workspaceId: job.workspace_id, storageKey: key, filename: `generation-${job.id}.mp4`, contentType, sizeBytes: output.buffer.length });

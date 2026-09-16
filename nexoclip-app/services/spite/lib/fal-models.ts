@@ -63,15 +63,15 @@ export const IMAGE_MODELS: ModelConfig[] = [
   image('seedream-4.5-unfiltered', 'Seedream 4.5 Unfiltered', 'byteplus', 'ep-20260907150312-xx7gf', SEEDREAM_RATIOS, ['2K', '4K'], '1:1', '2K'),
   image('seedream-5', 'Seedream 5.0', 'byteplus', 'seedream-5-0-260128', SEEDREAM_RATIOS, ['1K', '2K'], '1:1', '1K'),
   image('seedream-5-pro', 'Seedream 5.0 Pro', 'byteplus', 'dola-seedream-5-0-pro-260628', SEEDREAM_RATIOS, ['1K', '2K'], '1:1', '1K'),
-  image('seedream-5-pro-unfiltered', 'Seedream 5.0 Pro Unfiltered', 'byteplus', 'byteplus/seedream-5.0-pro-unfiltered', SEEDREAM_RATIOS, ['1K', '2K'], '1:1', '1K'),
+  image('seedream-5-pro-unfiltered', 'Seedream 5.0 Pro Unfiltered', 'byteplus', 'seedream-5.0-pro-unfiltered', SEEDREAM_RATIOS, ['1K', '2K'], '1:1', '1K'),
   image('seedream-5-lite-unfiltered', 'Seedream 5.0 Lite Unfiltered', 'byteplus', 'ep-20260907150433-zg8fr', SEEDREAM_RATIOS, ['1K', '2K', '4K'], '1:1', '2K'),
 ]
 
 export const VIDEO_MODELS: ModelConfig[] = [
   video('seedance-2.0', 'Seedance 2.0', 'dreamina-seedance-2-0-260128', ['720p', '1080p'], ['5s', '10s', '15s']),
-  video('seedance-2.0-unfiltered', 'Seedance 2.0 Unfiltered', 'byteplus/seedance-2.0-unfiltered', ['720p', '1080p'], ['5s', '10s', '15s']),
+  video('seedance-2.0-unfiltered', 'Seedance 2.0 Unfiltered', 'seedance-2.0-unfiltered', ['720p', '1080p'], ['5s', '10s', '15s']),
   video('seedance-2.5', 'Seedance 2.5', 'dreamina-seedance-2-5-260628', ['480p', '720p', '1080p', '4K'], Array.from({ length: 27 }, (_, i) => `${i + 4}s`)),
-  video('seedance-2.5-unfiltered', 'Seedance 2.5 Unfiltered', 'byteplus/seedance-2.5-unfiltered', ['480p', '720p', '1080p', '4K'], Array.from({ length: 27 }, (_, i) => `${i + 4}s`)),
+  video('seedance-2.5-unfiltered', 'Seedance 2.5 Unfiltered', 'seedance-2.5-unfiltered', ['480p', '720p', '1080p', '4K'], Array.from({ length: 27 }, (_, i) => `${i + 4}s`)),
 ]
 
 export const FAL_MODELS = [...IMAGE_MODELS, ...VIDEO_MODELS]
