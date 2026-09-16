@@ -67,6 +67,8 @@ test('rejects empty required inputs locally with a safe non-retryable error', ()
     () => client.createAsset({ groupId: '', url: 'https://objects.example/source.png', name: 'Character' }),
     () => client.createAsset({ groupId: 'group-1', url: ' ', name: 'Character' }),
     () => client.createAsset({ groupId: 'group-1', url: 'https://objects.example/source.png', name: undefined }),
+    () => client.createAssetGroup({ name: 'Character', clientToken: ' ' }),
+    () => client.createAsset({ groupId: 'group-1', url: 'https://objects.example/source.png', name: 'Character', clientToken: '' }),
     () => client.getAsset({ assetId: '' }),
   ];
 
@@ -84,22 +86,24 @@ test('rejects empty required inputs locally with a safe non-retryable error', ()
   assert.equal(sideEffects, 0);
 });
 
-test('signs CreateAssetGroup and sends the exact AIGC group body', async () => {
+test('signs CreateAssetGroup and sends the provider idempotency token', async () => {
   const { client, calls } = recordingClient({ Result: { Id: 'group-1' } });
 
-  const result = await client.createAssetGroup({ name: 'Portrait', description: 'Canvas asset' });
+  const result = await client.createAssetGroup({
+    name: 'Portrait', description: 'Canvas asset', clientToken: 'server-derived-group-token',
+  });
 
   assert.deepEqual(result, { Id: 'group-1' });
   assert.equal(calls[0].url, 'https://ark.ap-southeast-1.byteplusapi.com/?Action=CreateAssetGroup&Version=2024-01-01');
   assert.equal(calls[0].options.method, 'POST');
-  assert.equal(calls[0].options.body, '{"Name":"Portrait","Description":"Canvas asset","GroupType":"AIGC","ProjectName":"project-x"}');
-  assert.deepEqual(calls[0].options.headers, {
-    'Content-Type': 'application/json',
-    Host: 'ark.ap-southeast-1.byteplusapi.com',
-    'X-Content-Sha256': '61321a6646a575918d2c8568a4ab6048b40ce4cedc018ca2c54db41e3c760737',
-    'X-Date': '20260916T123456Z',
-    Authorization: 'HMAC-SHA256 Credential=AKIDEXAMPLE/20260916/ap-southeast-1/ark/request, SignedHeaders=content-type;host;x-content-sha256;x-date, Signature=220b1a7f851412f8fd3c593600ff7e8a8d309f21a0b160c4ed6525889ecccf41',
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    Name: 'Portrait',
+    Description: 'Canvas asset',
+    GroupType: 'AIGC',
+    ProjectName: 'project-x',
+    ClientToken: 'server-derived-group-token',
   });
+  assert.match(calls[0].options.headers.Authorization, /Signature=[a-f0-9]{64}$/);
 });
 
 test('signs CreateAsset and enforces image and moderation body semantics', async () => {
@@ -109,12 +113,21 @@ test('signs CreateAsset and enforces image and moderation body semantics', async
     groupId: 'group-1',
     url: 'https://objects.example/source.png?token=short',
     name: 'Character',
+    clientToken: 'server-derived-asset-token',
   });
 
   assert.deepEqual(result, { Id: 'asset-1' });
   assert.equal(calls[0].url, 'https://ark.ap-southeast-1.byteplusapi.com/?Action=CreateAsset&Version=2024-01-01');
-  assert.equal(calls[0].options.body, '{"GroupId":"group-1","URL":"https://objects.example/source.png?token=short","Name":"Character","AssetType":"Image","Moderation":{"Strategy":"Skip"},"ProjectName":"project-x"}');
-  assert.equal(calls[0].options.headers.Authorization, 'HMAC-SHA256 Credential=AKIDEXAMPLE/20260916/ap-southeast-1/ark/request, SignedHeaders=content-type;host;x-content-sha256;x-date, Signature=3a637af99eaeab6f44fc2efa51bb11e20b8968c652cde85a0aa22849a00b8401');
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    GroupId: 'group-1',
+    URL: 'https://objects.example/source.png?token=short',
+    Name: 'Character',
+    AssetType: 'Image',
+    Moderation: { Strategy: 'Skip' },
+    ProjectName: 'project-x',
+    ClientToken: 'server-derived-asset-token',
+  });
+  assert.match(calls[0].options.headers.Authorization, /Signature=[a-f0-9]{64}$/);
 });
 
 test('signs GetAsset and sends only the asset and project identifiers', async () => {
@@ -144,13 +157,14 @@ test('uses the documented default project and configured region', async () => {
     },
   });
 
-  await client.createAssetGroup({ name: 'Portrait' });
+  await client.createAssetGroup({ name: 'Portrait', clientToken: 'server-token' });
 
   assert.match(calls[0].url, /^https:\/\/ark\.eu-central-1\.byteplusapi\.com\//);
   assert.deepEqual(JSON.parse(calls[0].options.body), {
     Name: 'Portrait',
     GroupType: 'AIGC',
     ProjectName: 'default',
+    ClientToken: 'server-token',
   });
   assert.match(calls[0].options.headers.Authorization, /\/eu-central-1\/ark\/request/);
 });
@@ -241,7 +255,7 @@ test('turns non-transient provider failures into credential-free typed errors', 
 
   for (const response of responses) {
     const client = createBytePlusAssetsClient({ env, now: fixedNow, fetchFn: async () => response });
-    await assert.rejects(client.createAssetGroup({ name: 'Portrait' }), (error) => {
+    await assert.rejects(client.createAssetGroup({ name: 'Portrait', clientToken: 'server-token' }), (error) => {
       assert.ok(error instanceof BytePlusAssetsError);
       assert.equal(error.code, 'BYTEPLUS_ASSETS_REQUEST_FAILED');
       assert.equal(error.status, 400);

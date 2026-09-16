@@ -80,6 +80,9 @@ test('route exposes only allowlisted safe errors from configuration and validati
     [Object.assign(new Error('Image assets only'), {
       code: 'BYTEPLUS_ASSET_TYPE_UNSUPPORTED', status: 400, providerAssetId: 'provider-secret', providerBody: 'raw failure',
     }), 400, 'BYTEPLUS_ASSET_TYPE_UNSUPPORTED', 'Only image assets can be trusted for Seedance.'],
+    [Object.assign(new Error('local://download?signature=provider-secret'), {
+      code: 'BYTEPLUS_ASSET_SOURCE_UNAVAILABLE', status: 503,
+    }), 503, 'BYTEPLUS_ASSET_SOURCE_UNAVAILABLE', 'Asset storage is not available to BytePlus.'],
   ];
 
   for (const [failure, status, code, message] of cases) {

@@ -173,19 +173,22 @@ export function createBytePlusAssetsClient({ env = process.env, fetchFn = global
   }
 
   return {
-    createAssetGroup({ name, description } = {}) {
+    createAssetGroup({ name, description, clientToken } = {}) {
       requireNonEmptyString(name);
+      requireNonEmptyString(clientToken);
       return request('CreateAssetGroup', {
         Name: name,
         ...(description ? { Description: description } : {}),
         GroupType: 'AIGC',
         ProjectName: projectName,
+        ClientToken: clientToken,
       });
     },
-    createAsset({ groupId, url, name } = {}) {
+    createAsset({ groupId, url, name, clientToken } = {}) {
       requireNonEmptyString(groupId);
       requireNonEmptyString(url);
       requireNonEmptyString(name);
+      requireNonEmptyString(clientToken);
       return request('CreateAsset', {
         GroupId: groupId,
         URL: url,
@@ -193,6 +196,7 @@ export function createBytePlusAssetsClient({ env = process.env, fetchFn = global
         AssetType: 'Image',
         Moderation: { Strategy: 'Skip' },
         ProjectName: projectName,
+        ClientToken: clientToken,
       });
     },
     getAsset({ assetId } = {}) {

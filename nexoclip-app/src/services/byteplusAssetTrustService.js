@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto';
 import { getPool } from '../db/pool.js';
 import {
+  compareAndSetBytePlusAssetLinkStatus,
   createProcessingBytePlusAssetLink,
   findBytePlusAssetLink,
   resetBytePlusAssetLink,
@@ -21,6 +23,37 @@ const INVALID_STATE_FAILURE = {
   code: 'BYTEPLUS_ASSET_INVALID_STATE',
   message: 'Trusted asset is unavailable. Retry trust.',
 };
+
+function clientToken(workspaceId, assetId, operation) {
+  return createHash('sha256').update(`byteplus-assets:v1:${workspaceId}:${assetId}:${operation}`).digest('hex');
+}
+
+function unavailableSourceError() {
+  return new BytePlusAssetTrustError('Asset storage is not available to BytePlus.', {
+    code: 'BYTEPLUS_ASSET_SOURCE_UNAVAILABLE',
+    status: 503,
+  });
+}
+
+async function createProviderSourceUrl(storage, storageKey) {
+  let sourceUrl;
+  try {
+    const download = await storage.createDownloadUrl({
+      key: storageKey,
+      expiresInSeconds: SOURCE_URL_TTL_SECONDS,
+    });
+    sourceUrl = download?.url || download;
+  } catch {
+    throw unavailableSourceError();
+  }
+  try {
+    if (new URL(sourceUrl).protocol !== 'https:') throw unavailableSourceError();
+  } catch (error) {
+    if (error instanceof BytePlusAssetTrustError) throw error;
+    throw unavailableSourceError();
+  }
+  return sourceUrl;
+}
 
 export class BytePlusAssetTrustError extends Error {
   constructor(message, { code, status } = {}) {
@@ -54,6 +87,7 @@ function requireProviderId(result) {
 }
 
 const defaultRepository = {
+  compareAndSetBytePlusAssetLinkStatus,
   createProcessingBytePlusAssetLink,
   findBytePlusAssetLink,
   resetBytePlusAssetLink,
@@ -114,11 +148,15 @@ export function createBytePlusAssetTrustService({
       }
       prepared = true;
 
+      const sourceUrl = !link.provider_asset_id
+        ? await createProviderSourceUrl(storage, asset.storage_key)
+        : null;
       let groupId = link.group_id;
       if (!groupId) {
         groupId = requireProviderId(await provider.createAssetGroup({
           name: asset.filename,
           description: 'NexoClip workspace asset',
+          clientToken: clientToken(workspaceId, assetId, 'create-group'),
         }));
         link = await repository.updateBytePlusAssetLink(client, {
           workspaceId,
@@ -130,15 +168,11 @@ export function createBytePlusAssetTrustService({
       }
 
       if (!link.provider_asset_id) {
-        const download = await storage.createDownloadUrl({
-          key: asset.storage_key,
-          expiresInSeconds: SOURCE_URL_TTL_SECONDS,
-        });
-        const sourceUrl = download?.url || download;
         const providerAssetId = requireProviderId(await provider.createAsset({
           groupId,
           url: sourceUrl,
           name: asset.filename,
+          clientToken: clientToken(workspaceId, assetId, 'create-asset'),
         }));
         link = await repository.updateBytePlusAssetLink(client, {
           workspaceId,
@@ -174,6 +208,7 @@ export function createBytePlusAssetTrustService({
   }
 
   async function getTrust(workspaceId, assetId) {
+    const provider = assetsClientFactory({ env });
     const client = await pool.connect();
     try {
       const asset = await loadAsset(client, workspaceId, assetId);
@@ -181,25 +216,28 @@ export function createBytePlusAssetTrustService({
       const link = await repository.findBytePlusAssetLink(client, workspaceId, assetId);
       if (!link) return { status: 'not_trusted' };
       if (link.status === 'active' && !link.provider_asset_id) {
-        const failed = await repository.updateBytePlusAssetLink(client, {
+        const failed = await repository.compareAndSetBytePlusAssetLinkStatus(client, {
           workspaceId,
           localAssetId: assetId,
+          expectedStatus: 'active',
+          expectedProviderAssetId: null,
           status: 'failed',
           error: INVALID_STATE_FAILURE,
         });
-        return projectBytePlusTrustState(failed);
+        return projectBytePlusTrustState(failed || await repository.findBytePlusAssetLink(client, workspaceId, assetId));
       }
       if (link.status !== 'processing' || !link.provider_asset_id) return projectBytePlusTrustState(link);
 
-      const provider = assetsClientFactory({ env });
       const state = mapBytePlusAssetStatus(await provider.getAsset({ assetId: link.provider_asset_id }));
-      const updated = await repository.updateBytePlusAssetLink(client, {
+      const updated = await repository.compareAndSetBytePlusAssetLinkStatus(client, {
         workspaceId,
         localAssetId: assetId,
+        expectedStatus: 'processing',
+        expectedProviderAssetId: link.provider_asset_id,
         status: state.status,
         error: state.error || null,
       });
-      return projectBytePlusTrustState(updated);
+      return projectBytePlusTrustState(updated || await repository.findBytePlusAssetLink(client, workspaceId, assetId));
     } finally {
       client.release();
     }

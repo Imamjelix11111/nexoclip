@@ -19,7 +19,13 @@ export function validateAssetInput(input) {
 
 export function createStorage(env = process.env) {
   if (env.R2_BUCKET && env.R2_PUBLIC_URL && env.R2_ACCOUNT_ID && env.R2_ACCESS_KEY_ID && env.R2_SECRET_ACCESS_KEY) {
-    return new R2ObjectStorage();
+    return new R2ObjectStorage({
+      bucket: env.R2_BUCKET,
+      publicUrl: env.R2_PUBLIC_URL,
+      accountId: env.R2_ACCOUNT_ID,
+      accessKeyId: env.R2_ACCESS_KEY_ID,
+      secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+    });
   }
   return new LocalObjectStorage({
     root: env.LOCAL_OBJECT_STORAGE_DIR || '.local-object-storage',
@@ -35,6 +41,9 @@ export function createReferenceStorage(env = process.env, fallback = createStora
     return new R2ObjectStorage({
       bucket: env.R2_BUCKET_NAME,
       publicUrl: env.R2_PUBLIC_URL || 'https://legacy-reference.invalid',
+      accountId: env.R2_ACCOUNT_ID,
+      accessKeyId: env.R2_ACCESS_KEY_ID,
+      secretAccessKey: env.R2_SECRET_ACCESS_KEY,
     });
   }
   return fallback;
@@ -69,7 +78,6 @@ export async function listWorkspaceAssets(workspaceId, pool = getPool()) {
   return result.rows.map(({
     byteplus_trust_status: status,
     byteplus_has_provider_asset: hasProviderAsset,
-    byteplus_trust_error: _ignoredError,
     ...asset
   }) => ({
     ...asset,

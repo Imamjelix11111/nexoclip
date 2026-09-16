@@ -14,6 +14,7 @@ const safeErrors = {
   BYTEPLUS_ASSETS_INVALID_RESPONSE: ['BytePlus Assets API returned an invalid response.', 502],
   BYTEPLUS_ASSETS_INVALID_INPUT: ['BytePlus Assets API input is invalid.', 400],
   BYTEPLUS_ASSET_TYPE_UNSUPPORTED: ['Only image assets can be trusted for Seedance.', 400],
+  BYTEPLUS_ASSET_SOURCE_UNAVAILABLE: ['Asset storage is not available to BytePlus.', 503],
   BYTEPLUS_ASSET_TRUST_FAILED: ['Unable to update trusted asset.', 502],
 };
 

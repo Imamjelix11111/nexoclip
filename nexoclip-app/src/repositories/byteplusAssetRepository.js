@@ -40,6 +40,20 @@ export async function updateBytePlusAssetLink(client, {
   return result.rows[0] || null;
 }
 
+export async function compareAndSetBytePlusAssetLinkStatus(client, {
+  workspaceId, localAssetId, expectedStatus, expectedProviderAssetId, status, error,
+}) {
+  const result = await client.query(
+    `UPDATE byteplus_asset_links
+     SET status = $5, error = $6::jsonb, updated_at = now()
+     WHERE workspace_id = $1 AND local_asset_id = $2
+       AND status = $3 AND provider_asset_id IS NOT DISTINCT FROM $4
+     RETURNING ${columns}`,
+    [workspaceId, localAssetId, expectedStatus, expectedProviderAssetId, status, error && JSON.stringify(error)],
+  );
+  return result.rows[0] || null;
+}
+
 export async function resetBytePlusAssetLink(client, workspaceId, localAssetId) {
   const result = await client.query(
     `UPDATE byteplus_asset_links

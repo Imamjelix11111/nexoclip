@@ -4,9 +4,9 @@ import { BytePlusAssetsError } from '../../src/providers/byteplusAssetsClient.js
 import { listWorkspaceAssets } from '../../src/services/assetService.js';
 import { createBytePlusAssetTrustService } from '../../src/services/byteplusAssetTrustService.js';
 
-function fixture({ asset, link } = {}) {
+function fixture({ asset, link, casLosesTo } = {}) {
   let current = link ? { ...link } : null;
-  const calls = { queries: [], downloads: [], groups: [], assets: [], gets: [], resets: 0 };
+  const calls = { queries: [], downloads: [], groups: [], assets: [], gets: [], resets: 0, cas: [] };
   const client = {
     async query(text, values) {
       calls.queries.push({ text, values });
@@ -39,6 +39,16 @@ function fixture({ asset, link } = {}) {
         status: input.status,
         error: input.error ?? null,
       };
+      return { ...current };
+    },
+    async compareAndSetBytePlusAssetLinkStatus(_client, input) {
+      calls.cas.push(input);
+      if (casLosesTo) {
+        current = { ...current, ...casLosesTo };
+        return null;
+      }
+      if (current.status !== input.expectedStatus || current.provider_asset_id !== input.expectedProviderAssetId) return null;
+      current = { ...current, status: input.status, error: input.error ?? null };
       return { ...current };
     },
     async resetBytePlusAssetLink() {
@@ -77,14 +87,32 @@ test('starts image trust in the workspace with a short-lived source URL and safe
 
   assert.deepEqual(await service.startTrust('workspace-1', 'asset-1'), { status: 'processing' });
   assert.deepEqual(calls.downloads, [{ key: 'workspace-1/asset-1', expiresInSeconds: 300 }]);
-  assert.deepEqual(calls.groups, [{ name: 'portrait.png', description: 'NexoClip workspace asset' }]);
-  assert.deepEqual(calls.assets, [{
+  assert.deepEqual(calls.groups.map(({ clientToken, ...input }) => input), [{
+    name: 'portrait.png', description: 'NexoClip workspace asset',
+  }]);
+  assert.deepEqual(calls.assets.map(({ clientToken, ...input }) => input), [{
     groupId: 'group-secret', url: 'https://objects.example/source.png?signature=secret', name: 'portrait.png',
   }]);
+  assert.match(calls.groups[0].clientToken, /^[a-f0-9]{64}$/);
+  assert.match(calls.assets[0].clientToken, /^[a-f0-9]{64}$/);
+  assert.notEqual(calls.groups[0].clientToken, calls.assets[0].clientToken);
   assert.deepEqual(calls.queries.find(({ text }) => text.includes('FROM assets')).values, ['workspace-1', 'asset-1']);
   assert.match(calls.queries.find(({ text }) => text.includes('FROM assets')).text, /FOR UPDATE/);
   assert.equal(getLink().provider_asset_id, 'provider-asset-secret');
   assert.doesNotMatch(JSON.stringify(await service.getTrust('workspace-1', 'asset-1')), /secret|signature|group/i);
+});
+
+test('provider create tokens are deterministic per workspace asset and operation', async () => {
+  const first = fixture({ asset: image });
+  const retry = fixture({ asset: image });
+
+  await first.service.startTrust('workspace-1', 'asset-1');
+  await retry.service.startTrust('workspace-1', 'asset-1');
+
+  assert.equal(first.calls.groups[0].clientToken, retry.calls.groups[0].clientToken);
+  assert.equal(first.calls.assets[0].clientToken, retry.calls.assets[0].clientToken);
+  assert.notEqual(first.calls.groups[0].clientToken, first.calls.assets[0].clientToken);
+  assert.deepEqual(await first.service.getTrust('workspace-1', 'asset-1'), { status: 'processing' });
 });
 
 test('rejects non-images and cannot see assets from another workspace', async () => {
@@ -142,20 +170,63 @@ test('POST resumes incomplete processing links without duplicating an existing g
   assert.equal(incomplete.calls.assets[0].groupId, 'existing-group');
 });
 
-test('missing BytePlus configuration fails before changing trust state', async () => {
-  const { calls, getLink } = fixture({ asset: image });
-  const unconfigured = createBytePlusAssetTrustService({
-    pool: { async connect() { throw new Error('database must not be touched'); } },
-    storage: { async createDownloadUrl() { throw new Error('storage must not be touched'); } },
-    env: {},
+test('missing BytePlus configuration fails at the start of POST and every GET state', async () => {
+  for (const operation of ['startTrust', 'getTrust']) {
+    for (const existingLink of [null, { status: 'active' }, { status: 'failed' }]) {
+      let databaseTouches = 0;
+      const unconfigured = createBytePlusAssetTrustService({
+        pool: { async connect() {
+          databaseTouches += 1;
+          return {
+            async query(text) {
+              databaseTouches += 1;
+              if (text.includes('FROM assets')) return { rows: [{ ...image }] };
+              return { rows: existingLink ? [{ ...existingLink }] : [] };
+            },
+            release() {},
+          };
+        } },
+        storage: { async createDownloadUrl() { throw new Error('storage must not be touched'); } },
+        env: {},
+      });
+      await assert.rejects(
+        unconfigured[operation]('workspace-1', 'asset-1'),
+        (error) => error instanceof BytePlusAssetsError && error.code === 'BYTEPLUS_ASSETS_NOT_CONFIGURED',
+      );
+      assert.equal(databaseTouches, 0);
+    }
+  }
+});
+
+test('local storage fails safely before creating any BytePlus resource', async () => {
+  const { calls } = fixture({ asset: image });
+  const local = createBytePlusAssetTrustService({
+    pool: { async connect() { return {
+      async query(text) {
+        calls.queries.push({ text });
+        if (text.includes('FROM assets')) return { rows: [{ ...image }] };
+        return { rows: [] };
+      },
+      release() {},
+    }; } },
+    storage: { async createDownloadUrl() { return { url: 'local://download?signature=secret' }; } },
+    assetsClientFactory: () => ({
+      async createAssetGroup(input) { calls.groups.push(input); },
+      async createAsset(input) { calls.assets.push(input); },
+    }),
+    repository: {
+      async findBytePlusAssetLink() { return null; },
+      async createProcessingBytePlusAssetLink() {
+        return { workspace_id: 'workspace-1', local_asset_id: 'asset-1', status: 'processing', group_id: null, provider_asset_id: null };
+      },
+    },
   });
 
-  await assert.rejects(
-    unconfigured.startTrust('workspace-1', 'asset-1'),
-    (error) => error instanceof BytePlusAssetsError && error.code === 'BYTEPLUS_ASSETS_NOT_CONFIGURED',
-  );
+  await assert.rejects(local.startTrust('workspace-1', 'asset-1'), (error) => (
+    error.code === 'BYTEPLUS_ASSET_SOURCE_UNAVAILABLE' && error.status === 503
+  ));
   assert.equal(calls.groups.length, 0);
-  assert.equal(getLink(), null);
+  assert.equal(calls.assets.length, 0);
 });
 
 test('GET refreshes processing links to active or a canonical failed state', async () => {
@@ -174,6 +245,27 @@ test('GET refreshes processing links to active or a canonical failed state', asy
     error: { code: 'BYTEPLUS_ASSET_PROCESSING_FAILED', message: 'BytePlus could not process this asset.' },
   });
   assert.doesNotMatch(JSON.stringify(failed.getLink().error), /raw provider failure/);
+});
+
+test('GET compare-and-set loss reloads current state instead of regressing it', async () => {
+  const stale = fixture({
+    asset: image,
+    link: {
+      workspace_id: 'workspace-1', local_asset_id: 'asset-1', status: 'processing', provider_asset_id: 'provider-1',
+    },
+    casLosesTo: { status: 'active', provider_asset_id: 'provider-repaired' },
+  });
+  stale.provider.getAsset = async () => ({ Status: 'Failed' });
+
+  assert.deepEqual(await stale.service.getTrust('workspace-1', 'asset-1'), { status: 'active' });
+  assert.deepEqual(stale.calls.cas[0], {
+    workspaceId: 'workspace-1',
+    localAssetId: 'asset-1',
+    expectedStatus: 'processing',
+    expectedProviderAssetId: 'provider-1',
+    status: 'failed',
+    error: { code: 'BYTEPLUS_ASSET_PROCESSING_FAILED', message: 'BytePlus could not process this asset.' },
+  });
 });
 
 test('GET safely retries provider refresh errors and reports missing mappings', async () => {
@@ -196,7 +288,6 @@ test('workspace listing adds only safe trust state and preserves ordinary asset 
     size_bytes: 42,
     created_at: '2026-09-16T00:00:00.000Z',
     byteplus_trust_status: 'failed',
-    byteplus_trust_error: { Message: 'raw provider error', provider_asset_id: 'provider-secret' },
     byteplus_has_provider_asset: true,
   }];
   let sql;

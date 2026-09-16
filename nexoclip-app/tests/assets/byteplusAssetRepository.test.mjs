@@ -80,6 +80,24 @@ test('update changes only the workspace-owned local asset link', async () => {
   assert.deepEqual(calls[0].values, ['workspace-1', 'asset-1', 'group-1', 'provider-1', 'active', null]);
 });
 
+test('status refresh compare-and-set scopes the expected status and provider asset id', async () => {
+  const { compareAndSetBytePlusAssetLinkStatus } = await repository();
+  const calls = [];
+  const row = { id: 'link-1', status: 'active', provider_asset_id: 'provider-1' };
+  const client = { async query(text, values) { calls.push({ text, values }); return { rows: [row] }; } };
+
+  assert.equal(await compareAndSetBytePlusAssetLinkStatus(client, {
+    workspaceId: 'workspace-1',
+    localAssetId: 'asset-1',
+    expectedStatus: 'processing',
+    expectedProviderAssetId: 'provider-1',
+    status: 'active',
+    error: null,
+  }), row);
+  assert.match(calls[0].text, /status = \$3 AND provider_asset_id IS NOT DISTINCT FROM \$4/);
+  assert.deepEqual(calls[0].values, ['workspace-1', 'asset-1', 'processing', 'provider-1', 'active', null]);
+});
+
 test('reset clears provider state only for the workspace-owned local asset link', async () => {
   const { resetBytePlusAssetLink } = await repository();
   const calls = [];
