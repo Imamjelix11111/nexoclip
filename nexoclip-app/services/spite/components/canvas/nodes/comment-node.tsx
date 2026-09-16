@@ -61,6 +61,7 @@ function CommentNodeImpl({ id, data, selected }: NodeProps) {
       <button
         type="button"
         onPointerDown={(event) => event.stopPropagation()}
+        onDoubleClick={(e) => { e.preventDefault(); e.stopPropagation() }}
         onClick={(e) => {
           e.preventDefault()
           e.stopPropagation()

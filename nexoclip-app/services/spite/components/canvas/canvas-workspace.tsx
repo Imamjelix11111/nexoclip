@@ -67,7 +67,9 @@ import { StickerNode, getLastSticker } from './nodes/sticker-node'
 import { CompressNode } from './nodes/compress-node'
 import { RealtimePresenceOverlay } from './realtime-presence'
 import { CanvasCollaborationProvider } from './canvas-collaboration'
+import { useCanvasCollaboration } from './canvas-collaboration'
 import { resolveFollowTarget } from '@/lib/canvas-node-interactions'
+import { selectLegacyNoteDeletionIds } from '@/lib/legacy-notes'
 
 const NODE_TYPES: NodeTypes = {
   imageGen: ImageNode,
@@ -266,6 +268,19 @@ function StickerGhost({ containerRef }: { containerRef: React.RefObject<HTMLDivE
       {getLastSticker()}
     </div>
   )
+}
+
+function LegacyNoteCleanup() {
+  const { allNodes, deleteNodes } = useCanvasCollaboration()
+  const scheduledRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    const nextIds = selectLegacyNoteDeletionIds(allNodes as any, scheduledRef.current)
+    if (nextIds.length > 0) {
+      // Batch delete through the authoritative collaborative command
+      deleteNodes(nextIds)
+    }
+  }, [allNodes, deleteNodes])
+  return null
 }
 
 function CanvasInner({ projectId }: { projectId: string }) {
@@ -1169,6 +1184,8 @@ function CanvasInner({ projectId }: { projectId: string }) {
     >
       <div className="flex flex-col h-screen bg-[#080A0C] overflow-hidden">
       <OnboardingTour surface="canvas" />
+      {/* Auto-remove any persisted legacy note nodes on sync/hydration */}
+      <LegacyNoteCleanup />
       {/* Scene Timeline */}
       <SceneTimeline
         scenes={scenesWithShots}

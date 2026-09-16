@@ -113,6 +113,8 @@ export function JobsPanel({ open, onClose }: { open: boolean; onClose: () => voi
           </span>
         </div>
         <button
+          type="button"
+          aria-label="Close jobs panel"
           onClick={onClose}
           className="flex items-center justify-center w-6 h-6 rounded-md glass-hover text-muted-foreground hover:text-foreground transition-colors"
           title="Close jobs panel"
