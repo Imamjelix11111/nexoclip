@@ -5,5 +5,7 @@ ENV XDG_DATA_HOME=/tmp/caddy/data \
 
 COPY --chown=1001:1001 deploy/caddy/Caddyfile /etc/caddy/Caddyfile
 
+RUN setcap -r /usr/bin/caddy
+
 USER 1001:1001
 EXPOSE 8080
