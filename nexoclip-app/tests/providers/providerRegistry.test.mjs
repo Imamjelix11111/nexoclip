@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   getDirectProvider,
+  resolveDirectProviderModel,
+  createBytePlusEndpointNotConfiguredError,
   isRetryableProviderError,
   createDirectProviderUnavailableError,
 } from '../../src/providers/providerRegistry.js';
@@ -29,4 +31,32 @@ test('creates safe unsupported direct provider error', () => {
   assert.equal(error.status, 503);
   assert.equal(error.model, 'unknown/model');
   assert.match(error.message, /fallback direct provider/i);
+});
+
+test('maps dedicated BytePlus aliases to environment-backed endpoints', () => {
+  const mapping = getDirectProvider('byteplus/seedance-2.0-unfiltered');
+  assert.deepEqual(mapping, {
+    provider: 'byteplus',
+    model: 'byteplus/seedance-2.0-unfiltered',
+    endpointEnv: 'BYTEPLUS_SEEDANCE_2_ENDPOINT',
+  });
+  assert.equal(resolveDirectProviderModel(mapping, {
+    BYTEPLUS_SEEDANCE_2_ENDPOINT: ' ep-20260916130459-fw94z ',
+  }), 'ep-20260916130459-fw94z');
+});
+
+test('fails closed when a dedicated BytePlus endpoint is not configured', () => {
+  const mapping = getDirectProvider('byteplus/seedance-2.5-unfiltered');
+  assert.throws(
+    () => resolveDirectProviderModel(mapping, {}),
+    (error) => error.code === 'BYTEPLUS_ENDPOINT_NOT_CONFIGURED'
+      && error.status === 503
+      && error.endpointEnv === 'BYTEPLUS_SEEDANCE_2_5_ENDPOINT',
+  );
+});
+
+test('keeps standard BytePlus models on base model ids', () => {
+  const mapping = getDirectProvider('dreamina-seedance-2-0-260128');
+  assert.equal(mapping.endpointEnv, undefined);
+  assert.equal(resolveDirectProviderModel(mapping, {}), 'dreamina-seedance-2-0-260128');
 });

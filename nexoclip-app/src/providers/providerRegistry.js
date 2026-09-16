@@ -10,6 +10,10 @@ const DIRECT_MODEL_MAP = new Map([
   ['seedream-4-5-251128', { provider: 'byteplus', model: 'seedream-4-5-251128' }],
   ['seedream-4-0-250828', { provider: 'byteplus', model: 'seedream-4-0-250828' }],
   ['seedream-3.0-t2i', { provider: 'byteplus', model: 'seedream-3.0-t2i' }],
+  // Dedicated unfiltered aliases resolved via env-backed endpoint IDs
+  ['byteplus/seedance-2.0-unfiltered', { provider: 'byteplus', model: 'byteplus/seedance-2.0-unfiltered', endpointEnv: 'BYTEPLUS_SEEDANCE_2_ENDPOINT' }],
+  ['byteplus/seedance-2.5-unfiltered', { provider: 'byteplus', model: 'byteplus/seedance-2.5-unfiltered', endpointEnv: 'BYTEPLUS_SEEDANCE_2_5_ENDPOINT' }],
+  ['byteplus/seedream-5.0-pro-unfiltered', { provider: 'byteplus', model: 'byteplus/seedream-5.0-pro-unfiltered', endpointEnv: 'BYTEPLUS_SEEDREAM_5_ENDPOINT' }],
   ['ep-20260907150312-xx7gf', { provider: 'byteplus', model: 'ep-20260907150312-xx7gf' }],
   ['ep-20260907150433-zg8fr', { provider: 'byteplus', model: 'ep-20260907150433-zg8fr' }],
   ['ep-20260904190604-p8pjl', { provider: 'byteplus', model: 'ep-20260904190604-p8pjl' }],
@@ -56,6 +60,20 @@ export function getDirectProvider(model) {
   const namespaceEnd = prefix[0].indexOf('/');
   const directModel = namespaceEnd === -1 ? normalized : normalized.slice(namespaceEnd + 1);
   return { provider: prefix[1], model: directModel };
+}
+
+export function createBytePlusEndpointNotConfiguredError(model, endpointEnv) {
+  return Object.assign(
+    new Error(`BytePlus endpoint for ${model} is not configured`),
+    { code: 'BYTEPLUS_ENDPOINT_NOT_CONFIGURED', status: 503, model, endpointEnv },
+  );
+}
+
+export function resolveDirectProviderModel(mapping, env = process.env) {
+  if (!mapping?.endpointEnv) return mapping?.model;
+  const endpoint = env[mapping.endpointEnv]?.trim();
+  if (!endpoint) throw createBytePlusEndpointNotConfiguredError(mapping.model, mapping.endpointEnv);
+  return endpoint;
 }
 
 export function isRetryableProviderError(error) {

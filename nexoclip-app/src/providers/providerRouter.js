@@ -5,7 +5,7 @@ import { createGoogleImageAdapter } from './direct/imageAdapters.js';
 import { createBytePlusImageAdapter } from './direct/imageAdapters.js';
 import { createBytePlusAdapter } from './direct/byteplusAdapter.js';
 import { createOpenAIVideoAdapter } from './direct/openaiVideoAdapter.js';
-import { getDirectProvider, isRetryableProviderError, createDirectProviderUnavailableError } from './providerRegistry.js';
+import { getDirectProvider, resolveDirectProviderModel, isRetryableProviderError, createDirectProviderUnavailableError } from './providerRegistry.js';
 
 function directConfigured(env, provider) {
   if (provider === 'google') return Boolean(env.GEMINI_API_KEY || env.GOOGLE_API_KEY);
@@ -56,18 +56,21 @@ export function createProviderRouter({ env = process.env, fetch: fetchImpl = glo
       }
       const adapter = directAdapter(env, mapping.provider, operation, fetchImpl);
       if (!adapter) throw createDirectProviderUnavailableError(params.model, mapping.provider);
-      const result = operation === 'image' ? await adapter.generate({ ...params, model: mapping.model }) : await adapter.submit({ ...params, model: mapping.model });
+      const directModel = resolveDirectProviderModel(mapping, env);
+      const result = operation === 'image' ? await adapter.generate({ ...params, model: directModel }) : await adapter.submit({ ...params, model: directModel });
       return { ...result, provider: mapping.provider };
     }
   }
 
-  function run(operation, params, primary) {
+  async function run(operation, params, primary) {
     const mapping = getDirectProvider(params.model);
     // BytePlus endpoint IDs are deployment-specific and are not valid OpenRouter model IDs.
-    if (mapping?.provider === 'byteplus' && params.model.startsWith('ep-')) {
+    // Dedicated aliases with endpointEnv must resolve to endpoint IDs and route directly as well.
+    if (mapping?.provider === 'byteplus' && (mapping.endpointEnv || params.model.startsWith('ep-'))) {
       if (!directConfigured(env, 'byteplus')) throw createDirectProviderUnavailableError(params.model, 'byteplus');
       const adapter = directAdapter(env, 'byteplus', operation, fetchImpl);
-      const directParams = { ...params, model: mapping.model };
+      const directModel = resolveDirectProviderModel(mapping, env);
+      const directParams = { ...params, model: directModel };
       return operation === 'image' ? adapter.generate(directParams) : adapter.submit(directParams);
     }
     return withFallback(operation, params, primary);
