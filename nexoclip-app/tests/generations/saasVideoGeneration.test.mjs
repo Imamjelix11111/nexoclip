@@ -20,3 +20,25 @@ test('durable video handler submits, polls, downloads, and persists a tenant ass
   assert.equal(result.outputs[0].assetId, 'asset-1');
   assert.equal(puts.length, 1);
 });
+
+test('durable video handler writes directly when storage has no presigned upload API', async () => {
+  const puts = [];
+  const handler = createSaasVideoHandler({
+    pool: { async connect() { return { release() {} }; } },
+    storage: { async put(...args) { puts.push(args); } },
+    providerRouter: {
+      async submitVideo() { return { id: 'provider-job', provider: 'byteplus' }; },
+      async pollVideo() { return { status: 'completed' }; },
+      async downloadVideo() { return { buffer: Buffer.from('video'), contentType: 'video/mp4' }; },
+    },
+    createAsset: async () => ({ id: 'asset-1' }),
+    sleep: async () => {},
+  });
+
+  await handler({ id: 'job-1', workspace_id: 'workspace-1', model: 'byteplus/dreamina-seedance-2-0-260128', prompt: 'hello', parameters: {} });
+
+  assert.equal(puts.length, 1);
+  assert.match(puts[0][0], /^workspace-1\//);
+  assert.equal(puts[0][1].toString(), 'video');
+  assert.equal(puts[0][2], 'video/mp4');
+});
