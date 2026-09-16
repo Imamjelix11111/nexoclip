@@ -49,6 +49,41 @@ test('exposes only the three focused Assets API operations', () => {
   assert.deepEqual(Object.keys(client).sort(), ['createAsset', 'createAssetGroup', 'getAsset']);
 });
 
+test('rejects empty required inputs locally with a safe non-retryable error', () => {
+  let sideEffects = 0;
+  const client = createBytePlusAssetsClient({
+    env,
+    now: () => {
+      sideEffects += 1;
+      return fixedNow();
+    },
+    fetchFn: async () => {
+      sideEffects += 1;
+      return jsonResponse({ Result: {} });
+    },
+  });
+  const invalidCalls = [
+    () => client.createAssetGroup({ name: ' ' }),
+    () => client.createAsset({ groupId: '', url: 'https://objects.example/source.png', name: 'Character' }),
+    () => client.createAsset({ groupId: 'group-1', url: ' ', name: 'Character' }),
+    () => client.createAsset({ groupId: 'group-1', url: 'https://objects.example/source.png', name: undefined }),
+    () => client.getAsset({ assetId: '' }),
+  ];
+
+  for (const call of invalidCalls) {
+    assert.throws(call, (error) => {
+      assert.ok(error instanceof BytePlusAssetsError);
+      assert.equal(error.code, 'BYTEPLUS_ASSETS_INVALID_INPUT');
+      assert.equal(error.status, 400);
+      assert.equal(error.retryable, false);
+      assert.equal(error.message, 'BytePlus Assets API input is invalid.');
+      assert.doesNotMatch(JSON.stringify(error), /objects\.example|Character/);
+      return true;
+    });
+  }
+  assert.equal(sideEffects, 0);
+});
+
 test('signs CreateAssetGroup and sends the exact AIGC group body', async () => {
   const { client, calls } = recordingClient({ Result: { Id: 'group-1' } });
 
@@ -154,6 +189,28 @@ test('returns retryable typed errors for transport and transient HTTP failures',
       assert.equal(error.retryable, true);
       assert.equal(error.message, 'BytePlus Assets API is temporarily unavailable.');
       assert.doesNotMatch(JSON.stringify(error), /AKIDEXAMPLE|secret-key-value/);
+      return true;
+    });
+  }
+});
+
+test('maps allowlisted transient HTTP 200 error envelopes to safe retryable failures', async () => {
+  for (const code of ['Throttling', 'RequestLimitExceeded', 'InternalError', 'ServiceUnavailable']) {
+    const client = createBytePlusAssetsClient({
+      env,
+      now: fixedNow,
+      fetchFn: async () => jsonResponse({
+        ResponseMetadata: { Error: { Code: code, Message: `sensitive ${code} provider body` } },
+      }),
+    });
+
+    await assert.rejects(client.getAsset({ assetId: 'asset-1' }), (error) => {
+      assert.ok(error instanceof BytePlusAssetsError);
+      assert.equal(error.code, 'BYTEPLUS_ASSETS_UNAVAILABLE');
+      assert.equal(error.status, 503);
+      assert.equal(error.retryable, true);
+      assert.equal(error.message, 'BytePlus Assets API is temporarily unavailable.');
+      assert.doesNotMatch(JSON.stringify(error), new RegExp(`${code}|sensitive|provider body`));
       return true;
     });
   }

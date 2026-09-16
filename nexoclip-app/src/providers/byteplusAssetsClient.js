@@ -4,6 +4,18 @@ const SERVICE = 'ark';
 const VERSION = '2024-01-01';
 const SIGNED_HEADERS = 'content-type;host;x-content-sha256;x-date';
 const TRANSIENT_STATUSES = new Set([408, 409, 429, 500, 502, 503, 504]);
+const TRANSIENT_ERROR_CODES = new Set([
+  'InternalError',
+  'InternalServiceError',
+  'RateLimitExceeded',
+  'RequestLimitExceeded',
+  'ServiceUnavailable',
+  'ServiceUnavailableException',
+  'Throttling',
+  'ThrottlingException',
+  'TooManyRequests',
+  'TooManyRequestsException',
+]);
 
 export class BytePlusAssetsError extends Error {
   constructor(message, { code, status, retryable = false } = {}) {
@@ -80,6 +92,17 @@ function invalidResponseError() {
   });
 }
 
+function invalidInputError() {
+  return new BytePlusAssetsError('BytePlus Assets API input is invalid.', {
+    code: 'BYTEPLUS_ASSETS_INVALID_INPUT',
+    status: 400,
+  });
+}
+
+function requireNonEmptyString(value) {
+  if (typeof value !== 'string' || !value.trim()) throw invalidInputError();
+}
+
 export function mapBytePlusAssetStatus(payload) {
   const result = payload?.Result || payload || {};
   if (result.Status === 'Active') return { status: 'active' };
@@ -140,13 +163,18 @@ export function createBytePlusAssetsClient({ env = process.env, fetchFn = global
     } catch {
       throw invalidResponseError();
     }
-    if (responseBody?.ResponseMetadata?.Error) throw requestError(400);
+    const providerError = responseBody?.ResponseMetadata?.Error;
+    if (providerError) {
+      if (TRANSIENT_ERROR_CODES.has(providerError.Code)) throw unavailableError();
+      throw requestError(400);
+    }
     if (!responseBody?.Result || typeof responseBody.Result !== 'object') throw invalidResponseError();
     return responseBody.Result;
   }
 
   return {
     createAssetGroup({ name, description } = {}) {
+      requireNonEmptyString(name);
       return request('CreateAssetGroup', {
         Name: name,
         ...(description ? { Description: description } : {}),
@@ -155,16 +183,20 @@ export function createBytePlusAssetsClient({ env = process.env, fetchFn = global
       });
     },
     createAsset({ groupId, url, name } = {}) {
+      requireNonEmptyString(groupId);
+      requireNonEmptyString(url);
+      requireNonEmptyString(name);
       return request('CreateAsset', {
         GroupId: groupId,
         URL: url,
-        ...(name ? { Name: name } : {}),
+        Name: name,
         AssetType: 'Image',
         Moderation: { Strategy: 'Skip' },
         ProjectName: projectName,
       });
     },
     getAsset({ assetId } = {}) {
+      requireNonEmptyString(assetId);
       return request('GetAsset', { Id: assetId, ProjectName: projectName });
     },
   };
