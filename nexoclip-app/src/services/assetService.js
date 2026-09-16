@@ -54,16 +54,33 @@ export async function createAssetUpload(workspaceId, input, storage = createStor
   return { asset: result.rows[0], upload };
 }
 
-export async function listWorkspaceAssets(workspaceId) {
+export async function listWorkspaceAssets(workspaceId, pool = getPool()) {
   if (!workspaceId) throw new Error('workspace_id is required');
-  const result = await getPool().query(
-    `SELECT id, workspace_id, storage_key, filename, content_type, size_bytes, created_at
-     FROM assets WHERE workspace_id = $1 ORDER BY created_at DESC`,
+  const result = await pool.query(
+    `SELECT a.id, a.workspace_id, a.storage_key, a.filename, a.content_type, a.size_bytes, a.created_at,
+            bal.status AS byteplus_trust_status,
+            bal.provider_asset_id IS NOT NULL AS byteplus_has_provider_asset
+     FROM assets a
+     LEFT JOIN byteplus_asset_links bal
+       ON bal.workspace_id = a.workspace_id AND bal.local_asset_id = a.id
+     WHERE a.workspace_id = $1 ORDER BY a.created_at DESC`,
     [workspaceId],
   );
-  return result.rows.map((asset) => ({
+  return result.rows.map(({
+    byteplus_trust_status: status,
+    byteplus_has_provider_asset: hasProviderAsset,
+    byteplus_trust_error: _ignoredError,
+    ...asset
+  }) => ({
     ...asset,
     url: `/api/assets/${encodeURIComponent(asset.id)}/download?workspace_id=${encodeURIComponent(workspaceId)}`,
+    byteplus_trust: !status
+      ? { status: 'not_trusted' }
+      : status === 'active' && !hasProviderAsset
+        ? { status: 'failed', error: { code: 'BYTEPLUS_ASSET_INVALID_STATE', message: 'Trusted asset is unavailable. Retry trust.' } }
+        : status === 'failed'
+          ? { status: 'failed', error: { code: 'BYTEPLUS_ASSET_PROCESSING_FAILED', message: 'BytePlus could not process this asset.' } }
+          : { status },
   }));
 }
 
