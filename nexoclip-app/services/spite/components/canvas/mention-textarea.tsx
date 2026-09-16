@@ -13,7 +13,7 @@ import { createPortal } from 'react-dom'
 import { X, User, Package, MapPin, Folder, Check, PencilSimple, Trash } from '@phosphor-icons/react'
 import { AssetThumb } from './asset-thumb'
 import { mentionStateKey } from '@/lib/mention-state'
-import { placeMentionMenu } from '@/lib/mention-position'
+import { isUsableCaretRect, placeMentionMenu } from '@/lib/mention-position'
 
 export type FolderType = 'character' | 'prop' | 'location' | 'general'
 
@@ -483,8 +483,7 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
       const q = findActiveAtQuery()
       if (q && q.range) {
         const r = q.range.getBoundingClientRect()
-        if (r.width === 0 || r.height === 0) caretRect = el.getBoundingClientRect()
-        else caretRect = r
+        caretRect = isUsableCaretRect(r) ? r : el.getBoundingClientRect()
       } else {
         caretRect = el.getBoundingClientRect()
       }
