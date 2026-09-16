@@ -1,17 +1,31 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 
-const migrationUrl = new URL('../../src/db/migrations/024_byteplus_asset_links.sql', import.meta.url);
+const migrationsUrl = new URL('../../src/db/migrations/', import.meta.url);
+const assetKeyMigrationUrl = new URL('013_generation_outputs_usage.sql', migrationsUrl);
+const migrationUrl = new URL('024_byteplus_asset_links.sql', migrationsUrl);
 const repositoryUrl = new URL('../../src/repositories/byteplusAssetRepository.js', import.meta.url);
 
 async function repository() {
   return import(repositoryUrl);
 }
 
-test('migration defines workspace-owned BytePlus asset links', async () => {
-  const sql = await readFile(migrationUrl, 'utf8');
+test('migration runs after its composite asset key dependency and defines matching constraints', async () => {
+  const filenames = (await readdir(migrationsUrl))
+    .filter((filename) => filename.endsWith('.sql'))
+    .sort();
+  const dependencyIndex = filenames.indexOf('013_generation_outputs_usage.sql');
+  const migrationIndex = filenames.indexOf('024_byteplus_asset_links.sql');
+  const [assetKeySql, sql] = await Promise.all([
+    readFile(assetKeyMigrationUrl, 'utf8'),
+    readFile(migrationUrl, 'utf8'),
+  ]);
 
+  assert.notEqual(dependencyIndex, -1);
+  assert.ok(migrationIndex > dependencyIndex);
+  assert.match(assetKeySql, /CREATE UNIQUE INDEX IF NOT EXISTS assets_workspace_id_id_idx\s+ON assets \(workspace_id, id\)/);
+  assert.match(sql, /-- Requires 013_generation_outputs_usage\.sql: assets\(workspace_id, id\)/);
   assert.match(sql, /FOREIGN KEY \(workspace_id, local_asset_id\)\s+REFERENCES assets\(workspace_id, id\) ON DELETE CASCADE/);
   assert.match(sql, /CHECK \(status IN \('processing', 'active', 'failed'\)\)/);
   assert.match(sql, /UNIQUE \(workspace_id, local_asset_id\)/);
