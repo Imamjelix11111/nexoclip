@@ -483,6 +483,10 @@ export const MentionTextarea = forwardRef<MentionTextareaRef, Props>(function Me
       const q = findActiveAtQuery()
       if (q && q.range) {
         const r = q.range.getBoundingClientRect()
+        // A collapsed caret (selection collapsed at an insertion point)
+        // often reports width === 0. That is expected — accept zero-width
+        // rects as usable (isUsableCaretRect enforces monotonic edges and
+        // positive height while allowing width === 0).
         caretRect = isUsableCaretRect(r) ? r : el.getBoundingClientRect()
       } else {
         caretRect = el.getBoundingClientRect()

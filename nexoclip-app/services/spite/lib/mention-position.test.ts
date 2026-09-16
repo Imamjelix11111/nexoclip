@@ -45,3 +45,28 @@ test('clamps horizontally to viewport margins', () => {
     { width: 1200, height: 800 },
   ).left, 952)
 })
+
+// Additional geometry edge-case tests
+
+test('clamps left to margin when menu is wider than viewport', () => {
+  const pos = placeMentionMenu(
+    { left: 600, right: 600, top: 400, bottom: 420 },
+    { width: 1400, height: 180 },
+    { width: 1200, height: 800 },
+  )
+  assert.equal(pos.left, 8)
+})
+
+test('clamps top to margin when menu is taller than viewport or viewport is very small', () => {
+  const pos = placeMentionMenu(
+    { left: 100, right: 120, top: 200, bottom: 220 },
+    { width: 240, height: 1000 },
+    { width: 1200, height: 500 },
+  )
+  assert.equal(pos.top, 8)
+})
+
+test('rejects inverted caret rects where right < left or bottom <= top', () => {
+  assert.equal(isUsableCaretRect({ left: 100, right: 90, top: 200, bottom: 210, width: -10, height: 10 }), false)
+  assert.equal(isUsableCaretRect({ left: 100, right: 120, top: 200, bottom: 200, width: 20, height: 0 }), false)
+})
