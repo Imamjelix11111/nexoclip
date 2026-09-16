@@ -8,6 +8,7 @@ test('exposes only the requested direct model families', () => {
   assert.ok(getImageModels().every((model) => ['google', 'openai', 'byteplus'].includes(model.provider)))
   assert.deepEqual(getVideoModels().map((model) => model.name), [
     'Seedance 2.0',
+    'Seedance 2.0 Unfiltered',
     'Seedance 2.5',
     'Seedance 2.5 Unfiltered',
   ])

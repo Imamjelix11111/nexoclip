@@ -85,10 +85,10 @@ export function createBytePlusImageAdapter({ apiKey, baseUrl, fetch: fetchImpl =
   if (!baseUrl) throw new TypeError('baseUrl is required');
   const root = String(baseUrl).replace(/\/+$/, '');
   return { async generate({ model, prompt, aspectRatio, resolution, referenceImages }) {
-    // BytePlus accepts resolution presets via `size`; do NOT send aspect ratio-mapped dimensions as `size`.
-    // Seedream 4.5 deployment doesn't support 1K; upgrade to 2K when requested.
+    // Deployment endpoints accept resolution presets; base models use explicit dimensions to preserve ratio.
     const providerResolution = model === 'ep-20260907150312-xx7gf' && resolution?.toUpperCase() === '1K' ? '2K' : resolution;
-    const size = providerResolution;
+    const presetOnly = model.startsWith('ep-') || model.includes('seedream-5-0-pro');
+    const size = presetOnly ? providerResolution : bytePlusImageSize(aspectRatio, providerResolution);
     let response;
     try {
       response = await fetchImpl(`${root}/images/generations`, {
