@@ -138,9 +138,11 @@ test('retryable GET failures remain processing and use bounded backoff', async (
   assert.equal(bytePlusTrustPollDelay(20), 30000)
 })
 
-test('image generator and image reference nodes expose the shared trust toolbar action', () => {
+test('image generator and image reference nodes expose trust only while selected', () => {
   assert.match(imageNodeSource, /useImageTrust/)
   assert.match(referenceNodeSource, /useImageTrust/)
+  assert.match(imageNodeSource, /enabled: Boolean\(selected\).*Boolean\(outputUrl\)/)
+  assert.match(referenceNodeSource, /enabled: Boolean\(selected\).*Boolean\(thumbnail\)/)
   assert.match(nodeToolbarSource, /trustAction/)
   assert.match(nodeToolbarSource, /Trust for Seedance/)
 })
