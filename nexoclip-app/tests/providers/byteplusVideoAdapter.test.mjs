@@ -92,6 +92,26 @@ test('submit converts frame images to BytePlus reference images', async () => {
   assert.equal(body.duration, 5);
 });
 
+test('submit preserves trusted asset URIs and reference image ordering', async () => {
+  let request;
+  const adapter = createBytePlusAdapter({
+    apiKey: 'secret', baseUrl: 'https://ark.example/api/v3',
+    fetch: async (url, options) => { request = { url, options }; return jsonResponse({ id: 'cgt-1' }); },
+  });
+
+  await adapter.submit({
+    model: 'dreamina-seedance-2-0-mini-260615',
+    prompt: 'animate in order',
+    referenceImages: ['asset://provider-first', 'data:image/png;base64,c2Vjb25k', 'asset://provider-third'],
+  });
+
+  const body = JSON.parse(request.options.body);
+  assert.deepEqual(
+    body.content.filter((part) => part.type === 'image_url').map((part) => part.image_url.url),
+    ['asset://provider-first', 'data:image/png;base64,c2Vjb25k', 'asset://provider-third'],
+  );
+});
+
 test('submit sends reference images with the reference_image role BytePlus requires', async () => {
   let request;
   const adapter = createBytePlusAdapter({

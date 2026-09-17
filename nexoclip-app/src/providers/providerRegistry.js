@@ -39,6 +39,8 @@ const DIRECT_MODEL_MAP = new Map([
   ['openai/sora-2-pro', { provider: 'openai', model: 'sora-2-pro' }],
 ]);
 
+const DIRECT_BYTEPLUS_VIDEO_ENDPOINTS = new Set(['ep-20260904190604-p8pjl']);
+
 const DIRECT_PREFIXES = [
   ['google/', 'google'],
   ['gemini-', 'google'],
@@ -74,6 +76,14 @@ export function resolveDirectProviderModel(mapping, env = process.env) {
   const endpoint = env[mapping.endpointEnv]?.trim();
   if (!endpoint) throw createBytePlusEndpointNotConfiguredError(mapping.model, mapping.endpointEnv);
   return endpoint;
+}
+
+export function isDirectBytePlusSeedance(model, env = process.env) {
+  const mapping = getDirectProvider(model);
+  if (mapping?.provider !== 'byteplus') return false;
+  const resolvedModel = resolveDirectProviderModel(mapping, env);
+  return DIRECT_BYTEPLUS_VIDEO_ENDPOINTS.has(resolvedModel)
+    || [model, mapping.model, mapping.endpointEnv].some((value) => /seedance/i.test(value || ''));
 }
 
 export function isRetryableProviderError(error) {
