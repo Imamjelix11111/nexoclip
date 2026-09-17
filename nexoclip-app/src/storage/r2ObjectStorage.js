@@ -25,6 +25,15 @@ function formatDate(date) {
   return date.toISOString().replace(/[:-]|\.\d{3}/g, '');
 }
 
+function objectKey(value, bucket, accountId) {
+  if (!/^https?:\/\//i.test(value)) return value;
+  const url = new URL(value);
+  if (url.protocol !== 'https:' || url.hostname !== `${accountId}.r2.cloudflarestorage.com`) throw new Error('Invalid R2 download URL');
+  const [encodedBucket, ...parts] = url.pathname.slice(1).split('/');
+  if (decodeURIComponent(encodedBucket) !== bucket || !parts.length) throw new Error('Invalid R2 download URL');
+  return parts.map(decodeURIComponent).join('/');
+}
+
 export function createR2Client({
   accountId = required('R2_ACCOUNT_ID'),
   accessKeyId = required('R2_ACCESS_KEY_ID'),
@@ -92,7 +101,7 @@ export class R2ObjectStorage {
   }
 
   async get(key) {
-    const response = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+    const response = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: objectKey(key, this.bucket, this.accountId) }));
     const bytes = typeof response.Body?.transformToByteArray === 'function'
       ? await response.Body.transformToByteArray()
       : response.Body;

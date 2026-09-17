@@ -41,6 +41,31 @@ test('creates a 300-second provider-fetchable presigned HTTPS GET URL', async ()
   assert.doesNotMatch(download.url, /secret-key/);
 });
 
+test('downloads an object when given its presigned R2 URL', async () => {
+  const calls = [];
+  const storage = new R2ObjectStorage({
+    bucket: 'images',
+    publicUrl: 'https://cdn.example.test',
+    accountId: 'account-id',
+    accessKeyId: 'access-key',
+    secretAccessKey: 'secret-key',
+    now: () => new Date('2026-09-16T12:34:56.000Z'),
+    client: {
+      send: async (command) => {
+        calls.push(command.input);
+        return { Body: { transformToByteArray: async () => Uint8Array.from([105, 109, 97, 103, 101]) }, ContentType: 'image/png' };
+      },
+    },
+  });
+  const download = await storage.createDownloadUrl({ key: 'workspace/a b!(1).png' });
+
+  const object = await storage.get(download.url);
+
+  assert.equal(calls[0].Key, 'workspace/a b!(1).png');
+  assert.equal(object.body.toString(), 'image');
+  assert.equal(object.contentType, 'image/png');
+});
+
 test('downloads R2 streams as provider-readable buffers', async () => {
   const storage = new R2ObjectStorage({
     bucket: 'images',
