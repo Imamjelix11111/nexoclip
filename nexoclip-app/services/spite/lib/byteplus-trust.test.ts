@@ -1,5 +1,11 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
+
+const toolbarSource = readFileSync(
+  new URL('../components/canvas/left-toolbar.tsx', import.meta.url),
+  'utf8',
+)
 
 import {
   applyBytePlusTrustState,
@@ -23,6 +29,14 @@ test('trust UI is available only for workspace images', () => {
     label: 'Not trusted for Seedance',
     action: 'Trust for Seedance',
     disabled: false,
+  })
+})
+
+test('an in-flight POST disables trust before the server reports processing', () => {
+  assert.deepEqual(trustForSeedanceView('image', { status: 'not_trusted' }, true), {
+    label: 'Trusting for Seedance',
+    action: 'Trusting…',
+    disabled: true,
   })
 })
 
@@ -64,6 +78,29 @@ test('polling runs only for a visible selected image that is processing', () => 
   assert.equal(shouldPollBytePlusTrust({ detailVisible: true, type: 'video', status: 'processing' }), false)
   assert.equal(shouldPollBytePlusTrust({ detailVisible: true, type: 'image', status: 'active' }), false)
   assert.equal(shouldPollBytePlusTrust({ detailVisible: true, type: 'image', status: 'failed' }), false)
+})
+
+test('both detail layouts wire the shared trust action to the selected asset in-flight state', () => {
+  assert.equal(
+    toolbarSource.match(/inFlight=\{trustingAssetIds\.has\(selectedGenAsset\.id\)\}/g)?.length,
+    2,
+  )
+  assert.match(toolbarSource, /if \(trustRequestsRef\.current\.has\(asset\.id\)\) return/)
+  assert.match(toolbarSource, /trustRequestsRef\.current\.add\(asset\.id\)/)
+  assert.match(toolbarSource, /trustRequestsRef\.current\.delete\(asset\.id\)/)
+})
+
+test('processing trust polling uses one recursive timeout with cleanup, not an overlapping interval', () => {
+  const pollingEffect = toolbarSource.slice(
+    toolbarSource.indexOf('if (!shouldPollBytePlusTrust'),
+    toolbarSource.indexOf('// Listen for asset status changes'),
+  )
+
+  assert.match(pollingEffect, /await requestBytePlusTrust/)
+  assert.match(pollingEffect, /window\.setTimeout\(poll, 2000\)/)
+  assert.match(pollingEffect, /window\.clearTimeout\(timeout\)/)
+  assert.doesNotMatch(pollingEffect, /setInterval/)
+  assert.match(pollingEffect, /if \(cancelled\) return/)
 })
 
 test('trust responses update the matching list item without requiring an ID in the payload', () => {

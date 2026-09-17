@@ -107,13 +107,15 @@ interface GeneratedAsset {
 function TrustForSeedance({
   type,
   state,
+  inFlight,
   onTrust,
 }: {
   type: GeneratedAsset['type']
   state: BytePlusTrustState
+  inFlight: boolean
   onTrust: () => void
 }) {
-  const view = trustForSeedanceView(type, state)
+  const view = trustForSeedanceView(type, state, inFlight)
   if (!view) return null
 
   return (
@@ -135,7 +137,7 @@ function TrustForSeedance({
           aria-label={view.action}
           className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-accent/20 text-accent text-xs hover:bg-accent/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {state.status === 'processing' ? <CircleNotch size={13} className="animate-spin" aria-hidden="true" /> : <ShieldCheck size={13} aria-hidden="true" />}
+          {inFlight || state.status === 'processing' ? <CircleNotch size={13} className="animate-spin" aria-hidden="true" /> : <ShieldCheck size={13} aria-hidden="true" />}
           {view.action}
         </button>
       ) : null}
@@ -190,6 +192,8 @@ export function LeftToolbar({
   const [historyFilter, setHistoryFilter] = useState<'all' | 'image' | 'video' | 'audio' | 'uploads'>('all')
   const [historySearch, setHistorySearch] = useState('')
   const [selectedGenAsset, setSelectedGenAsset] = useState<GeneratedAsset | null>(null)
+  const trustRequestsRef = useRef(new Set<string>())
+  const [trustingAssetIds, setTrustingAssetIds] = useState<Set<string>>(new Set())
   // What the expanded panel's main area is showing. The sidebar drives this.
   type ExpandedView =
     | { kind: 'history' }
@@ -335,12 +339,22 @@ export function LeftToolbar({
   const trustSelectedAsset = async () => {
     const asset = selectedGenAsset
     if (!asset || asset.type !== 'image' || asset.byteplus_trust?.status === 'processing') return
+    if (trustRequestsRef.current.has(asset.id)) return
 
+    trustRequestsRef.current.add(asset.id)
+    setTrustingAssetIds(current => new Set(current).add(asset.id))
     let state: BytePlusTrustState
     try {
       state = await requestBytePlusTrust(asset.id, 'POST')
     } catch {
       state = { status: 'failed' }
+    } finally {
+      trustRequestsRef.current.delete(asset.id)
+      setTrustingAssetIds(current => {
+        const next = new Set(current)
+        next.delete(asset.id)
+        return next
+      })
     }
     setTrustState(asset.id, state)
     if (state.status === 'failed') toast.error(safeBytePlusTrustError(state.error))
@@ -355,21 +369,23 @@ export function LeftToolbar({
       status: state.status,
     })) return
 
+    const assetId = asset!.id
     let cancelled = false
-    const poll = async () => {
+    let timeout = window.setTimeout(poll, 2000)
+    async function poll() {
       let next: BytePlusTrustState
       try {
-        next = await requestBytePlusTrust(asset!.id, 'GET')
+        next = await requestBytePlusTrust(assetId, 'GET')
       } catch {
         next = { status: 'failed' }
       }
       if (cancelled) return
-      setTrustState(asset!.id, next, next.status !== 'processing')
+      setTrustState(assetId, next, next.status !== 'processing')
+      if (next.status === 'processing') timeout = window.setTimeout(poll, 2000)
     }
-    const interval = window.setInterval(poll, 2000)
     return () => {
       cancelled = true
-      window.clearInterval(interval)
+      window.clearTimeout(timeout)
     }
   }, [historyOpen, selectedGenAsset?.id, selectedGenAsset?.type, selectedGenAsset?.byteplus_trust?.status, mutateAssets])
 
@@ -1353,6 +1369,7 @@ export function LeftToolbar({
                 <TrustForSeedance
                   type={selectedGenAsset.type}
                   state={selectedGenAsset.byteplus_trust ?? { status: 'not_trusted' }}
+                  inFlight={trustingAssetIds.has(selectedGenAsset.id)}
                   onTrust={trustSelectedAsset}
                 />
 
@@ -1855,6 +1872,7 @@ export function LeftToolbar({
               <TrustForSeedance
                 type={selectedGenAsset.type}
                 state={selectedGenAsset.byteplus_trust ?? { status: 'not_trusted' }}
+                inFlight={trustingAssetIds.has(selectedGenAsset.id)}
                 onTrust={trustSelectedAsset}
               />
 

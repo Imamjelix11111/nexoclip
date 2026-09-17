@@ -15,10 +15,10 @@ export function safeBytePlusTrustError(error?: { code?: string; message?: string
     : 'Could not trust this image. Try again.'
 }
 
-export function trustForSeedanceView(type: string, state: BytePlusTrustState) {
+export function trustForSeedanceView(type: string, state: BytePlusTrustState, inFlight = false) {
   if (type !== 'image') return null
 
-  if (state.status === 'processing') {
+  if (inFlight || state.status === 'processing') {
     return { label: 'Trusting for Seedance', action: 'Trusting…', disabled: true }
   }
   if (state.status === 'active') {
