@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBytePlusAdapter } from '../../src/providers/direct/byteplusAdapter.js';
-import { createProviderRouter } from '../../src/providers/providerRouter.js';
+import { createProviderRouter, markTrustedAssetRequest } from '../../src/providers/providerRouter.js';
 
 function jsonResponse(body, { status = 200 } = {}) {
   return { ok: status >= 200 && status < 300, status, headers: { get: () => 'application/json' }, json: async () => body };
@@ -41,12 +41,12 @@ test('routes registered Seedance with trusted assets directly without calling Op
     },
   });
 
-  const result = await router.submitVideo({
+  const result = await router.submitVideo(markTrustedAssetRequest({
     model: 'bytedance/seedance-2.5',
     prompt: 'a cat running',
     referenceImages: ['asset://trusted-reference'],
     frameImages: [{ image_url: { url: 'asset://trusted-frame' }, frame_type: 'first_frame' }],
-  });
+  }));
 
   assert.equal(result.provider, 'byteplus');
   assert.equal(bytePlusBody.model, 'dreamina-seedance-2-5-260628');

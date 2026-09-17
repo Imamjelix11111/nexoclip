@@ -4,6 +4,7 @@ import { withBasePath } from '@/lib/base-path'
 import { workspaceAssetDeleteUrl } from '@/lib/workspace-asset-delete'
 import {
   applyBytePlusTrustState,
+  bytePlusTrustPollDelay,
   type BytePlusTrustState,
   requestBytePlusTrust,
   safeBytePlusTrustError,
@@ -194,6 +195,7 @@ export function LeftToolbar({
   const [selectedGenAsset, setSelectedGenAsset] = useState<GeneratedAsset | null>(null)
   const trustRequestsRef = useRef(new Set<string>())
   const [trustingAssetIds, setTrustingAssetIds] = useState<Set<string>>(new Set())
+  const [documentVisible, setDocumentVisible] = useState(true)
   // What the expanded panel's main area is showing. The sidebar drives this.
   type ExpandedView =
     | { kind: 'history' }
@@ -321,6 +323,13 @@ export function LeftToolbar({
   const propFolders = useMemo(() => folders.filter(f => f.type === 'prop'), [folders])
   const locationFolders = useMemo(() => folders.filter(f => f.type === 'location'), [folders])
   
+  useEffect(() => {
+    const updateVisibility = () => setDocumentVisible(!document.hidden)
+    updateVisibility()
+    document.addEventListener('visibilitychange', updateVisibility)
+    return () => document.removeEventListener('visibilitychange', updateVisibility)
+  }, [])
+
   // Keep selectedGenAsset in sync with latest data from SWR
   useEffect(() => {
     if (selectedGenAsset) {
@@ -364,6 +373,7 @@ export function LeftToolbar({
     const asset = selectedGenAsset
     const state = asset?.byteplus_trust ?? { status: 'not_trusted' as const }
     if (!shouldPollBytePlusTrust({
+      documentVisible,
       detailVisible: historyOpen && Boolean(asset),
       type: asset?.type,
       status: state.status,
@@ -371,7 +381,8 @@ export function LeftToolbar({
 
     const assetId = asset!.id
     let cancelled = false
-    let timeout = window.setTimeout(poll, 2000)
+    let attempt = 0
+    let timeout = window.setTimeout(poll, bytePlusTrustPollDelay(attempt))
     async function poll() {
       let next: BytePlusTrustState
       try {
@@ -381,13 +392,16 @@ export function LeftToolbar({
       }
       if (cancelled) return
       setTrustState(assetId, next, next.status !== 'processing')
-      if (next.status === 'processing') timeout = window.setTimeout(poll, 2000)
+      if (next.status === 'processing') {
+        attempt += 1
+        timeout = window.setTimeout(poll, bytePlusTrustPollDelay(attempt))
+      }
     }
     return () => {
       cancelled = true
       window.clearTimeout(timeout)
     }
-  }, [historyOpen, selectedGenAsset?.id, selectedGenAsset?.type, selectedGenAsset?.byteplus_trust?.status, mutateAssets])
+  }, [documentVisible, historyOpen, selectedGenAsset?.id, selectedGenAsset?.type, selectedGenAsset?.byteplus_trust?.status, mutateAssets])
 
   // Listen for asset status changes (from canvas node deletion)
   useEffect(() => {

@@ -35,16 +35,22 @@ export function trustForSeedanceView(type: string, state: BytePlusTrustState, in
   return { label: 'Not trusted for Seedance', action: 'Trust for Seedance', disabled: false }
 }
 
+export function bytePlusTrustPollDelay(attempt: number) {
+  return Math.min(30_000, 2_000 * (2 ** Math.max(0, attempt)))
+}
+
 export function shouldPollBytePlusTrust({
+  documentVisible = true,
   detailVisible,
   type,
   status,
 }: {
+  documentVisible?: boolean
   detailVisible: boolean
   type?: string
   status?: BytePlusTrustStatus
 }) {
-  return detailVisible && type === 'image' && status === 'processing'
+  return documentVisible && detailVisible && type === 'image' && status === 'processing'
 }
 
 export function applyBytePlusTrustState<T extends { id: string; byteplus_trust?: BytePlusTrustState }>(
@@ -60,12 +66,20 @@ export async function requestBytePlusTrust(
   method: 'GET' | 'POST',
   fetchFn: typeof fetch = fetch,
 ): Promise<BytePlusTrustState> {
-  const response = await fetchFn(bytePlusTrustUrl(assetId), { method })
+  let response: Response
+  try {
+    response = await fetchFn(bytePlusTrustUrl(assetId), { method })
+  } catch {
+    return method === 'GET' ? { status: 'processing' } : { status: 'failed' }
+  }
   const payload = await response.json().catch(() => ({})) as {
     status?: BytePlusTrustStatus
     error?: { code?: string; message?: string }
   }
   if (!response.ok) {
+    if (method === 'GET' && ([408, 409, 429].includes(response.status) || response.status >= 500)) {
+      return { status: 'processing' }
+    }
     return { status: 'failed', error: { code: payload.error?.code } }
   }
   if (!['not_trusted', 'processing', 'active', 'failed'].includes(payload.status ?? '')) {

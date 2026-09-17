@@ -1,11 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { BytePlusAssetsError } from '../../src/providers/byteplusAssetsClient.js';
 import { listWorkspaceAssets } from '../../src/services/assetService.js';
 import { createBytePlusAssetTrustService } from '../../src/services/byteplusAssetTrustService.js';
 
-function fixture({ asset, link, casLosesTo } = {}) {
-  let current = link ? { ...link } : null;
+function fixture({ asset, link, casLosesTo, now = () => new Date('2026-09-16T12:00:00Z') } = {}) {
+  let current = link ? {
+    project_name: 'project-x',
+    attempt_id: '00000000-0000-4000-8000-000000000001',
+    updated_at: now().toISOString(),
+    group_id: null,
+    provider_asset_id: null,
+    error: null,
+    ...link,
+  } : null;
   const calls = { queries: [], downloads: [], groups: [], assets: [], gets: [], resets: 0, cas: [] };
   const client = {
     async query(text, values) {
@@ -24,6 +33,8 @@ function fixture({ asset, link, casLosesTo } = {}) {
         workspace_id: input.workspaceId,
         local_asset_id: input.localAssetId,
         project_name: input.projectName,
+        attempt_id: input.attemptId,
+        updated_at: now().toISOString(),
         status: 'processing',
         group_id: null,
         provider_asset_id: null,
@@ -32,8 +43,10 @@ function fixture({ asset, link, casLosesTo } = {}) {
       return { ...current };
     },
     async updateBytePlusAssetLink(_client, input) {
+      if (input.expectedAttemptId && current.attempt_id !== input.expectedAttemptId) return null;
       current = {
         ...current,
+        updated_at: now().toISOString(),
         group_id: input.groupId ?? current.group_id,
         provider_asset_id: input.providerAssetId ?? current.provider_asset_id,
         status: input.status,
@@ -51,15 +64,23 @@ function fixture({ asset, link, casLosesTo } = {}) {
       current = { ...current, status: input.status, error: input.error ?? null };
       return { ...current };
     },
-    async resetBytePlusAssetLink() {
+    async resetBytePlusAssetLink(_client, input) {
       calls.resets += 1;
-      current = { ...current, group_id: null, provider_asset_id: null, status: 'processing', error: null };
+      current = {
+        ...current,
+        group_id: input.clearGroup ? null : current.group_id,
+        provider_asset_id: null,
+        attempt_id: input.attemptId,
+        project_name: input.projectName,
+        updated_at: now().toISOString(),
+        status: 'processing', error: null,
+      };
       return { ...current };
     },
   };
   const provider = {
-    async createAssetGroup(input) { calls.groups.push(input); return { Id: 'group-secret' }; },
-    async createAsset(input) { calls.assets.push(input); return { Id: 'provider-asset-secret' }; },
+    async createAssetGroup(input) { calls.groups.push(input); calls.queries.push({ text: 'PROVIDER create-group' }); return { Id: 'group-secret' }; },
+    async createAsset(input) { calls.assets.push(input); calls.queries.push({ text: 'PROVIDER create-asset' }); return { Id: 'provider-asset-secret' }; },
     async getAsset(input) { calls.gets.push(input); return { Status: 'Processing' }; },
   };
   const service = createBytePlusAssetTrustService({
@@ -73,6 +94,8 @@ function fixture({ asset, link, casLosesTo } = {}) {
     assetsClientFactory: () => provider,
     repository,
     env: { BYTEPLUS_PROJECT_NAME: 'project-x' },
+    attemptIdFactory: (() => { let value = 0; return () => `00000000-0000-4000-8000-${String(++value).padStart(12, '0')}`; })(),
+    now,
   });
   return { service, provider, calls, getLink: () => current };
 }
@@ -98,8 +121,26 @@ test('starts image trust in the workspace with a short-lived source URL and safe
   assert.notEqual(calls.groups[0].clientToken, calls.assets[0].clientToken);
   assert.deepEqual(calls.queries.find(({ text }) => text.includes('FROM assets')).values, ['workspace-1', 'asset-1']);
   assert.match(calls.queries.find(({ text }) => text.includes('FROM assets')).text, /FOR UPDATE/);
+  const commitIndex = calls.queries.findIndex(({ text }) => text === 'COMMIT');
+  assert.ok(commitIndex >= 0 && commitIndex < calls.queries.findIndex(({ text }) => text === 'PROVIDER create-group'), 'claim must commit before provider I/O');
   assert.equal(getLink().provider_asset_id, 'provider-asset-secret');
   assert.doesNotMatch(JSON.stringify(await service.getTrust('workspace-1', 'asset-1')), /secret|signature|group/i);
+});
+
+test('failed retry retains the group and rotates only the asset attempt token', async () => {
+  const retry = fixture({ asset: image, link: {
+    workspace_id: 'workspace-1', local_asset_id: 'asset-1', status: 'failed',
+    project_name: 'project-x', group_id: 'stable-group', provider_asset_id: 'failed-asset',
+    attempt_id: '00000000-0000-4000-8000-000000000099',
+  } });
+
+  await retry.service.startTrust('workspace-1', 'asset-1');
+
+  assert.equal(retry.calls.groups.length, 0);
+  assert.equal(retry.calls.assets[0].groupId, 'stable-group');
+  assert.notEqual(retry.getLink().attempt_id, '00000000-0000-4000-8000-000000000099');
+  const failedToken = createHash('sha256').update('byteplus-assets:v1:workspace-1:asset-1:create-asset:00000000-0000-4000-8000-000000000099').digest('hex');
+  assert.notEqual(retry.calls.assets[0].clientToken, failedToken);
 });
 
 test('provider create tokens are deterministic per workspace asset and operation', async () => {
@@ -156,14 +197,28 @@ test('POST retries failed and corrupt active links', async () => {
     const retry = fixture({ asset: image, link });
     assert.deepEqual(await retry.service.startTrust('workspace-1', 'asset-1'), { status: 'processing' });
     assert.equal(retry.calls.resets, 1);
-    assert.equal(retry.calls.groups.length, 1);
+    assert.equal(retry.calls.groups.length, 0);
+    assert.equal(retry.calls.assets.length, 1);
   }
+});
+
+test('concurrent POST returns a fresh durable processing claim without provider I/O', async () => {
+  const claimed = fixture({ asset: image, link: {
+    workspace_id: 'workspace-1', local_asset_id: 'asset-1', status: 'processing',
+    project_name: 'project-x', attempt_id: 'attempt-live', group_id: null, provider_asset_id: null,
+    updated_at: '2026-09-16T11:59:59Z',
+  } });
+
+  assert.deepEqual(await claimed.service.startTrust('workspace-1', 'asset-1'), { status: 'processing' });
+  assert.equal(claimed.calls.groups.length, 0);
+  assert.equal(claimed.calls.assets.length, 0);
 });
 
 test('POST resumes incomplete processing links without duplicating an existing group', async () => {
   const incomplete = fixture({ asset: image, link: {
     workspace_id: 'workspace-1', local_asset_id: 'asset-1', status: 'processing',
     group_id: 'existing-group', provider_asset_id: null,
+    updated_at: '2026-09-16T11:00:00Z',
   } });
   assert.deepEqual(await incomplete.service.startTrust('workspace-1', 'asset-1'), { status: 'processing' });
   assert.equal(incomplete.calls.groups.length, 0);
@@ -200,6 +255,7 @@ test('missing BytePlus configuration fails at the start of POST and every GET st
 
 test('local storage fails safely before creating any BytePlus resource', async () => {
   const { calls } = fixture({ asset: image });
+  let linkCreates = 0;
   const local = createBytePlusAssetTrustService({
     pool: { async connect() { return {
       async query(text) {
@@ -217,6 +273,7 @@ test('local storage fails safely before creating any BytePlus resource', async (
     repository: {
       async findBytePlusAssetLink() { return null; },
       async createProcessingBytePlusAssetLink() {
+        linkCreates += 1;
         return { workspace_id: 'workspace-1', local_asset_id: 'asset-1', status: 'processing', group_id: null, provider_asset_id: null };
       },
     },
@@ -227,6 +284,20 @@ test('local storage fails safely before creating any BytePlus resource', async (
   ));
   assert.equal(calls.groups.length, 0);
   assert.equal(calls.assets.length, 0);
+  assert.equal(linkCreates, 0);
+});
+
+test('project mismatch blocks refresh and worker-safe state requires explicit recreate', async () => {
+  const mismatch = fixture({ asset: image, link: {
+    workspace_id: 'workspace-1', local_asset_id: 'asset-1', status: 'processing',
+    project_name: 'old-project', attempt_id: 'attempt-old', provider_asset_id: 'provider-1',
+  } });
+
+  assert.deepEqual(await mismatch.service.getTrust('workspace-1', 'asset-1'), {
+    status: 'failed',
+    error: { code: 'BYTEPLUS_ASSET_PROJECT_MISMATCH', message: 'Trusted asset belongs to another BytePlus project. Recreate trust.' },
+  });
+  assert.equal(mismatch.calls.gets.length, 0);
 });
 
 test('GET refreshes processing links to active or a canonical failed state', async () => {
@@ -263,6 +334,7 @@ test('GET compare-and-set loss reloads current state instead of regressing it', 
     localAssetId: 'asset-1',
     expectedStatus: 'processing',
     expectedProviderAssetId: 'provider-1',
+    expectedAttemptId: '00000000-0000-4000-8000-000000000001',
     status: 'failed',
     error: { code: 'BYTEPLUS_ASSET_PROCESSING_FAILED', message: 'BytePlus could not process this asset.' },
   });

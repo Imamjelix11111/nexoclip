@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { getPool } from '../db/pool.js';
 import {
   compareAndSetBytePlusAssetLinkStatus,
@@ -23,9 +23,15 @@ const INVALID_STATE_FAILURE = {
   code: 'BYTEPLUS_ASSET_INVALID_STATE',
   message: 'Trusted asset is unavailable. Retry trust.',
 };
+const PROJECT_MISMATCH_FAILURE = {
+  code: 'BYTEPLUS_ASSET_PROJECT_MISMATCH',
+  message: 'Trusted asset belongs to another BytePlus project. Recreate trust.',
+};
+const CLAIM_STALE_MS = 30_000;
 
-function clientToken(workspaceId, assetId, operation) {
-  return createHash('sha256').update(`byteplus-assets:v1:${workspaceId}:${assetId}:${operation}`).digest('hex');
+function clientToken(workspaceId, assetId, operation, attemptId) {
+  const attempt = operation === 'create-asset' ? `:${attemptId}` : '';
+  return createHash('sha256').update(`byteplus-assets:v1:${workspaceId}:${assetId}:${operation}${attempt}`).digest('hex');
 }
 
 function unavailableSourceError() {
@@ -70,7 +76,9 @@ export function projectBytePlusTrustState(link) {
   if (status === 'active' && (link.provider_asset_id === null || link.byteplus_has_provider_asset === false)) {
     return { status: 'failed', error: INVALID_STATE_FAILURE };
   }
-  if (status === 'failed') return { status: 'failed', error: PROCESSING_FAILURE };
+  if (status === 'failed') {
+    return { status: 'failed', error: link?.error?.code === PROJECT_MISMATCH_FAILURE.code ? PROJECT_MISMATCH_FAILURE : PROCESSING_FAILURE };
+  }
   return { status };
 }
 
@@ -100,6 +108,8 @@ export function createBytePlusAssetTrustService({
   assetsClientFactory = createBytePlusAssetsClient,
   repository = defaultRepository,
   env = process.env,
+  attemptIdFactory = randomUUID,
+  now = () => new Date(),
 } = {}) {
   async function loadAsset(client, workspaceId, assetId, { lock = false } = {}) {
     const result = await client.query(
@@ -112,45 +122,54 @@ export function createBytePlusAssetTrustService({
 
   async function startTrust(workspaceId, assetId) {
     const provider = assetsClientFactory({ env });
+    const projectName = env.BYTEPLUS_PROJECT_NAME?.trim() || 'default';
     const client = await pool.connect();
-    let prepared = false;
+    let asset;
+    let link;
+    let sourceUrl;
+    let ownsClaim = false;
     let inTransaction = false;
     try {
       await client.query('BEGIN');
       inTransaction = true;
-      const asset = await loadAsset(client, workspaceId, assetId, { lock: true });
+      asset = await loadAsset(client, workspaceId, assetId, { lock: true });
       if (!asset) {
         await client.query('COMMIT');
-        inTransaction = false;
         return null;
       }
       if (!asset.content_type?.startsWith('image/')) {
         throw new BytePlusAssetTrustError('Only image assets can be trusted for Seedance.', {
-          code: 'BYTEPLUS_ASSET_TYPE_UNSUPPORTED',
-          status: 400,
+          code: 'BYTEPLUS_ASSET_TYPE_UNSUPPORTED', status: 400,
         });
       }
 
-      let link = await repository.findBytePlusAssetLink(client, workspaceId, assetId);
-      if ((link?.status === 'active' && link.provider_asset_id) || (link?.status === 'processing' && link.provider_asset_id)) {
+      link = await repository.findBytePlusAssetLink(client, workspaceId, assetId);
+      const projectMatches = link?.project_name === projectName;
+      if (projectMatches && link?.provider_asset_id && ['active', 'processing'].includes(link.status)) {
         await client.query('COMMIT');
-        inTransaction = false;
         return projectBytePlusTrustState(link);
       }
-      if (link?.status === 'failed' || link?.status === 'active') {
-        link = await repository.resetBytePlusAssetLink(client, workspaceId, assetId);
-      } else if (!link) {
+      const claimAge = now().getTime() - new Date(link?.updated_at || 0).getTime();
+      if (projectMatches && link?.status === 'processing' && !link.provider_asset_id && claimAge < CLAIM_STALE_MS) {
+        await client.query('COMMIT');
+        return projectBytePlusTrustState(link);
+      }
+
+      sourceUrl = await createProviderSourceUrl(storage, asset.storage_key);
+      if (!link) {
         link = await repository.createProcessingBytePlusAssetLink(client, {
-          workspaceId,
-          localAssetId: assetId,
-          projectName: env.BYTEPLUS_PROJECT_NAME?.trim() || 'default',
+          workspaceId, localAssetId: assetId, projectName, attemptId: attemptIdFactory(),
+        });
+      } else if (link.status === 'failed' || link.status === 'active' || !projectMatches) {
+        link = await repository.resetBytePlusAssetLink(client, {
+          workspaceId, localAssetId: assetId, projectName, attemptId: attemptIdFactory(), clearGroup: !projectMatches,
         });
       }
-      prepared = true;
+      ownsClaim = true;
+      await client.query('COMMIT');
+      inTransaction = false;
 
-      const sourceUrl = !link.provider_asset_id
-        ? await createProviderSourceUrl(storage, asset.storage_key)
-        : null;
+      const attemptId = link.attempt_id;
       let groupId = link.group_id;
       if (!groupId) {
         groupId = requireProviderId(await provider.createAssetGroup({
@@ -159,47 +178,32 @@ export function createBytePlusAssetTrustService({
           clientToken: clientToken(workspaceId, assetId, 'create-group'),
         }));
         link = await repository.updateBytePlusAssetLink(client, {
-          workspaceId,
-          localAssetId: assetId,
-          groupId,
-          status: 'processing',
-          error: null,
+          workspaceId, localAssetId: assetId, groupId, status: 'processing', error: null,
+          expectedAttemptId: attemptId,
         });
+        if (!link) return projectBytePlusTrustState(await repository.findBytePlusAssetLink(client, workspaceId, assetId));
       }
 
       if (!link.provider_asset_id) {
         const providerAssetId = requireProviderId(await provider.createAsset({
-          groupId,
-          url: sourceUrl,
-          name: asset.filename,
-          clientToken: clientToken(workspaceId, assetId, 'create-asset'),
+          groupId, url: sourceUrl, name: asset.filename,
+          clientToken: clientToken(workspaceId, assetId, 'create-asset', attemptId),
         }));
         link = await repository.updateBytePlusAssetLink(client, {
-          workspaceId,
-          localAssetId: assetId,
-          groupId,
-          providerAssetId,
-          status: 'processing',
-          error: null,
+          workspaceId, localAssetId: assetId, groupId, providerAssetId, status: 'processing', error: null,
+          expectedAttemptId: attemptId,
         });
+        if (!link) return projectBytePlusTrustState(await repository.findBytePlusAssetLink(client, workspaceId, assetId));
       }
-
-      await client.query('COMMIT');
-      inTransaction = false;
       return projectBytePlusTrustState(link);
     } catch (error) {
-      if (inTransaction && prepared && error instanceof BytePlusAssetsError) {
-        if (!error.retryable) {
-          await repository.updateBytePlusAssetLink(client, {
-            workspaceId,
-            localAssetId: assetId,
-            status: 'failed',
-            error: { code: 'BYTEPLUS_ASSET_TRUST_FAILED', message: 'BytePlus could not trust this asset.' },
-          });
-        }
-        await client.query('COMMIT');
-      } else if (inTransaction) {
-        await client.query('ROLLBACK');
+      if (inTransaction) await client.query('ROLLBACK');
+      if (!inTransaction && ownsClaim && error instanceof BytePlusAssetsError && !error.retryable) {
+        await repository.updateBytePlusAssetLink(client, {
+          workspaceId, localAssetId: assetId, status: 'failed',
+          error: { code: 'BYTEPLUS_ASSET_TRUST_FAILED', message: 'BytePlus could not trust this asset.' },
+          expectedAttemptId: link?.attempt_id,
+        });
       }
       throw error;
     } finally {
@@ -215,12 +219,23 @@ export function createBytePlusAssetTrustService({
       if (!asset) return null;
       const link = await repository.findBytePlusAssetLink(client, workspaceId, assetId);
       if (!link) return { status: 'not_trusted' };
+      const projectName = env.BYTEPLUS_PROJECT_NAME?.trim() || 'default';
+      if (link.project_name !== projectName) {
+        const failed = await repository.compareAndSetBytePlusAssetLinkStatus(client, {
+          workspaceId, localAssetId: assetId,
+          expectedStatus: link.status, expectedProviderAssetId: link.provider_asset_id,
+          expectedAttemptId: link.attempt_id,
+          status: 'failed', error: PROJECT_MISMATCH_FAILURE,
+        });
+        return projectBytePlusTrustState(failed || { ...link, status: 'failed', error: PROJECT_MISMATCH_FAILURE });
+      }
       if (link.status === 'active' && !link.provider_asset_id) {
         const failed = await repository.compareAndSetBytePlusAssetLinkStatus(client, {
           workspaceId,
           localAssetId: assetId,
           expectedStatus: 'active',
           expectedProviderAssetId: null,
+          expectedAttemptId: link.attempt_id,
           status: 'failed',
           error: INVALID_STATE_FAILURE,
         });
@@ -234,6 +249,7 @@ export function createBytePlusAssetTrustService({
         localAssetId: assetId,
         expectedStatus: 'processing',
         expectedProviderAssetId: link.provider_asset_id,
+        expectedAttemptId: link.attempt_id,
         status: state.status,
         error: state.error || null,
       });

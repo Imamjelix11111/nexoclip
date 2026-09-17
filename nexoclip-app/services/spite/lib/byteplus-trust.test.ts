@@ -10,6 +10,8 @@ const toolbarSource = readFileSync(
 import {
   applyBytePlusTrustState,
   bytePlusTrustUrl,
+  bytePlusTrustPollDelay,
+  requestBytePlusTrust,
   safeBytePlusTrustError,
   shouldPollBytePlusTrust,
   trustForSeedanceView,
@@ -72,12 +74,27 @@ test('missing BytePlus configuration gets an actionable setup message', () => {
   )
 })
 
-test('polling runs only for a visible selected image that is processing', () => {
-  assert.equal(shouldPollBytePlusTrust({ detailVisible: true, type: 'image', status: 'processing' }), true)
+test('polling runs only for a visible document and selected processing image', () => {
+  assert.equal(shouldPollBytePlusTrust({ documentVisible: true, detailVisible: true, type: 'image', status: 'processing' }), true)
+  assert.equal(shouldPollBytePlusTrust({ documentVisible: false, detailVisible: true, type: 'image', status: 'processing' }), false)
   assert.equal(shouldPollBytePlusTrust({ detailVisible: false, type: 'image', status: 'processing' }), false)
   assert.equal(shouldPollBytePlusTrust({ detailVisible: true, type: 'video', status: 'processing' }), false)
   assert.equal(shouldPollBytePlusTrust({ detailVisible: true, type: 'image', status: 'active' }), false)
   assert.equal(shouldPollBytePlusTrust({ detailVisible: true, type: 'image', status: 'failed' }), false)
+})
+
+test('retryable GET failures remain processing and use bounded backoff', async () => {
+  const state = await requestBytePlusTrust('asset-1', 'GET', async () => new Response(
+    JSON.stringify({ error: { code: 'BYTEPLUS_ASSETS_UNAVAILABLE' } }),
+    { status: 503, headers: { 'content-type': 'application/json' } },
+  ))
+  assert.deepEqual(state, { status: 'processing' })
+  assert.deepEqual(
+    await requestBytePlusTrust('asset-1', 'GET', async () => { throw new TypeError('network down') }),
+    { status: 'processing' },
+  )
+  assert.equal(bytePlusTrustPollDelay(0), 2000)
+  assert.equal(bytePlusTrustPollDelay(20), 30000)
 })
 
 test('both detail layouts wire the shared trust action to the selected asset in-flight state', () => {
@@ -97,10 +114,13 @@ test('processing trust polling uses one recursive timeout with cleanup, not an o
   )
 
   assert.match(pollingEffect, /await requestBytePlusTrust/)
-  assert.match(pollingEffect, /window\.setTimeout\(poll, 2000\)/)
+  assert.match(pollingEffect, /window\.setTimeout\(poll, bytePlusTrustPollDelay\(attempt\)\)/)
   assert.match(pollingEffect, /window\.clearTimeout\(timeout\)/)
   assert.doesNotMatch(pollingEffect, /setInterval/)
   assert.match(pollingEffect, /if \(cancelled\) return/)
+  assert.match(toolbarSource, /document\.addEventListener\('visibilitychange'/)
+  assert.match(toolbarSource, /document\.hidden/)
+  assert.match(pollingEffect, /bytePlusTrustPollDelay/)
 })
 
 test('trust responses update the matching list item without requiring an ID in the payload', () => {

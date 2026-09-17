@@ -4,6 +4,7 @@ const SERVICE = 'ark';
 const VERSION = '2024-01-01';
 const SIGNED_HEADERS = 'content-type;host;x-content-sha256;x-date';
 const TRANSIENT_STATUSES = new Set([408, 409, 429, 500, 502, 503, 504]);
+const PENDING_STATUSES = new Set(['Processing', 'Queued', 'Pending']);
 const TRANSIENT_ERROR_CODES = new Set([
   'InternalError',
   'InternalServiceError',
@@ -115,7 +116,8 @@ export function mapBytePlusAssetStatus(payload) {
       },
     };
   }
-  return { status: 'processing' };
+  if (PENDING_STATUSES.has(result.Status)) return { status: 'processing' };
+  throw invalidResponseError();
 }
 
 export function createBytePlusAssetsClient({ env = process.env, fetchFn = globalThis.fetch, now = () => new Date() } = {}) {
@@ -130,6 +132,7 @@ export function createBytePlusAssetsClient({ env = process.env, fetchFn = global
 
   const projectName = env.BYTEPLUS_PROJECT_NAME?.trim() || 'default';
   const region = env.BYTEPLUS_REGION?.trim() || 'ap-southeast-1';
+  const requestTimeoutMs = Math.max(1, Number(env.BYTEPLUS_ASSETS_TIMEOUT_MS) || 15_000);
 
   async function request(action, body) {
     const payload = JSON.stringify(body);
@@ -147,6 +150,7 @@ export function createBytePlusAssetsClient({ env = process.env, fetchFn = global
         method: 'POST',
         headers: signed.headers,
         body: payload,
+        signal: AbortSignal.timeout(requestTimeoutMs),
       });
     } catch {
       throw unavailableError();

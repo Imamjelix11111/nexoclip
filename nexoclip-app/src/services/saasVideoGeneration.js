@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { createProviderRouter } from '../providers/providerRouter.js';
+import { createProviderRouter, markTrustedAssetRequest } from '../providers/providerRouter.js';
 import { createGeneratedAsset } from '../repositories/assetMetadataRepository.js';
 import { findBytePlusAssetLink as findStoredBytePlusAssetLink } from '../repositories/byteplusAssetRepository.js';
 import { isDirectBytePlusSeedance } from '../providers/providerRegistry.js';
@@ -43,11 +43,21 @@ function videoRequest(job, { referenceImages, frameImages, referenceVideos }) {
 export function createSaasVideoHandler({ pool, storage, referenceStorage = storage, providerRouter, findBytePlusAssetLink = findStoredBytePlusAssetLink, env = process.env, createAsset = createGeneratedAsset, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), pollIntervalMs = 5_000, maxPolls = 120 }) {
   if (!pool || !storage || !providerRouter) throw new TypeError('pool, storage, and provider router are required');
   return async (job) => {
+    let hasTrustedAsset = false;
+    const projectName = env.BYTEPLUS_PROJECT_NAME?.trim() || 'default';
     const resolveWorkspaceAsset = isDirectBytePlusSeedance(job.model, env)
       ? async ({ workspaceId, assetId }) => {
         const link = await findBytePlusAssetLink(pool, workspaceId, assetId);
         if (!link) return null;
-        if (link.status === 'active' && link.provider_asset_id?.trim()) return `asset://${link.provider_asset_id.trim()}`;
+        if (link.project_name !== projectName) {
+          throw Object.assign(new Error('Trusted BytePlus asset belongs to another project. Recreate Trust for Seedance.'), {
+            code: 'BYTEPLUS_ASSET_PROJECT_MISMATCH', status: 422,
+          });
+        }
+        if (link.status === 'active' && link.provider_asset_id?.trim()) {
+          hasTrustedAsset = true;
+          return `asset://${link.provider_asset_id.trim()}`;
+        }
         throw trustedAssetError(link.status);
       }
       : undefined;
@@ -55,7 +65,8 @@ export function createSaasVideoHandler({ pool, storage, referenceStorage = stora
     const referenceImages = await resolveReferenceImages({ ...resolution, referenceImages: job.parameters?.referenceImages });
     const frameImages = await resolveReferenceImages({ ...resolution, referenceImages: (job.parameters?.frameImages || []).map((frame) => frame.url) });
     const referenceVideos = await resolveReferenceImages({ workspaceId: job.workspace_id, referenceImages: job.parameters?.referenceVideos, pool, storage, referenceStorage });
-    const submitted = await providerRouter.submitVideo(videoRequest(job, { referenceImages, frameImages, referenceVideos }));
+    const request = videoRequest(job, { referenceImages, frameImages, referenceVideos });
+    const submitted = await providerRouter.submitVideo(hasTrustedAsset ? markTrustedAssetRequest(request) : request);
     const provider = submitted.provider || 'openrouter';
     const providerRequestId = submitted.id || submitted.providerRequestId;
     if (!providerRequestId) throw Object.assign(new Error('Provider returned no video request id'), { code: 'PROVIDER_INVALID_RESPONSE' });

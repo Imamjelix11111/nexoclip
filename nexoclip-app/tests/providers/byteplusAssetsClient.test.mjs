@@ -169,15 +169,27 @@ test('uses the documented default project and configured region', async () => {
   assert.match(calls[0].options.headers.Authorization, /\/eu-central-1\/ark\/request/);
 });
 
-test('maps Active, Failed, and every pending status to safe local states', () => {
+test('maps only allowlisted provider statuses and rejects missing or unknown values', () => {
   assert.deepEqual(mapBytePlusAssetStatus({ Result: { Status: 'Active' } }), { status: 'active' });
   assert.deepEqual(
     mapBytePlusAssetStatus({ Result: { Status: 'Failed', Error: { Code: 'SensitiveCode', Message: 'internal provider detail' } } }),
     { status: 'failed', error: { code: 'BYTEPLUS_ASSET_PROCESSING_FAILED', message: 'BytePlus could not process this asset.' } },
   );
-  for (const status of ['Processing', 'Queued', 'Pending', undefined]) {
+  for (const status of ['Processing', 'Queued', 'Pending']) {
     assert.deepEqual(mapBytePlusAssetStatus({ Result: { Status: status } }), { status: 'processing' });
   }
+  for (const status of [undefined, '', 'Mystery']) {
+    assert.throws(
+      () => mapBytePlusAssetStatus({ Result: { Status: status } }),
+      (error) => error.code === 'BYTEPLUS_ASSETS_INVALID_RESPONSE' && error.status === 502,
+    );
+  }
+});
+
+test('bounds provider network calls with an abort timeout', async () => {
+  const { client, calls } = recordingClient();
+  await client.getAsset({ assetId: 'asset-1' });
+  assert.ok(calls[0].options.signal instanceof AbortSignal);
 });
 
 test('returns retryable typed errors for transport and transient HTTP failures', async () => {

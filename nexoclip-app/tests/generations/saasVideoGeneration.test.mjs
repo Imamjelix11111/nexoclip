@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 const { createSaasVideoHandler } = await import('../../src/services/saasVideoGeneration.js');
+const { isTrustedAssetRequest } = await import('../../src/providers/providerRouter.js');
 
 test('durable video handler submits, polls, downloads, and persists a tenant asset', async () => {
   const puts = [];
@@ -46,7 +47,8 @@ function trustedHandler({ links = {}, model = 'bytedance/seedance-2.5', env = {}
     },
     findBytePlusAssetLink: async (_client, workspaceId, assetId) => {
       lookups.push([workspaceId, assetId]);
-      return links[`${workspaceId}:${assetId}`] || null;
+      const link = links[`${workspaceId}:${assetId}`];
+      return link ? { project_name: env.BYTEPLUS_PROJECT_NAME || 'default', ...link } : null;
     },
     createAsset: async () => ({ id: 'output-1' }),
     sleep: async () => {},
@@ -68,6 +70,7 @@ test('active workspace mapping substitutes an asset URI before download for stan
   const request = await runTrusted(setup, { referenceImages: [assetUrl('asset-1')] });
 
   assert.deepEqual(request.referenceImages, ['asset://provider-1']);
+  assert.equal(isTrustedAssetRequest(request), true);
   assert.deepEqual(setup.lookups, [['workspace-1', 'asset-1']]);
   assert.deepEqual(setup.downloads, []);
 });
@@ -141,6 +144,19 @@ for (const providerAssetId of [null, '   ']) {
     );
   });
 }
+
+test('mapping from a different BytePlus project is rejected before substitution', async () => {
+  const setup = trustedHandler({
+    env: { BYTEPLUS_PROJECT_NAME: 'project-current' },
+    links: { 'workspace-1:asset-1': { status: 'active', project_name: 'project-old', provider_asset_id: 'provider-1' } },
+  });
+
+  await assert.rejects(
+    runTrusted(setup, { referenceImages: [assetUrl('asset-1')] }),
+    (error) => error.code === 'BYTEPLUS_ASSET_PROJECT_MISMATCH' && /recreate/i.test(error.message),
+  );
+  assert.deepEqual(setup.downloads, []);
+});
 
 test('cross-workspace mapping is not used', async () => {
   const setup = trustedHandler({ links: { 'workspace-2:asset-1': { status: 'active', provider_asset_id: 'other-workspace-provider' } } });

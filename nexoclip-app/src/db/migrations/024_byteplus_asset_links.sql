@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS byteplus_asset_links (
   local_asset_id UUID NOT NULL,
   group_id TEXT,
   provider_asset_id TEXT,
+  attempt_id UUID NOT NULL DEFAULT gen_random_uuid(),
   status TEXT NOT NULL DEFAULT 'processing'
     CHECK (status IN ('processing', 'active', 'failed')),
   error JSONB,

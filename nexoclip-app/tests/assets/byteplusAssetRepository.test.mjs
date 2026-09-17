@@ -27,6 +27,7 @@ test('migration runs after its composite asset key dependency and defines matchi
   assert.match(assetKeySql, /CREATE UNIQUE INDEX IF NOT EXISTS assets_workspace_id_id_idx\s+ON assets \(workspace_id, id\)/);
   assert.match(sql, /-- Requires 013_generation_outputs_usage\.sql: assets\(workspace_id, id\)/);
   assert.match(sql, /FOREIGN KEY \(workspace_id, local_asset_id\)\s+REFERENCES assets\(workspace_id, id\) ON DELETE CASCADE/);
+  assert.match(sql, /attempt_id UUID NOT NULL/);
   assert.match(sql, /CHECK \(status IN \('processing', 'active', 'failed'\)\)/);
   assert.match(sql, /UNIQUE \(workspace_id, local_asset_id\)/);
 });
@@ -54,12 +55,12 @@ test('processing insert is idempotent without overwriting an existing link', asy
   };
 
   const result = await createProcessingBytePlusAssetLink(client, {
-    workspaceId: 'workspace-1', localAssetId: 'asset-1', projectName: 'project-1',
+    workspaceId: 'workspace-1', localAssetId: 'asset-1', projectName: 'project-1', attemptId: 'attempt-1',
   });
 
   assert.equal(result, existing);
   assert.match(calls[0].text, /ON CONFLICT \(workspace_id, local_asset_id\) DO NOTHING/);
-  assert.deepEqual(calls[0].values, ['workspace-1', 'asset-1', 'project-1']);
+  assert.deepEqual(calls[0].values, ['workspace-1', 'asset-1', 'project-1', 'attempt-1']);
   assert.deepEqual(calls[1].values, ['workspace-1', 'asset-1']);
 });
 
@@ -77,7 +78,7 @@ test('update changes only the workspace-owned local asset link', async () => {
   assert.match(calls[0].text, /group_id = COALESCE\(\$3, group_id\)/);
   assert.match(calls[0].text, /provider_asset_id = COALESCE\(\$4, provider_asset_id\)/);
   assert.match(calls[0].text, /WHERE workspace_id = \$1 AND local_asset_id = \$2/);
-  assert.deepEqual(calls[0].values, ['workspace-1', 'asset-1', 'group-1', 'provider-1', 'active', null]);
+  assert.deepEqual(calls[0].values, ['workspace-1', 'asset-1', 'group-1', 'provider-1', 'active', null, null]);
 });
 
 test('status refresh compare-and-set scopes the expected status and provider asset id', async () => {
@@ -95,17 +96,20 @@ test('status refresh compare-and-set scopes the expected status and provider ass
     error: null,
   }), row);
   assert.match(calls[0].text, /status = \$3 AND provider_asset_id IS NOT DISTINCT FROM \$4/);
-  assert.deepEqual(calls[0].values, ['workspace-1', 'asset-1', 'processing', 'provider-1', 'active', null]);
+  assert.deepEqual(calls[0].values, ['workspace-1', 'asset-1', 'processing', 'provider-1', 'active', null, null]);
 });
 
-test('reset clears provider state only for the workspace-owned local asset link', async () => {
+test('reset retains group quota, clears the failed provider asset, and rotates attempt', async () => {
   const { resetBytePlusAssetLink } = await repository();
   const calls = [];
   const row = { id: 'link-1', status: 'processing' };
   const client = { async query(text, values) { calls.push({ text, values }); return { rows: [row] }; } };
 
-  assert.equal(await resetBytePlusAssetLink(client, 'workspace-1', 'asset-1'), row);
-  assert.match(calls[0].text, /SET group_id = NULL, provider_asset_id = NULL, status = 'processing', error = NULL/);
+  assert.equal(await resetBytePlusAssetLink(client, {
+    workspaceId: 'workspace-1', localAssetId: 'asset-1', attemptId: 'attempt-2', projectName: 'project-1',
+  }), row);
+  assert.match(calls[0].text, /SET provider_asset_id = NULL, attempt_id = \$3, project_name = \$4, status = 'processing'/);
+  assert.doesNotMatch(calls[0].text, /group_id = NULL/);
   assert.match(calls[0].text, /WHERE workspace_id = \$1 AND local_asset_id = \$2/);
-  assert.deepEqual(calls[0].values, ['workspace-1', 'asset-1']);
+  assert.deepEqual(calls[0].values, ['workspace-1', 'asset-1', 'attempt-2', 'project-1', false]);
 });

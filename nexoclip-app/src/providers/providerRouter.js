@@ -7,10 +7,23 @@ import { createBytePlusAdapter } from './direct/byteplusAdapter.js';
 import { createOpenAIVideoAdapter } from './direct/openaiVideoAdapter.js';
 import { getDirectProvider, resolveDirectProviderModel, isDirectBytePlusSeedance, isRetryableProviderError, createDirectProviderUnavailableError } from './providerRegistry.js';
 
-function hasTrustedAssetImage(params) {
-  const trusted = (value) => typeof value === 'string' && /^asset:\/\//i.test(value);
-  return params.referenceImages?.some(trusted)
-    || params.frameImages?.some((frame) => trusted(frame?.image_url?.url));
+const TRUSTED_ASSET_REQUEST = Symbol('trustedBytePlusAssetRequest');
+
+export function markTrustedAssetRequest(params) {
+  Object.defineProperty(params, TRUSTED_ASSET_REQUEST, { value: true });
+  return params;
+}
+
+export function isTrustedAssetRequest(params) {
+  return params?.[TRUSTED_ASSET_REQUEST] === true;
+}
+
+function hasAssetUri(params) {
+  const urls = [
+    ...(params?.referenceImages || []),
+    ...(params?.frameImages || []).map((frame) => frame?.image_url?.url),
+  ];
+  return urls.some((url) => typeof url === 'string' && url.trim().toLowerCase().startsWith('asset://'));
 }
 
 function directConfigured(env, provider) {
@@ -69,11 +82,16 @@ export function createProviderRouter({ env = process.env, fetch: fetchImpl = glo
   }
 
   async function run(operation, params, primary) {
+    if (operation === 'video' && hasAssetUri(params) && !isTrustedAssetRequest(params)) {
+      throw Object.assign(new Error('Provider asset references must be resolved by the workspace service'), {
+        code: 'INVALID_REFERENCE_IMAGE', status: 400,
+      });
+    }
     const mapping = getDirectProvider(params.model);
     // BytePlus endpoint IDs are deployment-specific and are not valid OpenRouter model IDs.
     // Dedicated aliases with endpointEnv must resolve to endpoint IDs and route directly as well.
     const hasDirectOnlyAsset = operation === 'video'
-      && hasTrustedAssetImage(params)
+      && isTrustedAssetRequest(params)
       && isDirectBytePlusSeedance(params.model, env);
     if (mapping?.provider === 'byteplus' && (mapping.endpointEnv || params.model.startsWith('ep-') || hasDirectOnlyAsset)) {
       if (!directConfigured(env, 'byteplus')) throw createDirectProviderUnavailableError(params.model, 'byteplus');

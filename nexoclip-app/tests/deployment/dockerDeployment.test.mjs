@@ -28,6 +28,14 @@ const assetVars = {
   BYTEPLUS_REGION: '${BYTEPLUS_REGION:-ap-southeast-1}',
 };
 
+const mainStorageVars = {
+  R2_BUCKET: '${R2_BUCKET_NAME}',
+  R2_PUBLIC_URL: '${R2_PUBLIC_URL}',
+  R2_ACCOUNT_ID: '${R2_ACCOUNT_ID}',
+  R2_ACCESS_KEY_ID: '${R2_ACCESS_KEY_ID}',
+  R2_SECRET_ACCESS_KEY: '${R2_SECRET_ACCESS_KEY}',
+};
+
 const endpointVars = [
   'BYTEPLUS_SEEDANCE_2_ENDPOINT',
   'BYTEPLUS_SEEDANCE_2_5_ENDPOINT',
@@ -69,6 +77,17 @@ test('wires BytePlus Assets configuration to the main app and video worker only'
           `${target} must receive ${name} as ${interpolation}`,
         );
       }
+    }
+
+    const main = blocks.get(deployment.targets[0]);
+    for (const [name, productionInterpolation] of Object.entries(mainStorageVars)) {
+      const interpolation = deployment.path === 'docker-compose.yml'
+        ? productionInterpolation.replace('}', ':-}')
+        : productionInterpolation;
+      assert.ok(
+        main.split('\n').includes(`      ${name}: ${interpolation}`),
+        `${deployment.targets[0]} must receive ${name} as ${interpolation}`,
+      );
     }
 
     for (const [service, block] of blocks) {
