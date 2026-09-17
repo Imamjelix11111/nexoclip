@@ -16,7 +16,7 @@ export async function GET(request, { params }) {
     const result = await createAssetDownload(tenant.workspace.id, assetId);
     if (!result) return Response.json({ error: 'Asset not found' }, { status: 404 });
     return new Response(null, {
-      status: 307,
+      status: 302,
       headers: {
         Location: result.download.url,
         'Cache-Control': 'private, no-store',
