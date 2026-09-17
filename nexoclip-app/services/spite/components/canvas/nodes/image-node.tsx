@@ -197,7 +197,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
   const imageTrust = useImageTrust({
     url: outputUrl,
     filename: `${String(data.label || 'generated-image')}.png`,
-    enabled: Boolean(outputUrl) && !['submitting', 'in_queue', 'in_progress'].includes(status),
+    enabled: Boolean(selected) && Boolean(outputUrl) && !['submitting', 'in_queue', 'in_progress'].includes(status),
     onCanonicalized: useCallback((canonicalUrl: string, workspaceAssetId: string) => {
       setOutputUrl(canonicalUrl)
       patchPersistedNodeData({ outputUrl: canonicalUrl, workspaceAssetId })
