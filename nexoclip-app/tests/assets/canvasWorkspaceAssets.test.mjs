@@ -30,7 +30,10 @@ test('asset panel refreshes on completion without aggressive polling', () => {
   assert.doesNotMatch(toolbar, /refreshInterval: 3000/);
 });
 
-test('immutable generated asset IDs cache per authenticated browser session', () => {
-  assert.match(downloadRoute, /private, max-age=31536000, immutable/);
+test('asset downloads verify ownership then redirect directly to short-lived R2 URLs', () => {
+  assert.match(downloadRoute, /status: 307/);
+  assert.match(downloadRoute, /Location: result\.download\.url/);
+  assert.match(downloadRoute, /private, no-store/);
   assert.match(downloadRoute, /'Vary': 'Cookie'/);
+  assert.doesNotMatch(downloadRoute, /createStorage\(\)\.get/);
 });
