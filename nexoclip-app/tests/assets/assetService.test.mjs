@@ -79,7 +79,10 @@ test('uses R2 for asset downloads when R2 is configured', async () => {
   try {
     const storage = createStorage();
     assert.ok(storage instanceof R2ObjectStorage);
-    assert.deepEqual(await storage.createDownloadUrl({ key: 'workspace/asset.png' }), { url: 'workspace/asset.png' });
+    const download = await storage.createDownloadUrl({ key: 'workspace/asset.png', expiresInSeconds: 300 });
+    assert.equal(download.method, 'GET');
+    assert.equal(new URL(download.url).protocol, 'https:');
+    assert.equal(new URL(download.url).searchParams.get('X-Amz-Expires'), '300');
   } finally {
     for (const key of keys) {
       if (previous[key] === undefined) delete process.env[key];

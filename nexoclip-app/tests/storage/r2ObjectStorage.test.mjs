@@ -16,6 +16,31 @@ test('uploads generated assets to R2 and returns encoded public URL', async () =
   assert.equal(calls[0].ContentType, 'image/png');
 });
 
+test('creates a 300-second provider-fetchable presigned HTTPS GET URL', async () => {
+  const storage = new R2ObjectStorage({
+    bucket: 'images',
+    publicUrl: 'https://cdn.example.test',
+    accountId: 'account-id',
+    accessKeyId: 'access-key',
+    secretAccessKey: 'secret-key',
+    now: () => new Date('2026-09-16T12:34:56.000Z'),
+    client: { send: async () => { throw new Error('presigning must not fetch the object'); } },
+  });
+
+  const download = await storage.createDownloadUrl({ key: 'workspace/a b!(1).png', expiresInSeconds: 300 });
+  const url = new URL(download.url);
+
+  assert.equal(download.method, 'GET');
+  assert.equal(url.protocol, 'https:');
+  assert.equal(url.hostname, 'account-id.r2.cloudflarestorage.com');
+  assert.equal(url.pathname, '/images/workspace/a%20b%21%281%29.png');
+  assert.equal(url.searchParams.get('X-Amz-Expires'), '300');
+  assert.equal(url.searchParams.get('X-Amz-Date'), '20260916T123456Z');
+  assert.equal(url.searchParams.get('X-Amz-Credential'), 'access-key/20260916/auto/s3/aws4_request');
+  assert.equal(url.searchParams.get('X-Amz-Signature'), 'c0e7952b2b8219cb5c902ce86e0dd7a98c36f3df95d18fd39150e55bafaac1c5');
+  assert.doesNotMatch(download.url, /secret-key/);
+});
+
 test('downloads R2 streams as provider-readable buffers', async () => {
   const storage = new R2ObjectStorage({
     bucket: 'images',
