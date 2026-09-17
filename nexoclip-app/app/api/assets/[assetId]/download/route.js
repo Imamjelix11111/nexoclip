@@ -19,7 +19,7 @@ export async function GET(request, { params }) {
       status: 302,
       headers: {
         Location: result.download.url,
-        'Cache-Control': 'private, no-store',
+        'Cache-Control': 'private, max-age=300',
         'Vary': 'Cookie',
       },
     });
