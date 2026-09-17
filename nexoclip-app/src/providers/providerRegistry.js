@@ -39,7 +39,24 @@ const DIRECT_MODEL_MAP = new Map([
   ['openai/sora-2-pro', { provider: 'openai', model: 'sora-2-pro' }],
 ]);
 
-const DIRECT_BYTEPLUS_VIDEO_ENDPOINTS = new Set(['ep-20260904190604-p8pjl']);
+const DIRECT_BYTEPLUS_SEEDANCE_MODELS = new Set([
+  'byteplus/seedance-2.0-unfiltered',
+  'byteplus/seedance-2.5-unfiltered',
+  'ep-20260904190604-p8pjl',
+  'dreamina-seedance-2-5-260628',
+  'bytedance/seedance-2.5',
+  'dreamina-seedance-2-0-260128',
+  'dreamina-seedance-2-0-fast-260128',
+  'dreamina-seedance-2-0-mini-260615',
+  'seedance-1-5-pro-251215',
+  'seedance-1-0-pro-250528',
+  'seedance-1-0-pro-fast-251015',
+  'seedance-v2.0-t2v',
+  'seedance-v2.0-i2v',
+  'seedance-v2.0-extend',
+  'bytedance/seedance-2.0',
+  'bytedance/seedance-2.0-mini',
+]);
 
 const DIRECT_PREFIXES = [
   ['google/', 'google'],
@@ -79,11 +96,11 @@ export function resolveDirectProviderModel(mapping, env = process.env) {
 }
 
 export function isDirectBytePlusSeedance(model, env = process.env) {
+  if (typeof model !== 'string' || !DIRECT_BYTEPLUS_SEEDANCE_MODELS.has(model.trim())) return false;
   const mapping = getDirectProvider(model);
   if (mapping?.provider !== 'byteplus') return false;
-  const resolvedModel = resolveDirectProviderModel(mapping, env);
-  return DIRECT_BYTEPLUS_VIDEO_ENDPOINTS.has(resolvedModel)
-    || [model, mapping.model, mapping.endpointEnv].some((value) => /seedance/i.test(value || ''));
+  resolveDirectProviderModel(mapping, env);
+  return true;
 }
 
 export function isRetryableProviderError(error) {

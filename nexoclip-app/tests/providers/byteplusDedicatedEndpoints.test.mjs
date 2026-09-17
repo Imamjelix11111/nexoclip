@@ -17,10 +17,15 @@ test('routes dedicated Seedance aliases directly to the video endpoint id', asyn
     return new Response(JSON.stringify({ id: 'task-1', status: 'queued' }), { status: 200 });
   } });
 
-  await router.submitVideo({ model: 'byteplus/seedance-2.0-unfiltered', prompt: 'scene' });
+  await router.submitVideo({
+    model: 'byteplus/seedance-2.0-unfiltered',
+    prompt: 'scene',
+    referenceImages: ['asset://trusted-dedicated-reference'],
+  });
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, 'https://ark.example/api/v3/contents/generations/tasks');
   assert.equal(calls[0].body.model, 'ep-video-20');
+  assert.equal(calls[0].body.content[1].image_url.url, 'asset://trusted-dedicated-reference');
 });
 
 test('routes dedicated Seedream alias directly to the image endpoint id', async () => {

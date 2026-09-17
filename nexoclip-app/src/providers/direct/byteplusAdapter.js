@@ -31,9 +31,10 @@ export function createBytePlusAdapter({ apiKey, baseUrl, fetch: fetchImpl = glob
       // (e.g. the mini variant) reject an image_url with no role ("role must be
       // specified for image contents"); others silently accept it without one. Always
       // sending it is the only combination confirmed to work across model variants.
-      const images = referenceImages?.length
-        ? referenceImages
-        : (frameImages || []).map((frame) => frame?.image_url?.url).filter(Boolean);
+      const images = [
+        ...(referenceImages || []),
+        ...(frameImages || []).map((frame) => frame?.image_url?.url).filter(Boolean),
+      ];
       for (const image of images) content.push({ type: 'image_url', role: 'reference_image', image_url: { url: image } });
       for (const video of referenceVideos || []) content.push({ type: 'video_url', role: 'reference_video', video_url: { url: video } });
       // Video generation is async-task based and lives under /tasks — /contents/generations

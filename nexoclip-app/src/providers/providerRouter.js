@@ -5,7 +5,13 @@ import { createGoogleImageAdapter } from './direct/imageAdapters.js';
 import { createBytePlusImageAdapter } from './direct/imageAdapters.js';
 import { createBytePlusAdapter } from './direct/byteplusAdapter.js';
 import { createOpenAIVideoAdapter } from './direct/openaiVideoAdapter.js';
-import { getDirectProvider, resolveDirectProviderModel, isRetryableProviderError, createDirectProviderUnavailableError } from './providerRegistry.js';
+import { getDirectProvider, resolveDirectProviderModel, isDirectBytePlusSeedance, isRetryableProviderError, createDirectProviderUnavailableError } from './providerRegistry.js';
+
+function hasTrustedAssetImage(params) {
+  const trusted = (value) => typeof value === 'string' && /^asset:\/\//i.test(value);
+  return params.referenceImages?.some(trusted)
+    || params.frameImages?.some((frame) => trusted(frame?.image_url?.url));
+}
 
 function directConfigured(env, provider) {
   if (provider === 'google') return Boolean(env.GEMINI_API_KEY || env.GOOGLE_API_KEY);
@@ -66,7 +72,10 @@ export function createProviderRouter({ env = process.env, fetch: fetchImpl = glo
     const mapping = getDirectProvider(params.model);
     // BytePlus endpoint IDs are deployment-specific and are not valid OpenRouter model IDs.
     // Dedicated aliases with endpointEnv must resolve to endpoint IDs and route directly as well.
-    if (mapping?.provider === 'byteplus' && (mapping.endpointEnv || params.model.startsWith('ep-'))) {
+    const hasDirectOnlyAsset = operation === 'video'
+      && hasTrustedAssetImage(params)
+      && isDirectBytePlusSeedance(params.model, env);
+    if (mapping?.provider === 'byteplus' && (mapping.endpointEnv || params.model.startsWith('ep-') || hasDirectOnlyAsset)) {
       if (!directConfigured(env, 'byteplus')) throw createDirectProviderUnavailableError(params.model, 'byteplus');
       const adapter = directAdapter(env, 'byteplus', operation, fetchImpl);
       const directModel = resolveDirectProviderModel(mapping, env);
