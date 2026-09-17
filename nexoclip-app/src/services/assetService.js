@@ -49,6 +49,35 @@ export function createReferenceStorage(env = process.env, fallback = createStora
   return fallback;
 }
 
+export async function importWorkspaceAsset(workspaceId, { filename, contentType, body }, storage = createStorage(), pool = getPool()) {
+  const bytes = Buffer.isBuffer(body) ? body : Buffer.from(body || []);
+  const metadata = validateAssetInput({ filename, contentType, sizeBytes: bytes.length });
+  if (!metadata.contentType.startsWith('image/')) throw new Error('Only images can be imported');
+  const assetId = randomUUID();
+  const key = `${workspaceId}/${assetId}`;
+  try {
+    if (typeof storage.createUploadUrl === 'function') {
+      const upload = await storage.createUploadUrl({ key, contentType: metadata.contentType });
+      await storage.put(upload.url || upload, bytes, metadata.contentType);
+    } else {
+      await storage.put(key, bytes, metadata.contentType);
+    }
+    const result = await pool.query(
+      `INSERT INTO assets (id, workspace_id, storage_key, filename, content_type, size_bytes)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, workspace_id, storage_key, filename, content_type, size_bytes, created_at`,
+      [assetId, workspaceId, key, metadata.filename, metadata.contentType, metadata.sizeBytes],
+    );
+    return {
+      asset: result.rows[0],
+      url: `/api/assets/${encodeURIComponent(assetId)}/download?workspace_id=${encodeURIComponent(workspaceId)}`,
+    };
+  } catch (error) {
+    await storage.delete?.(key).catch(() => {});
+    throw error;
+  }
+}
+
 export async function createAssetUpload(workspaceId, input, storage = createStorage()) {
   const metadata = validateAssetInput(input);
   const assetId = randomUUID();
