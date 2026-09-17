@@ -2,6 +2,14 @@
 
 import { withBasePath } from '@/lib/base-path'
 import { workspaceAssetDeleteUrl } from '@/lib/workspace-asset-delete'
+import {
+  applyBytePlusTrustState,
+  type BytePlusTrustState,
+  requestBytePlusTrust,
+  safeBytePlusTrustError,
+  shouldPollBytePlusTrust,
+  trustForSeedanceView,
+} from '@/lib/byteplus-trust'
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
 import useSWR from 'swr'
@@ -93,6 +101,46 @@ interface GeneratedAsset {
   // generations that came back from a stuck / timed-out job.
   recovered?: boolean
   created_at: string
+  byteplus_trust?: BytePlusTrustState
+}
+
+function TrustForSeedance({
+  type,
+  state,
+  onTrust,
+}: {
+  type: GeneratedAsset['type']
+  state: BytePlusTrustState
+  onTrust: () => void
+}) {
+  const view = trustForSeedanceView(type, state)
+  if (!view) return null
+
+  return (
+    <div className="mt-4 rounded-lg border border-border/30 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs text-muted-foreground/60">Trust for Seedance</span>
+        <span className="text-xs text-foreground" role="status" aria-live="polite">
+          {view.label}
+        </span>
+      </div>
+      {view.message ? (
+        <p className="mt-2 text-xs text-red-300" role="alert">{view.message}</p>
+      ) : null}
+      {view.action ? (
+        <button
+          type="button"
+          onClick={onTrust}
+          disabled={view.disabled}
+          aria-label={view.action}
+          className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-accent/20 text-accent text-xs hover:bg-accent/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {state.status === 'processing' ? <CircleNotch size={13} className="animate-spin" aria-hidden="true" /> : <ShieldCheck size={13} aria-hidden="true" />}
+          {view.action}
+        </button>
+      ) : null}
+    </div>
+  )
 }
 
 interface LeftToolbarProps {
@@ -276,6 +324,54 @@ export function LeftToolbar({
       if (updated) setSelectedGenAsset(updated)
     }
   }, [generatedAssets])
+
+  const setTrustState = (assetId: string, state: BytePlusTrustState, revalidate = false) => {
+    setSelectedGenAsset(current => current?.id === assetId
+      ? { ...current, byteplus_trust: state }
+      : current)
+    mutateAssets(current => applyBytePlusTrustState(current, assetId, state), { revalidate })
+  }
+
+  const trustSelectedAsset = async () => {
+    const asset = selectedGenAsset
+    if (!asset || asset.type !== 'image' || asset.byteplus_trust?.status === 'processing') return
+
+    let state: BytePlusTrustState
+    try {
+      state = await requestBytePlusTrust(asset.id, 'POST')
+    } catch {
+      state = { status: 'failed' }
+    }
+    setTrustState(asset.id, state)
+    if (state.status === 'failed') toast.error(safeBytePlusTrustError(state.error))
+  }
+
+  useEffect(() => {
+    const asset = selectedGenAsset
+    const state = asset?.byteplus_trust ?? { status: 'not_trusted' as const }
+    if (!shouldPollBytePlusTrust({
+      detailVisible: historyOpen && Boolean(asset),
+      type: asset?.type,
+      status: state.status,
+    })) return
+
+    let cancelled = false
+    const poll = async () => {
+      let next: BytePlusTrustState
+      try {
+        next = await requestBytePlusTrust(asset!.id, 'GET')
+      } catch {
+        next = { status: 'failed' }
+      }
+      if (cancelled) return
+      setTrustState(asset!.id, next, next.status !== 'processing')
+    }
+    const interval = window.setInterval(poll, 2000)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [historyOpen, selectedGenAsset?.id, selectedGenAsset?.type, selectedGenAsset?.byteplus_trust?.status, mutateAssets])
 
   // Listen for asset status changes (from canvas node deletion)
   useEffect(() => {
@@ -1254,6 +1350,12 @@ export function LeftToolbar({
                   </div>
                 </div>
 
+                <TrustForSeedance
+                  type={selectedGenAsset.type}
+                  state={selectedGenAsset.byteplus_trust ?? { status: 'not_trusted' }}
+                  onTrust={trustSelectedAsset}
+                />
+
                 {/* Prompt */}
                 <div className="mt-4">
                   <div className="flex items-center justify-between mb-2">
@@ -1750,7 +1852,13 @@ export function LeftToolbar({
                 </div>
               </div>
 
-              <div className="mb-4">
+              <TrustForSeedance
+                type={selectedGenAsset.type}
+                state={selectedGenAsset.byteplus_trust ?? { status: 'not_trusted' }}
+                onTrust={trustSelectedAsset}
+              />
+
+              <div className="mb-4 mt-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-mono text-muted-foreground/60 uppercase">Prompt</span>
                   <button
