@@ -5,11 +5,13 @@ import { workspaceAssetDeleteUrl } from '@/lib/workspace-asset-delete'
 import {
   applyBytePlusTrustState,
   bytePlusTrustPollDelay,
+  importImageForTrust,
   type BytePlusTrustState,
   requestBytePlusTrust,
   safeBytePlusTrustError,
   shouldPollBytePlusTrust,
   trustForSeedanceView,
+  workspaceAssetIdFromUrl,
 } from '@/lib/byteplus-trust'
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
@@ -354,9 +356,32 @@ export function LeftToolbar({
     setTrustingAssetIds(current => new Set(current).add(asset.id))
     let state: BytePlusTrustState
     try {
-      state = await requestBytePlusTrust(asset.id, 'POST')
+      const imported = await importImageForTrust({
+        url: asset.r2_url,
+        filename: `${asset.prompt || 'canvas-image'}.png`,
+      })
+      setTrustState(asset.id, { status: 'processing' })
+      if (imported.canonicalUrl !== asset.r2_url) {
+        const linked = await fetch(withBasePath(`/api/assets/${encodeURIComponent(asset.id)}`), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ canonical_url: imported.canonicalUrl }),
+        })
+        if (!linked.ok) throw new Error('Could not link this workspace image')
+        setSelectedGenAsset(current => current?.id === asset.id
+          ? { ...current, r2_url: imported.canonicalUrl }
+          : current)
+        mutateFolders(current => current?.map(folder => ({
+          ...folder,
+          assets: folder.assets.map(item => item.id === asset.id
+            ? { ...item, r2_url: imported.canonicalUrl }
+            : item),
+        })), { revalidate: false })
+        mutateAssets()
+      }
+      state = await requestBytePlusTrust(imported.assetId, 'POST')
     } catch {
-      state = { status: 'failed' }
+      state = { status: 'failed', error: { code: 'IMAGE_IMPORT_FAILED' } }
     } finally {
       trustRequestsRef.current.delete(asset.id)
       setTrustingAssetIds(current => {
@@ -379,19 +404,22 @@ export function LeftToolbar({
       status: state.status,
     })) return
 
-    const assetId = asset!.id
+    const resolvedAssetId = workspaceAssetIdFromUrl(asset!.r2_url)
+    if (!resolvedAssetId) return
+    const providerAssetId = resolvedAssetId
+    const localAssetId = asset!.id
     let cancelled = false
     let attempt = 0
     let timeout = window.setTimeout(poll, bytePlusTrustPollDelay(attempt))
     async function poll() {
       let next: BytePlusTrustState
       try {
-        next = await requestBytePlusTrust(assetId, 'GET')
+        next = await requestBytePlusTrust(providerAssetId, 'GET')
       } catch {
         next = { status: 'failed' }
       }
       if (cancelled) return
-      setTrustState(assetId, next, next.status !== 'processing')
+      setTrustState(localAssetId, next, next.status !== 'processing')
       if (next.status === 'processing') {
         attempt += 1
         timeout = window.setTimeout(poll, bytePlusTrustPollDelay(attempt))
@@ -401,7 +429,18 @@ export function LeftToolbar({
       cancelled = true
       window.clearTimeout(timeout)
     }
-  }, [documentVisible, historyOpen, selectedGenAsset?.id, selectedGenAsset?.type, selectedGenAsset?.byteplus_trust?.status, mutateAssets])
+  }, [documentVisible, historyOpen, selectedGenAsset?.id, selectedGenAsset?.r2_url, selectedGenAsset?.type, selectedGenAsset?.byteplus_trust?.status, mutateAssets])
+
+  useEffect(() => {
+    const asset = selectedGenAsset
+    const workspaceAssetId = workspaceAssetIdFromUrl(asset?.r2_url)
+    if (!asset || asset.type !== 'image' || asset.byteplus_trust || !workspaceAssetId) return
+    let cancelled = false
+    requestBytePlusTrust(workspaceAssetId, 'GET')
+      .then(state => { if (!cancelled) setTrustState(asset.id, state) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [selectedGenAsset?.id, selectedGenAsset?.r2_url, selectedGenAsset?.type])
 
   // Listen for asset status changes (from canvas node deletion)
   useEffect(() => {
@@ -1193,7 +1232,16 @@ export function LeftToolbar({
                               tabIndex={0}
                               onClick={() => {
                                 if (selectMode) toggleAssetSelected(a.id)
-                                else if (full) setSelectedGenAsset(full)
+                                else setSelectedGenAsset(full || {
+                                  id: a.id,
+                                  type: a.type,
+                                  model: '',
+                                  prompt: a.prompt || '',
+                                  r2_url: a.r2_url,
+                                  used_in_canvas: true,
+                                  is_upload: false,
+                                  created_at: new Date().toISOString(),
+                                })
                               }}
                               draggable={!selectMode}
                               onDragStart={(e) => {

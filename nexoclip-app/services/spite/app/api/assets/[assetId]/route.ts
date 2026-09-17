@@ -80,9 +80,10 @@ export function createAssetRouteHandlers(deps: AssetRouteDeps = {}) {
         if (!asset) return assetNotFoundResponse()
 
         const body = await request.json()
-        const { used_in_canvas, recovered } = body as {
+        const { used_in_canvas, recovered, canonical_url } = body as {
           used_in_canvas?: boolean
           recovered?: boolean
+          canonical_url?: string
         }
 
         if (used_in_canvas !== undefined) {
@@ -100,6 +101,29 @@ export function createAssetRouteHandlers(deps: AssetRouteDeps = {}) {
           await sql`
             UPDATE generation_history
             SET recovered = ${recovered}
+            WHERE id = ${assetId} AND project_id = ${asset.project_id}
+          `
+        }
+
+        if (canonical_url !== undefined) {
+          const parsed = new URL(canonical_url, 'https://canvas.invalid')
+          const canonicalPath = /^\/api\/assets\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/download$/i.test(parsed.pathname)
+          const baseUrl = env.NEXOCLIP_INTERNAL_URL?.trim().replace(/\/$/, '')
+          if (!canonicalPath || !baseUrl) {
+            return NextResponse.json({ error: 'Invalid workspace asset URL' }, { status: 400 })
+          }
+          const upstream = await fetchFn(`${baseUrl}${parsed.pathname}${parsed.search}`, {
+            headers: { cookie: request.headers.get('cookie') ?? '' },
+          })
+          const isOwnedImage = upstream.ok && upstream.headers.get('content-type')?.startsWith('image/')
+          await upstream.body?.cancel()
+          if (!isOwnedImage) {
+            return NextResponse.json({ error: 'Workspace image not found' }, { status: 404 })
+          }
+          const storedUrl = `${parsed.pathname}${parsed.search}`
+          await sql`
+            UPDATE generation_history
+            SET r2_url = ${storedUrl}
             WHERE id = ${assetId} AND project_id = ${asset.project_id}
           `
         }

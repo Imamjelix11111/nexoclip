@@ -18,6 +18,7 @@ import { estimateGenerationCost, formatUSD, COST_CONFIRM_THRESHOLD_USD } from '@
 import { resolveNodeMediaUrl } from '@/lib/node-media'
 import { compileMentionsForModel } from '@/lib/mention-prompt'
 import { useProjectFolders } from '@/hooks/use-project-folders'
+import { useImageTrust } from '@/hooks/use-image-trust'
 import { completeGenerationNode } from '@/lib/generation-node'
 import { ConnectedInputs } from '../connected-inputs'
 import { useCanvasCollaboration } from '../canvas-collaboration'
@@ -193,6 +194,15 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
     if (!syncGuardRef.current.allowsPersistence()) return
     updateNodeData(id, updater)
   }, [id, updateNodeData])
+  const imageTrust = useImageTrust({
+    url: outputUrl,
+    filename: `${String(data.label || 'generated-image')}.png`,
+    enabled: Boolean(outputUrl) && !['submitting', 'in_queue', 'in_progress'].includes(status),
+    onCanonicalized: useCallback((canonicalUrl: string, workspaceAssetId: string) => {
+      setOutputUrl(canonicalUrl)
+      patchPersistedNodeData({ outputUrl: canonicalUrl, workspaceAssetId })
+    }, [patchPersistedNodeData]),
+  })
   
   // Prompt text is read from the connected Text node at render and again
   // immediately before recovery/submission; this node never owns a prompt.
@@ -955,6 +965,13 @@ function ImageNodeImpl({ id, data, selected }: NodeProps) {
         nodeLabel={(data.label as string) || 'Image Generator'}
         assetUrl={outputUrl || undefined}
         assetType="image"
+        trustAction={outputUrl ? {
+          label: imageTrust.label,
+          disabled: imageTrust.disabled,
+          active: imageTrust.state.status === 'active',
+          processing: imageTrust.inFlight || imageTrust.state.status === 'processing',
+          onClick: imageTrust.trust,
+        } : undefined}
         onRename={handleRename}
         onAddToFolder={outputUrl ? handleAddToFolder : undefined}
         onViewFullscreen={outputUrl ? () => setLightboxOpen(true) : undefined}

@@ -5,6 +5,43 @@ export interface BytePlusTrustState {
   error?: { code?: string; message?: string }
 }
 
+const WORKSPACE_ASSET_PATH = /^\/api\/assets\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/download(?:\?|$)/i
+
+export function workspaceAssetIdFromUrl(value: string | null | undefined) {
+  if (!value || /^\s*asset:\/\//i.test(value)) return null
+  try {
+    return new URL(value, 'https://canvas.invalid').pathname.match(WORKSPACE_ASSET_PATH)?.[1] ?? null
+  } catch {
+    return null
+  }
+}
+
+export async function importImageForTrust({
+  url,
+  filename = 'canvas-image.png',
+  fetchFn = fetch,
+}: {
+  url: string
+  filename?: string
+  fetchFn?: typeof fetch
+}): Promise<{ assetId: string; canonicalUrl: string }> {
+  const existingId = workspaceAssetIdFromUrl(url)
+  if (existingId) return { assetId: existingId, canonicalUrl: url }
+
+  const source = await fetchFn(url)
+  const contentType = source.headers.get('content-type')?.split(';')[0]?.trim() || ''
+  if (!source.ok || !contentType.startsWith('image/')) throw new Error('Source image is unavailable')
+  const form = new FormData()
+  form.append('file', new File([await source.blob()], filename, { type: contentType }))
+  const imported = await fetchFn('/api/assets/import', { method: 'POST', body: form })
+  const payload = await imported.json().catch(() => ({})) as { asset?: { id?: string }; url?: string }
+  const assetId = payload.asset?.id
+  if (!imported.ok || !assetId || !payload.url || workspaceAssetIdFromUrl(payload.url) !== assetId) {
+    throw new Error('Could not register this image')
+  }
+  return { assetId, canonicalUrl: payload.url }
+}
+
 export function bytePlusTrustUrl(assetId: string) {
   return `/api/assets/${encodeURIComponent(assetId)}/byteplus-trust`
 }
