@@ -31,7 +31,8 @@ test('asset panel refreshes on completion without aggressive polling', () => {
 });
 
 test('asset downloads verify ownership then redirect directly to short-lived R2 URLs', () => {
-  assert.match(downloadRoute, /status: 307/);
+  assert.match(downloadRoute, /status: 302/);
+  assert.doesNotMatch(downloadRoute, /status: 307/);
   assert.match(downloadRoute, /Location: result\.download\.url/);
   assert.match(downloadRoute, /private, no-store/);
   assert.match(downloadRoute, /'Vary': 'Cookie'/);
