@@ -101,6 +101,13 @@ test('wires BytePlus Assets configuration to the main app and video worker only'
 
     for (const worker of deployment.workers) {
       const block = blocks.get(worker);
+      const bucketInterpolation = deployment.path === 'docker-compose.yml'
+        ? '${R2_BUCKET_NAME:-}'
+        : '${R2_BUCKET_NAME}';
+      assert.ok(
+        block.split('\n').includes(`      R2_BUCKET: ${bucketInterpolation}`),
+        `${worker} must write assets to the same R2 bucket as the main app`,
+      );
       for (const name of endpointVars) {
         assert.match(block, new RegExp(`^      ${name}:`, 'm'), `${worker} must preserve ${name}`);
       }
