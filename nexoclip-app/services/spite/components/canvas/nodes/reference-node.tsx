@@ -3,7 +3,7 @@
 import { Position, NodeProps, Handle } from '@xyflow/react'
 import { useParams } from 'next/navigation'
 import { Image as ImageIcon, UploadSimple, CircleNotch, VideoCamera, SpeakerHigh } from '@phosphor-icons/react'
-import { memo, useState, useEffect, useRef } from 'react'
+import { memo, useState, useEffect, useRef, useCallback } from 'react'
 import { NodeActionToolbar } from './node-toolbar'
 import { ShotSelector } from './shot-selector'
 import { useSceneShots } from './use-scene-shots'
@@ -12,6 +12,7 @@ import { resolveNodeMediaUrl } from '@/lib/node-media'
 import { Lightbox } from '../lightbox'
 import { useCanvasCollaboration } from '../canvas-collaboration'
 import { ResizableNodeFrame } from './resizable-node-frame'
+import { useImageTrust } from '@/hooks/use-image-trust'
 
 function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
   const params = useParams()
@@ -45,6 +46,15 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
   const isUploading = data.isUploading as boolean
   const isAudio = (data.mediaType as string) === 'audio' || /\.(mp3|wav|m4a|ogg|aac|flac)(\?|$)/i.test(thumbnail || '')
   const isVideo = !isAudio && ((data.mediaType as string) === 'video' || /\.(mp4|webm|mov|m4v)(\?|$)/i.test(thumbnail || ''))
+  const imageTrust = useImageTrust({
+    url: thumbnail,
+    filename: `${String(data.label || 'reference-image')}.png`,
+    enabled: Boolean(thumbnail) && !isUploading && !isAudio && !isVideo,
+    onCanonicalized: useCallback((canonicalUrl: string, workspaceAssetId: string) => {
+      setThumbnail(canonicalUrl)
+      patchNodeData(id, { thumbnail: canonicalUrl, assetId: workspaceAssetId })
+    }, [id, patchNodeData]),
+  })
 
   const handleShotSelect = (shotId: string) => {
     // Empty string from the selector means "unassign". Storing undefined
@@ -92,6 +102,13 @@ function ReferenceNodeImpl({ id, data, selected }: NodeProps) {
         assetId={data.assetId as string}
         assetUrl={thumbnail || undefined}
         assetType={isAudio ? 'image' : isVideo ? 'video' : 'image'}
+        trustAction={thumbnail && !isAudio && !isVideo ? {
+          label: imageTrust.label,
+          disabled: imageTrust.disabled,
+          active: imageTrust.state.status === 'active',
+          processing: imageTrust.inFlight || imageTrust.state.status === 'processing',
+          onClick: imageTrust.trust,
+        } : undefined}
         onAddToFolder={handleAddToFolder}
         onViewFullscreen={thumbnail && !isAudio ? () => setLightboxOpen(true) : undefined}
       />

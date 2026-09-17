@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createStorage, deleteWorkspaceAsset, validateAssetInput } from '../../src/services/assetService.js';
+import * as assetService from '../../src/services/assetService.js';
+
+const { createStorage, deleteWorkspaceAsset, validateAssetInput } = assetService;
 import { R2ObjectStorage } from '../../src/storage/r2ObjectStorage.js';
 
 test('validates asset metadata and restricts content types', () => {
@@ -12,6 +14,40 @@ test('validates asset metadata and restricts content types', () => {
 test('rejects unsupported or oversized assets', () => {
   assert.throws(() => validateAssetInput({ filename: 'page.html', contentType: 'text/html', sizeBytes: 1 }), /content type/);
   assert.throws(() => validateAssetInput({ filename: 'cover.png', contentType: 'image/png', sizeBytes: 50 * 1024 * 1024 + 1 }), /size/);
+});
+
+test('imports image bytes into canonical workspace storage and metadata', async () => {
+  assert.equal(typeof assetService.importWorkspaceAsset, 'function');
+  const writes = [];
+  const queries = [];
+  const storage = {
+    async put(key, body, contentType) { writes.push({ key, body, contentType }); },
+  };
+  const pool = {
+    async query(text, values) {
+      queries.push({ text, values });
+      return { rows: [{ id: values[0], workspace_id: values[1], storage_key: values[2], filename: values[3], content_type: values[4], size_bytes: values[5] }] };
+    },
+  };
+
+  const result = await assetService.importWorkspaceAsset('workspace-1', {
+    filename: 'reference.png', contentType: 'image/png', body: Buffer.from('image'),
+  }, storage, pool);
+
+  assert.equal(result.asset.workspace_id, 'workspace-1');
+  assert.match(result.url, /^\/api\/assets\/[0-9a-f-]+\/download\?workspace_id=workspace-1$/);
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].contentType, 'image/png');
+  assert.equal(queries.length, 1);
+});
+
+test('rejects non-image canonical imports', async () => {
+  await assert.rejects(
+    assetService.importWorkspaceAsset('workspace-1', {
+      filename: 'clip.mp4', contentType: 'video/mp4', body: Buffer.from('video'),
+    }, { put: async () => {} }, { query: async () => ({ rows: [] }) }),
+    /Only images/,
+  );
 });
 
 test('normalizes R2 object responses for the storage interface', async () => {
