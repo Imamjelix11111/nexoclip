@@ -21,12 +21,12 @@ function serviceBlocks(compose) {
   return blocks;
 }
 
-const assetVars = [
-  'BYTEPLUS_ACCESS_KEY_ID',
-  'BYTEPLUS_SECRET_ACCESS_KEY',
-  'BYTEPLUS_PROJECT_NAME',
-  'BYTEPLUS_REGION',
-];
+const assetVars = {
+  BYTEPLUS_ACCESS_KEY_ID: '${BYTEPLUS_ACCESS_KEY_ID}',
+  BYTEPLUS_SECRET_ACCESS_KEY: '${BYTEPLUS_SECRET_ACCESS_KEY}',
+  BYTEPLUS_PROJECT_NAME: '${BYTEPLUS_PROJECT_NAME:-default}',
+  BYTEPLUS_REGION: '${BYTEPLUS_REGION:-ap-southeast-1}',
+};
 
 const endpointVars = [
   'BYTEPLUS_SEEDANCE_2_ENDPOINT',
@@ -63,15 +63,17 @@ test('wires BytePlus Assets configuration to the main app and video worker only'
     for (const target of deployment.targets) {
       const block = blocks.get(target);
       assert.ok(block, `${deployment.path} must contain ${target}`);
-      for (const name of assetVars) {
-        const interpolation = String.raw`\$\{${name}(?::-[^}]*)?\}`;
-        assert.match(block, new RegExp(`^      ${name}: ${interpolation}$`, 'm'), `${target} must receive ${name}`);
+      for (const [name, interpolation] of Object.entries(assetVars)) {
+        assert.ok(
+          block.split('\n').includes(`      ${name}: ${interpolation}`),
+          `${target} must receive ${name} as ${interpolation}`,
+        );
       }
     }
 
     for (const [service, block] of blocks) {
       if (deployment.targets.includes(service)) continue;
-      for (const name of assetVars) {
+      for (const name of Object.keys(assetVars)) {
         assert.doesNotMatch(block, new RegExp(`^      ${name}:`, 'm'), `${service} must not receive ${name}`);
       }
     }
